@@ -41,7 +41,6 @@
 			let frame = 0;
 			let lastRenderAt = 0;
 			let lastTickAt = 0;
-			const flick = { prev: -1, jumps: 0, max: 0, last: -1, events: [] };
 			let slowTicks = 0;
 			let fastTicks = 0;
 			let scaleIndex = 1;
@@ -124,8 +123,10 @@
 			}
 
 			let texture = null;
-			/** Half-resolution blurred copy of the wallpaper: { tex, fbo, width, height }. */
+			/** Blurred copy of the wallpaper: { tex, fbo, width, height }. */
 			let blurTarget = null;
+			/** Ping-pong partner for multi-pass blur; always a scratch buffer. */
+			let blurTargetB = null;
 			/** Snapshot of the previous blurred frame, used for the swap cross-fade. */
 			let prevBlur = null;
 			/** Scratch FBO used to copy a texture into the snapshot. */
@@ -210,13 +211,12 @@
 				return true;
 			}
 
-			/** (Re)allocate the half-resolution blur target, freeing the old one. */
-			function ensureBlurTarget(width, height) {
-				if (blurTarget && blurTarget.width === width && blurTarget.height === height) return blurTarget;
-				if (blurTarget) {
-					gl.deleteFramebuffer(blurTarget.fbo);
-					gl.deleteTexture(blurTarget.tex);
-					blurTarget = null;
+			/** (Re)allocate one full-resolution blur target, freeing the old one. */
+			function makeTarget(current, width, height) {
+				if (current && current.width === width && current.height === height) return current;
+				if (current) {
+					gl.deleteFramebuffer(current.fbo);
+					gl.deleteTexture(current.tex);
 				}
 				const tex = gl.createTexture();
 				gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -229,88 +229,75 @@
 				gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-				blurTarget = { tex, fbo, width, height };
-				return blurTarget;
+				return { tex, fbo, width, height };
 			}
 
 			/**
 			 * One-shot blur of the current wallpaper into an FBO. Runs on upload and
 			 * when the blur slider moves — never per frame.
 			 *
-			 * The target is FULL resolution on purpose: rendering into a half-size
-			 * target made the bilinear upscale do the blurring, which smeared icons
-			 * and text into what looked like astigmatism. Here only the poisson
-			 * kernel blurs, and blur = 0 removes the pass entirely so the wallpaper
-			 * is pixel-sharp.
+			 * Full resolution on purpose: a half-size target lets the bilinear
+			 * upscale do part of the blurring, which smears icons and text into
+			 * astigmatism. Only the 13-tap poisson kernel blurs, and blur = 0 skips
+			 * the pass entirely so the wallpaper stays pixel-sharp.
+			 *
+			 * One 13-tap pass bands visibly past ~10 texels, so the same kernel is
+			 * ping-ponged 1–4 times: the slider maps to a target radius in texture
+			 * texels, the pass count grows with it, and every pass keeps its radius
+			 * inside the kernel's well-sampled range. That is what makes 100% soft
+			 * instead of a clamped, undersampled smear.
 			 */
 			function renderBlur() {
 				if (!blurProgram || !texture) return;
 				if (params.blur <= 0.5) {
 					// Sharp mode: sample the wallpaper directly, zero extra GPU memory.
-					if (blurTarget) {
-						gl.deleteFramebuffer(blurTarget.fbo);
-						gl.deleteTexture(blurTarget.tex);
-						blurTarget = null;
+					for (const target of [blurTarget, blurTargetB]) {
+						if (!target) continue;
+						gl.deleteFramebuffer(target.fbo);
+						gl.deleteTexture(target.tex);
 					}
+					blurTarget = null;
+					blurTargetB = null;
 					return;
 				}
 				const width = texture.width;
 				const height = texture.height;
-				// Keep the previous blurred frame for the cross-fade before the new
-				// one overwrites the target.
+				// Keep the previous blurred frame for the cross-fade before the
+				// targets are reused.
 				if (blurTarget) copyToPrev(blurTarget);
-				const target = ensureBlurTarget(width, height);
-				const cssScale = width / Math.max(1, window.innerWidth || width);
-				gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-				gl.viewport(0, 0, width, height);
+				blurTarget = makeTarget(blurTarget, width, height);
+				blurTargetB = makeTarget(blurTargetB, width, height);
+				const pixelScale = width / Math.max(1, window.innerWidth || width);
+				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
+				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
+				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
 				gl.useProgram(blurProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				if (blurUniforms.aPos >= 0) {
 					gl.enableVertexAttribArray(blurUniforms.aPos);
 					gl.vertexAttribPointer(blurUniforms.aPos, 2, gl.FLOAT, false, 0, 0);
 				}
-				gl.activeTexture(gl.TEXTURE0);
-				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
 				gl.uniform1i(blurUniforms.tex, 0);
 				gl.uniform2f(blurUniforms.texel, 1 / width, 1 / height);
-				// 13 taps band badly past ~12 texels; the slider is in CSS pixels.
-				gl.uniform1f(blurUniforms.radius, Math.min(12, Math.max(0.8, params.blur * 0.75 * cssScale)));
-				gl.drawArrays(gl.TRIANGLES, 0, 3);
-				// TEMP FLICKER PROBE: sample the centre of the composited frame so a
-				// whole-surface brightness jump is measured instead of guessed.
-				try {
-					const probeSize = 4;
-					const pxW = gl.drawingBufferWidth;
-					const pxH = gl.drawingBufferHeight;
-					const px = new Uint8Array(probeSize * probeSize * 4);
-					gl.readPixels(
-						Math.max(0, (pxW >> 1) - 2),
-						Math.max(0, (pxH >> 1) - 2),
-						probeSize,
-						probeSize,
-						gl.RGBA,
-						gl.UNSIGNED_BYTE,
-						px
-					);
-					let sum = 0;
-					for (let i = 0; i < px.length; i += 4) sum += (px[i] + px[i + 1] + px[i + 2]) / 3;
-					const mean = sum / (px.length / 4) / 255;
-					if (flick.prev >= 0) {
-						const diff = Math.abs(mean - flick.prev);
-						if (diff > 0.1) {
-							flick.jumps += 1;
-							if (diff > flick.max) flick.max = Math.round(diff * 1000) / 1000;
-							if (flick.events.length < 12) {
-								flick.events.push(
-									`${Math.round(now)}|${Math.round(diff * 100)}|${mean.toFixed(2)}|tex:${texture ? 1 : 0}|blur:${blurTarget ? 1 : 0}|blend:${blendStart ? 1 : 0}|cw:${canvas.width}|f:${perf.frames}`
-								);
-							}
-						}
-					}
-					flick.prev = mean;
-					flick.last = Math.round(mean * 1000) / 1000;
-				} catch {
-					/* ignore */
+				gl.uniform1f(blurUniforms.radius, radius);
+				let source = texture.handle;
+				let finalIsB = false;
+				for (let pass = 0; pass < passes; pass++) {
+					const dest = pass % 2 === 0 ? blurTarget : blurTargetB;
+					gl.bindFramebuffer(gl.FRAMEBUFFER, dest.fbo);
+					gl.viewport(0, 0, width, height);
+					gl.activeTexture(gl.TEXTURE0);
+					gl.bindTexture(gl.TEXTURE_2D, source);
+					gl.drawArrays(gl.TRIANGLES, 0, 3);
+					source = dest.tex;
+					finalIsB = pass % 2 === 1;
+				}
+				// The main pass always samples blurTarget: swap the pair when the
+				// final pass landed in the scratch buffer.
+				if (finalIsB) {
+					const swap = blurTarget;
+					blurTarget = blurTargetB;
+					blurTargetB = swap;
 				}
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				// Start the 420 ms cross-fade from the snapshot to the fresh blur.
@@ -378,42 +365,6 @@
 					gl.activeTexture(gl.TEXTURE0);
 				}
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
-				// TEMP FLICKER PROBE: sample the centre of the composited frame so a
-				// whole-surface brightness jump is measured instead of guessed.
-				try {
-					const probeSize = 4;
-					const pxW = gl.drawingBufferWidth;
-					const pxH = gl.drawingBufferHeight;
-					const px = new Uint8Array(probeSize * probeSize * 4);
-					gl.readPixels(
-						Math.max(0, (pxW >> 1) - 2),
-						Math.max(0, (pxH >> 1) - 2),
-						probeSize,
-						probeSize,
-						gl.RGBA,
-						gl.UNSIGNED_BYTE,
-						px
-					);
-					let sum = 0;
-					for (let i = 0; i < px.length; i += 4) sum += (px[i] + px[i + 1] + px[i + 2]) / 3;
-					const mean = sum / (px.length / 4) / 255;
-					if (flick.prev >= 0) {
-						const diff = Math.abs(mean - flick.prev);
-						if (diff > 0.1) {
-							flick.jumps += 1;
-							if (diff > flick.max) flick.max = Math.round(diff * 1000) / 1000;
-							if (flick.events.length < 12) {
-								flick.events.push(
-									`${Math.round(now)}|${Math.round(diff * 100)}|${mean.toFixed(2)}|tex:${texture ? 1 : 0}|blur:${blurTarget ? 1 : 0}|blend:${blendStart ? 1 : 0}|cw:${canvas.width}|f:${perf.frames}`
-								);
-							}
-						}
-					}
-					flick.prev = mean;
-					flick.last = Math.round(mean * 1000) / 1000;
-				} catch {
-					/* ignore */
-				}
 				if (!shown && source) {
 					shown = true;
 					canvas.style.opacity = "1";
@@ -731,8 +682,7 @@
 						ms: Math.round((perf.ms || 0) * 10) / 10,
 						frameGap: Math.round((perf.frameGap || 0) * 10) / 10,
 						texErr: textureError || null,
-						canvases: document.querySelectorAll("canvas").length,
-						flick: { n: flick.jumps, max: flick.max, last: flick.last, e: flick.events }
+						canvases: document.querySelectorAll("canvas").length
 					};
 				},
 				start,
@@ -747,13 +697,18 @@
 						gl.deleteTexture(blurTarget.tex);
 						blurTarget = null;
 					}
+					if (blurTargetB) {
+						gl.deleteFramebuffer(blurTargetB.fbo);
+						gl.deleteTexture(blurTargetB.tex);
+						blurTargetB = null;
+					}
 					if (prevBlur) {
 						gl.deleteTexture(prevBlur.tex);
 						prevBlur = null;
 					}
 					// copyFbo is created lazily by snapshotTexture() and survives every
 					// other reset; without this it leaks one framebuffer per renderer
-					// rebuild (every renderMode / degrade / webglEpoch change).
+					// rebuild (every backend / degrade / webglEpoch change).
 					if (copyFbo) gl.deleteFramebuffer(copyFbo);
 					copyFbo = null;
 					if (blurProgram) gl.deleteProgram(blurProgram);

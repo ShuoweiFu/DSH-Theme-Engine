@@ -17,7 +17,7 @@
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
 				source: source.source === "wallpaper" ? "wallpaper" : "desktop",
-				renderMode: source.renderMode === "css" ? "css" : source.renderMode === "webgpu" ? "webgpu" : "webgl",
+				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto"
@@ -162,6 +162,5 @@
 		/**
 		 * Seek a hidden <video> to ~18% of its duration and snapshot one frame,
 		 * capped at 2048 px. The host route supports Range, so only the head and
-		 * the seek target are fetched. Used by the wallpaper texture upload and by
-		 * the CSS-only ink probe.
+		 * the seek target are fetched. Used by the wallpaper texture upload.
 		 */

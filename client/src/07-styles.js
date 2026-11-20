@@ -1,7 +1,5 @@
 		const CSS = String.raw`
 :root {
-	--lg-wallpaper: none;
-	--lg-composer-bg: rgba(255, 255, 255, 0.06);
 	--lg-blur: 10px;
 	--lg-sat: 1.4;
 	--lg-dim: 0.08;
@@ -16,7 +14,11 @@ html[data-lg-enabled="on"] body {
 	background: transparent !important;
 }
 
-/* CSS fallback wallpaper; the WebGL canvas takes over when it is running. */
+/* Startup scrim: a flat themed base behind the app until the shader's first
+   frame arrives. The shader canvas covers it completely once running; when the
+   fifth protection layer trips, this same layer becomes the static translucent
+   fallback (see [data-lg-webgl="static"] below), so a dead GPU can never show a
+   black pane. */
 html[data-lg-enabled="on"] body::before {
 	content: "";
 	position: fixed;
@@ -24,26 +26,14 @@ html[data-lg-enabled="on"] body::before {
 	z-index: -2;
 	pointer-events: none;
 	background-color: var(--lg-fallback);
-	background-image: var(--lg-wallpaper, none);
-	background-position: center;
-	background-size: cover;
-	background-repeat: no-repeat;
 	opacity: calc(1 - var(--lg-dim));
+	transition: opacity 240ms ease;
 }
 
-/* The canvas owns the wallpaper in GPU modes: this element stays as the dark
-   fallback colour only. It used to paint the same wallpaper underneath, but
-   every recapture replaced that image with no transition, which read as the
-   background flashing on each refresh. */
-html[data-lg-enabled="on"][data-lg-webgl="on"] body::before,
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] body::before {
-	background-image: none !important;
-}
-
-/* WebGPU has no CPU-side blur prepass; a canvas filter is the cheapest way to
-   keep the glass soft without a second full-window compositor pass. */
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] canvas[data-liquid-glass] {
-	filter: blur(calc(var(--lg-blur) * 0.6));
+/* Static fallback: half-transparent scrim over the desktop, no wallpaper image,
+   no shader, no backdrop-filter. Text keeps its themed ink and stays legible. */
+html[data-lg-enabled="on"][data-lg-webgl="static"] body::before {
+	opacity: 0.62;
 }
 
 /* Soft moving sheen + depth over the wallpaper. */
@@ -82,35 +72,22 @@ html[data-lg-suppressed="on"] #root {
 	backdrop-filter: none !important;
 }
 
-/* The glass pane: blur + saturation of everything behind the app.
-   Only the pure-CSS backend keeps this: with WebGL/WebGPU the wallpaper is
-   already blurred by the shader prepass, and a compositor backdrop-filter here
-   would make Chromium blur the very same pixels a second time (double GPU
-   cost for no visual gain). */
-html[data-lg-enabled="on"][data-lg-webgl="off"] #root {
-	background: transparent !important;
-	-webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
-	backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
-}
-
+/* The glass pane. Every GPU backend blurs the wallpaper in its own shader
+   prepass, so the compositor must never run a second backdrop blur over the
+   canvas. The static fallback deliberately has none either: it is a flat
+   translucent scrim, which is exactly what "no GPU" can guarantee. */
 html[data-lg-enabled="on"][data-lg-webgl="on"] #root,
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] #root {
+html[data-lg-enabled="on"][data-lg-webgl="gpu"] #root,
+html[data-lg-enabled="on"][data-lg-webgl="static"] #root,
+html[data-lg-enabled="on"][data-lg-webgl="off"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
 }
 
 /* DSH's composer card ships as an opaque white slab (rgb(255,255,255)), which
-   breaks the glass pane and piles a white background behind the input text —
-   white placeholder/label text then has nothing to stand out against. Give it
-   the same raised-surface token as every other nested panel, so it can only be
-   as dense as the frost the user actually chose. Class names are CSS-module
-   hashes ('GRgSLq_card'), so match the stable '_card' suffix plus the fact that
-   the element contains the editor. Suppressed mode keeps the shipped slab. */
-html[data-lg-enabled="on"]:not([data-lg-suppressed="on"]) [class*="_card"]:has([contenteditable="true"]),
-html[data-lg-enabled="on"]:not([data-lg-suppressed="on"]) [class*="_card"]:has(textarea) {
-	background: var(--lg-composer-bg, var(--dsw-alias-bg-layer-1)) !important;
-}
+   breaks the glass pane. It carries the stable data-composer-card attribute, so
+   the frosted treatment below targets it directly (no CSS-module hash games). */
 
 /* Edge bevel: reads as a thick pane with an inner lens ring. */
 html[data-lg-enabled="on"] #root::after {
@@ -187,7 +164,38 @@ html[data-lg-enabled="on"] #root::after {
 	}
 }
 
+/* ---- native message composer: frosted glass ---- */
+/*
+ * The conversation's input card is the one native surface the user stares at
+ * all day, so it gets the same treatment as the settings cards: a translucent
+ * wash of the overlay token plus a real backdrop blur, a hairline ring and a
+ * top-edge highlight.  The wallpaper and the transcript behind it stay visible
+ * (frosted), instead of the opaque input slab DSH ships by default.
+ */
+div[data-composer-card] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 82%, transparent);
+	-webkit-backdrop-filter: blur(26px) saturate(1.28);
+	backdrop-filter: blur(26px) saturate(1.28);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 12px 32px rgba(8, 12, 20, 0.12);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card] {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
 /* ---- main panel page (native plugin-page chrome) ---- */
+/*
+ * The page itself is bare glass: the wallpaper, the liquid shader and the
+ * frosted app backdrop must all stay visible through this column.  Clarity is
+ * bought locally — every settings group is its own translucent floating card —
+ * never by painting an opaque sheet over the whole workspace.
+ */
 .lg-page {
 	display: flex;
 	flex-direction: column;
@@ -195,12 +203,8 @@ html[data-lg-enabled="on"] #root::after {
 	width: 100%;
 	height: 100%;
 	min-height: 0;
-	background: rgba(250, 251, 253, 0.97);
+	background: transparent;
 	color: var(--dsw-alias-label-primary);
-}
-
-html[data-lg-mode="dark"] .lg-page {
-	background: rgba(12, 15, 22, 0.97);
 }
 
 .lg-page-head {
@@ -266,11 +270,24 @@ html[data-lg-mode="dark"] .lg-page {
 	overscroll-behavior: contain;
 }
 
+/*
+ * One floating glass card per group: a faint wash of the theme's own layer-2
+ * token plus a backdrop blur.  The card, not the page, is what keeps labels
+ * legible over a busy wallpaper; the gaps between cards stay fully transparent
+ * so the liquid background reads through.
+ */
 .lg-group {
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	margin: 0 0 32px;
+	margin: 0 0 24px;
+	padding: 6px 18px;
+	border: 0.5px solid var(--dsw-alias-border-l1);
+	border-radius: 14px;
+	background: var(--dsw-alias-bg-layer-2);
+	-webkit-backdrop-filter: blur(24px) saturate(1.18);
+	backdrop-filter: blur(24px) saturate(1.18);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .lg-group:last-child {
@@ -426,7 +443,7 @@ html[data-lg-mode="dark"] .lg-page {
 .lg-field {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 12px;
 	padding: 16px 0;
 	border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
@@ -436,21 +453,40 @@ html[data-lg-mode="dark"] .lg-page {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 16px;
+	min-width: 0;
 	font-size: 14px;
 	line-height: 20px;
 }
 
+.lg-field-head span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .lg-field-head b {
+	flex: none;
 	font-size: 12px;
 	font-weight: 500;
 	font-variant-numeric: tabular-nums;
 	color: var(--dsw-alias-label-secondary);
 }
 
+/*
+ * Apple-style damped glass slider. The track is a 4px hairline of the theme's
+ * own secondary ink at 20%; the travelled part is a barely-there brand wash,
+ * painted by a JS-fed custom property so every value change animates the fill
+ * without re-rendering anything but the input.
+ */
 .lg-range {
+	--lg-fill: 0%;
+	--lg-track: color-mix(in srgb, var(--dsw-alias-label-secondary) 20%, transparent);
+	--lg-fill-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 55%, transparent);
 	width: 100%;
-	height: 18px;
+	height: 20px;
 	margin: 0;
+	padding: 0;
 	appearance: none;
 	-webkit-appearance: none;
 	background: transparent;
@@ -458,9 +494,15 @@ html[data-lg-mode="dark"] .lg-page {
 }
 
 .lg-range::-webkit-slider-runnable-track {
-	height: 3px;
+	height: 4px;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--dsw-alias-label-secondary) 26%, transparent);
+	background: linear-gradient(
+		to right,
+		var(--lg-fill-color) 0,
+		var(--lg-fill-color) var(--lg-fill),
+		var(--lg-track) var(--lg-fill),
+		var(--lg-track) 100%
+	);
 }
 
 .lg-range::-webkit-slider-thumb {
@@ -468,35 +510,53 @@ html[data-lg-mode="dark"] .lg-page {
 	-webkit-appearance: none;
 	width: 16px;
 	height: 16px;
-	margin-top: -6.5px;
-	border: 0.5px solid var(--dsw-alias-border-l4);
+	margin-top: -6px;
+	border: 0;
 	border-radius: 50%;
 	background: #fff;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
-	transition: transform 0.12s ease;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.1);
+	transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease;
+	will-change: transform;
 }
 
 .lg-range:hover::-webkit-slider-thumb {
-	transform: scale(1.08);
+	transform: scale(1.15);
+	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .lg-range:active::-webkit-slider-thumb {
-	transform: scale(0.94);
+	transform: scale(0.95);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
 .lg-range::-moz-range-track {
-	height: 3px;
+	height: 4px;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--dsw-alias-label-secondary) 26%, transparent);
+	background: var(--lg-track);
+}
+
+.lg-range::-moz-range-progress {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--lg-fill-color);
 }
 
 .lg-range::-moz-range-thumb {
-	width: 15px;
-	height: 15px;
-	border: 0.5px solid var(--dsw-alias-border-l4);
+	width: 16px;
+	height: 16px;
+	border: 0;
 	border-radius: 50%;
 	background: #fff;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.1);
+	transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lg-range:hover::-moz-range-thumb {
+	transform: scale(1.15);
+}
+
+.lg-range:active::-moz-range-thumb {
+	transform: scale(0.95);
 }
 
 .lg-range:focus-visible {

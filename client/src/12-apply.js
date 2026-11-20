@@ -122,7 +122,9 @@
 				const state = useWallpaper();
 				const lang = useLang();
 				const [mode, setMode] = useState(currentMode);
-				// Layer 5: 'webgl' → 'css' (static glass) → 'off' (plugin disabled).
+				// Layer 5: 'webgl' → 'static' (translucent scrim, no black pane) →
+				// 'off' (plugin disabled). There is no CSS wallpaper mode any more:
+				// the shader is the only wallpaper renderer.
 				const [degrade, setDegrade] = useState("webgl");
 				const [webglEpoch, setWebglEpoch] = useState(0);
 				const [notice, setNotice] = useState(() => (startupNotice ? makeTranslate(activeLang)(startupNotice) : ""));
@@ -175,14 +177,7 @@
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = mode;
-					root.style.setProperty(
-						"--lg-wallpaper",
-						value.wallpaper && state.url && state.kind !== "video" ? `url("${state.url}")` : "none"
-					);
-					root.style.setProperty("--lg-blur", `${value.blur}px`);
-					root.style.setProperty("--lg-sat", String(value.saturation));
 					root.style.setProperty("--lg-dim", String(value.dim));
-					root.style.setProperty("--lg-tint", String(value.tint));
 					root.style.setProperty("--lg-fallback", mode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
 				}, [value, state.url, state.kind, mode, appsBehind]);
@@ -216,7 +211,7 @@
 					};
 				}, [value.enabled]);
 
-				// Layer 5: a lost context freezes WebGL and drops to static CSS glass;
+				// Layer 5: a lost context freezes WebGL and drops to the static scrim;
 				// a second failure inside ten minutes turns the plugin off entirely.
 				const onFault = (kind) => {
 					if (kind === "restored") return;
@@ -235,9 +230,11 @@
 						setSettings({ enabled: false });
 						reportClientError("degrade: off", true);
 					} else {
-						setDegrade("css");
-						setNotice(translate("cssMode"));
-						reportClientError("degrade: css", true);
+						// Fifth protection layer: keep the app legible, never a black
+						// pane. A flat translucent scrim replaces the shader output.
+						setDegrade("static");
+						setNotice(translate("staticMode"));
+						reportClientError("degrade: static", true);
 					}
 				};
 
@@ -277,36 +274,42 @@
 				}, [value.enabled, value.fps, value.autoScale, translate]);
 
 				useEffect(() => {
-					if (!value.enabled || degrade !== "webgl") return;
-					const mode = value.renderMode;
-					// CSS backend: no canvas at all; the stylesheet paints the wallpaper
-					// behind a frosted #root (blur + tint, zero GPU shading). The flag has
-					// to be flipped here too: a first load straight into CSS would
-					// otherwise keep whatever the previous renderer left behind.
-					if (mode === "css") {
-						document.documentElement.dataset.lgWebgl = "off";
+					const root = document.documentElement;
+					if (!value.enabled) return;
+					if (degrade !== "webgl") {
+						// The stylesheet owns the static scrim; make sure a stale canvas
+						// flag cannot keep the WebGL-only rules alive.
+						root.dataset.lgWebgl = "static";
 						return;
 					}
+					const mode = value.renderMode;
 					let cancelled = false;
 					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk }) : createLiquidCanvas({ onFault, onInk });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
-						setSettings({ renderMode: "css" });
-						setNotice(translate(mode === "webgpu" ? "webgpuUnavailable" : "cssMode"));
+						if (mode === "webgpu") {
+							// WebGPU is the only mode with an alternative backend: fall
+							// back to WebGL instead of degrading the whole plugin.
+							setSettings({ renderMode: "webgl" });
+							setNotice(translate("webgpuUnavailable"));
+						} else {
+							setDegrade("static");
+							setNotice(translate("staticMode"));
+						}
 						return;
 					}
 					if (liquid.ready) {
 						liquid.ready.then((ok) => {
 							if (cancelled || ok) return;
 							liquid.dispose();
-							setSettings({ renderMode: "css" });
+							setSettings({ renderMode: "webgl" });
 							setNotice(translate("webgpuUnavailable"));
 						});
 					}
 					document.body.appendChild(liquid.canvas);
 					liquidRef.current = liquid;
 					activeRenderer = liquid;
-					document.documentElement.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
+					root.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
 					liquid.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
 					liquid.setTargetFps(value.fps);
 					liquid.setAutoScale(value.autoScale);
@@ -316,8 +319,8 @@
 						liquid.dispose();
 						liquidRef.current = null;
 						if (activeRenderer === liquid) activeRenderer = null;
-						if (document.documentElement.dataset.lgWebgl !== "off") {
-							document.documentElement.dataset.lgWebgl = "off";
+						if (root.dataset.lgWebgl !== "static") {
+							root.dataset.lgWebgl = "off";
 						}
 					};
 					// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -386,33 +389,6 @@
 					liquidRef.current?.setWallpaper(wallpaperUrl, wallpaperKind);
 				}, [wallpaperUrl, wallpaperKind]);
 
-				// CSS mode has no renderer to report ink, so sample the same bitmap
-				// here; the fetch is an ImageBitmap decode, not a GPU upload.
-				useEffect(() => {
-					if (value.renderMode !== "css" || degrade === "off" || !wallpaperUrl) return;
-					let cancelled = false;
-					(async () => {
-						try {
-							let source;
-							if (wallpaperKind === "video") {
-								source = await frameFromVideo(wallpaperUrl);
-							} else {
-								const response = await fetch(wallpaperUrl, { cache: "no-store" });
-								if (!response.ok) return;
-								source = await createImageBitmap(await response.blob());
-							}
-							if (!source || cancelled) return;
-							onInk(measureInk(source));
-							source.close?.();
-						} catch {
-							// Ink stays on the theme default.
-						}
-					})();
-					return () => {
-						cancelled = true;
-					};
-				}, [value.renderMode, degrade, wallpaperUrl, wallpaperKind, onInk]);
-
 				// Token layering is the supported way to restyle shipped surfaces:
 				// the theme service composes our layer above the active theme.
 				//
@@ -448,15 +424,8 @@
 							ink = decided.ink;
 							veil = decided.veil;
 						}
-						// The composer is its own surface: give it a ground that matches the
-						// ink actually in use, so white text sits on dark glass and dark text
-						// on light glass instead of both fighting the wallpaper.
-						document.documentElement.style.setProperty(
-							"--lg-composer-bg",
-							ink === "light"
-								? `rgba(12,14,20,${(0.42 + 0.33 * veil).toFixed(3)})`
-								: `rgba(255,255,255,${(0.06 + 0.5 * veil).toFixed(3)})`
-						);
+						// The composer is its own surface: the frosted card reads the overlay
+						// token, which glassTokens() already tints toward the ink in use.
 						const next = glassTokens(value.tint, veil, ink);
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
@@ -627,8 +596,6 @@
 								appsBehind: state.appsBehind === true,
 								kind: state.kind ?? null,
 								mode: root.dataset.lgMode ?? null,
-								blur: root.style.getPropertyValue("--lg-blur"),
-								wallpaper: root.style.getPropertyValue("--lg-wallpaper").slice(0, 72),
 								rootBackground: rootStyle?.backgroundColor ?? null,
 								rootBackdrop: rootStyle?.backdropFilter || rootStyle?.webkitBackdropFilter || null,
 								bodyBeforeImage: String(bodyBefore.backgroundImage || "").slice(0, 72),
@@ -696,7 +663,7 @@
 						? h(
 								"div",
 								{ className: "lg-warn", "data-degrade": degrade, "data-liquid-glass": "warn" },
-								h("span", { className: "lg-warn-text" }, notice || t("cssMode")),
+								h("span", { className: "lg-warn-text" }, notice || t("staticMode")),
 								degrade !== "webgl"
 									? h(
 											"button",
@@ -933,8 +900,7 @@
 									"select",
 									{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
 									h("option", { value: "webgl" }, t("renderWebgl")),
-									h("option", { value: "webgpu" }, t("renderWebgpu")),
-									h("option", { value: "css" }, t("renderCss"))
+									h("option", { value: "webgpu" }, t("renderWebgpu"))
 								)
 							),
 							h(
@@ -990,7 +956,8 @@
 								h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—"))
+								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
+								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
 							)
 						),
 						h(

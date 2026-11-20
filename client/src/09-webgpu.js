@@ -2,12 +2,12 @@
 		 * Owns the WebGL canvas that paints the liquid wallpaper and its five
 		 * protection layers: visibility/focus circuit breaker, frame-rate
 		 * throttle, dynamic resolution, render-on-demand, and a context-lost
-		 * escape hatch that drops to static CSS glass.
+		 * escape hatch that drops to a static translucent scrim.
 		 */
 		// WebGPU backend: the same screen-space liquid pipeline, written in WGSL.
 		// It keeps the WebGL renderer's contract (start/stop/pause/fps/DRS) so the
 		// protection layers work unchanged; any setup failure returns null and the
-		// caller degrades to CSS mode.
+		// caller degrades to a static translucent scrim.
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
@@ -35,6 +35,15 @@
 			let texture = null;
 			let sampler = null;
 			let textureVersion = 0;
+			let blurPipeline = null;
+			let blurUniformBuffer = null;
+			let wallpaperView = null;
+			let blurA = null;
+			let blurB = null;
+			let blurAView = null;
+			let blurBView = null;
+			let blurKey = "";
+			const blurUniforms = new Float32Array(4);
 			let running = false;
 			let disposed = false;
 			let shown = false;
@@ -46,7 +55,7 @@
 			let fast = 0;
 			let scaleIndex = 1;
 			let mouse = { x: 0.5, y: 0.5 };
-			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55 };
+			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
 			const uniforms = new Float32Array(20);
 			const vertexShader = `
@@ -115,6 +124,49 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }`;
 
+			// 13-tap poisson-disc Gaussian for the WebGPU prepass, numerically the
+			// same kernel as BLUR_FRAGMENT_SHADER in 08-shaders.js: centre 0.1370,
+			// four axes at 1.41r 0.1044, four diagonals at 1r 0.0820, four axes at
+			// 2.2r 0.0294 (sum 1.0002, so repeated passes cannot gain brightness).
+			// The renderer ping-pongs this one kernel 1–4 times, which is what keeps
+			// a 48 px slider smooth instead of a clamped, banded smear.
+			const blurShader = `
+struct BlurU { texel: vec2<f32>, radius: f32, pad: f32 };
+@group(0) @binding(0) var<uniform> b: BlurU;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var src: texture_2d<f32>;
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex
+fn vs(@builtin(vertex_index) i: u32) -> VSOut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  var out: VSOut;
+  out.pos = vec4<f32>(p[i], 0.0, 1.0);
+  out.uv = p[i] * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+fn tap(uv: vec2<f32>, off: vec2<f32>) -> vec3<f32> {
+  return textureSample(src, samp, uv + off * b.texel * b.radius).rgb;
+}
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  let uv = in.uv;
+  var col = tap(uv, vec2<f32>(0.0, 0.0)) * 0.1370;
+  col += tap(uv, vec2<f32>(1.41, 0.0)) * 0.1044;
+  col += tap(uv, vec2<f32>(-1.41, 0.0)) * 0.1044;
+  col += tap(uv, vec2<f32>(0.0, 1.41)) * 0.1044;
+  col += tap(uv, vec2<f32>(0.0, -1.41)) * 0.1044;
+  col += tap(uv, vec2<f32>(1.0, 1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(-1.0, -1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(1.0, -1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(-1.0, 1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(2.2, 0.0)) * 0.0294;
+  col += tap(uv, vec2<f32>(-2.2, 0.0)) * 0.0294;
+  col += tap(uv, vec2<f32>(0.0, 2.2)) * 0.0294;
+  col += tap(uv, vec2<f32>(0.0, -2.2)) * 0.0294;
+  return vec4<f32>(col, 1.0);
+}
+`;
+
 			function geometry() {
 				const frameX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
 				const frameY = Math.max(0, window.outerHeight - window.innerHeight);
@@ -136,6 +188,84 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					canvas.height = h;
 				}
 				return w / Math.max(1, window.innerWidth);
+			}
+			function makeBlurTargets(width, height) {
+				if (blurA && blurA.width === width && blurA.height === height) return;
+				for (const tex of [blurA, blurB]) {
+					try { tex?.destroy(); } catch { /* already gone */ }
+				}
+				const make = () =>
+					device.createTexture({
+						size: [width, height],
+						format: "rgba8unorm",
+						usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
+					});
+				blurA = make();
+				blurB = make();
+				blurAView = blurA.createView();
+				blurBView = blurB.createView();
+				blurKey = "";
+			}
+			function blurBindGroup(view) {
+				return device.createBindGroup({
+					layout: blurPipeline.getBindGroupLayout(0),
+					entries: [
+						{ binding: 0, resource: { buffer: blurUniformBuffer } },
+						{ binding: 1, resource: sampler },
+						{ binding: 2, resource: view }
+					]
+				});
+			}
+			/**
+			 * Encode the blur prepass and return the view the main pass samples.
+			 * Same mapping as the WebGL renderer: the slider is in CSS pixels, the
+			 * target radius is in wallpaper texels, and the pass count grows with
+			 * it so every individual 13-tap pass keeps its radius inside the
+			 * kernel's well-sampled range.
+			 */
+			function runBlur(encoder) {
+				if (!blurPipeline || !blurUniformBuffer || !texture) return null;
+				if (params.blur <= 0.5) return wallpaperView;
+				const width = texture.width;
+				const height = texture.height;
+				makeBlurTargets(width, height);
+				const pixelScale = width / Math.max(1, window.innerWidth);
+				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
+				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
+				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
+				blurUniforms[0] = 1 / width;
+				blurUniforms[1] = 1 / height;
+				blurUniforms[2] = radius;
+				blurUniforms[3] = 0;
+				device.queue.writeBuffer(blurUniformBuffer, 0, blurUniforms);
+				let source = wallpaperView;
+				for (let pass = 0; pass < passes; pass++) {
+					const dest = pass % 2 === 0 ? blurAView : blurBView;
+					const command = encoder.beginRenderPass({
+						colorAttachments: [{
+							view: dest,
+							clearValue: { r: 0, g: 0, b: 0, a: 1 },
+							loadOp: "clear",
+							storeOp: "store"
+						}]
+					});
+					command.setPipeline(blurPipeline);
+					command.setBindGroup(0, blurBindGroup(source));
+					command.draw(3);
+					command.end();
+					source = dest;
+				}
+				return source;
+			}
+			function bindDisplay(view) {
+				bindGroup = device.createBindGroup({
+					layout: pipeline.getBindGroupLayout(0),
+					entries: [
+						{ binding: 0, resource: { buffer: uniformBuffer } },
+						{ binding: 1, resource: sampler },
+						{ binding: 2, resource: view }
+					]
+				});
 			}
 			function frameInterval() {
 				return perf.targetFps > 0 ? 1000 / perf.targetFps : 0;
@@ -165,7 +295,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				}
 			}
 			function draw(now) {
-				if (!device || !context || !bindGroup) return;
+				if (!device || !context || !pipeline) return;
 				const g = geometry();
 				const cScale = canvas.width / Math.max(1, window.innerWidth);
 				uniforms[0] = (now || performance.now()) / 1000;
@@ -176,8 +306,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
 				uniforms[12] = params.tint; uniforms[13] = cScale; uniforms[14] = g.dpr;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
-				const view = context.getCurrentTexture().createView();
 				const encoder = device.createCommandEncoder();
+				if (texture) {
+					// Wallpaper uploads and blur-slider moves invalidate the prepass;
+					// ordinary frames reuse the last blurred view.
+					const key = `${textureVersion}:${texture.width}x${texture.height}:${window.innerWidth}:${params.blur}`;
+					if (key !== blurKey || !bindGroup) {
+						const source = runBlur(encoder);
+						if (!source) return;
+						bindDisplay(source);
+						blurKey = key;
+					}
+				}
+				const view = context.getCurrentTexture().createView();
 				const pass = encoder.beginRenderPass({
 					colorAttachments: [{
 						view,
@@ -186,9 +327,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						storeOp: "store"
 					}]
 				});
-				pass.setPipeline(pipeline);
-				pass.setBindGroup(0, bindGroup);
-				pass.draw(3);
+				if (bindGroup) {
+					pass.setPipeline(pipeline);
+					pass.setBindGroup(0, bindGroup);
+					pass.draw(3);
+				}
 				pass.end();
 				device.queue.submit([encoder.finish()]);
 				if (!shown && texture) {
@@ -264,14 +407,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					});
 					device.queue.copyExternalImageToTexture({ source }, { texture }, [w, h]);
 					source.close?.();
-					bindGroup = device.createBindGroup({
-						layout: pipeline.getBindGroupLayout(0),
-						entries: [
-							{ binding: 0, resource: { buffer: uniformBuffer } },
-							{ binding: 1, resource: sampler },
-							{ binding: 2, resource: texture.createView() }
-						]
-					});
+					wallpaperView = texture.createView();
+					bindGroup = null;
+					blurKey = "";
 					draw(performance.now());
 					return true;
 				} catch (error) {
@@ -302,6 +440,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						fragment: { module: device.createShaderModule({ code: vertexShader }), entryPoint: "fs", targets: [{ format }] },
 						primitive: { topology: "triangle-list" }
 					});
+					blurUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+					blurPipeline = device.createRenderPipeline({
+						layout: "auto",
+						vertex: { module: device.createShaderModule({ code: blurShader }), entryPoint: "vs" },
+						fragment: { module: device.createShaderModule({ code: blurShader }), entryPoint: "fs", targets: [{ format: "rgba8unorm" }] },
+						primitive: { topology: "triangle-list" }
+					});
 					return true;
 				} catch (error) {
 					reportClientError(`webgpu init: ${error?.message ?? error}`, true);
@@ -317,6 +462,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					disposed = true;
 					stop();
 					try { texture?.destroy(); } catch {}
+					for (const tex of [blurA, blurB]) {
+						try { tex?.destroy(); } catch {}
+					}
+					blurA = null;
+					blurB = null;
+					blurAView = null;
+					blurBView = null;
+					wallpaperView = null;
+					bindGroup = null;
+					try { blurUniformBuffer?.destroy(); } catch {}
 					try { device?.destroy(); } catch {}
 					canvas.remove();
 				},
@@ -325,6 +480,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.tint === "number") params.tint = next.tint;
+					if (typeof next.blur === "number" && next.blur !== params.blur) {
+						params.blur = next.blur;
+						blurKey = "";
+						if (device && texture) draw(performance.now());
+					}
 				},
 				setMouse(x, y) { mouse.x = x; mouse.y = y; },
 				setTargetFps(v) { perf.targetFps = v > 0 ? Math.min(240, v) : 0; },
@@ -351,7 +511,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						msPerFrame: Number((elapsed / frames).toFixed(3)),
 						canvas: [canvas.width, canvas.height],
 						tex: [texture.width, texture.height],
-						blur: null,
+						blur: params.blur > 0.5 ? [texture.width, texture.height] : null,
 						scale: SCALES[scaleIndex],
 						backend: "webgpu"
 					};

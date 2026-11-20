@@ -15,16 +15,19 @@
 		}
 
 		function Slider({ label, value, min, max, step, display, onChange }) {
+			const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
 			return h(
 				"label",
-				{ className: "lg-slider" },
-				h("div", { className: "lg-slider-head" }, h("span", null, label), h("b", null, display)),
+				{ className: "lg-field" },
+				h("div", { className: "lg-field-head" }, h("span", null, label), h("b", null, display)),
 				h("input", {
 					type: "range",
+					className: "lg-range",
 					min,
 					max,
 					step,
 					value,
+					style: { "--lg-fill": `${pct}%` },
 					onChange: (event) => onChange(Number(event.target.value))
 				})
 			);

@@ -113,10 +113,11 @@ void main() {
 }
 `;
 
-		// Blur prepass: one 13-tap poisson blur into a half-resolution FBO, run
-		// once per wallpaper upload (or when the blur slider moves) instead of
-		// letting the compositor run backdrop-filter over the whole window every
-		// frame. This is what keeps the GPU cost to a single pass.
+		// 13-tap poisson-disc Gaussian, normalised so repeated passes cannot
+		// accumulate brightness (an unnormalised kernel used to gain ~19% per
+		// pass). Offsets: centre, 4 axis at 1.41r, 4 diagonal at 1r, 4 axis at
+		// 2.2r. The renderer runs this one kernel 1–4 times (ping-pong) so the
+		// same 13 taps stay smooth all the way to a 48 px slider position.
 		const BLUR_FRAGMENT_SHADER = String.raw`
 precision mediump float;
 uniform sampler2D uTex;
@@ -125,19 +126,19 @@ uniform float uRadius;
 void main() {
 	vec2 uv = gl_FragCoord.xy * uTexel;
 	vec2 r = uTexel * uRadius;
-	vec3 color = texture2D(uTex, uv).rgb * 0.1633;
-	color += texture2D(uTex, uv + vec2(r.x * 1.41, 0.0)).rgb * 0.1245;
-	color += texture2D(uTex, uv - vec2(r.x * 1.41, 0.0)).rgb * 0.1245;
-	color += texture2D(uTex, uv + vec2(0.0, r.y * 1.41)).rgb * 0.1245;
-	color += texture2D(uTex, uv - vec2(0.0, r.y * 1.41)).rgb * 0.1245;
-	color += texture2D(uTex, uv + vec2(r.x, r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv - vec2(r.x, r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv + vec2(r.x, -r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv - vec2(r.x, -r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv + vec2(r.x * 2.2, 0.0)).rgb * 0.035;
-	color += texture2D(uTex, uv - vec2(r.x * 2.2, 0.0)).rgb * 0.035;
-	color += texture2D(uTex, uv + vec2(0.0, r.y * 2.2)).rgb * 0.035;
-	color += texture2D(uTex, uv - vec2(0.0, r.y * 2.2)).rgb * 0.035;
+	vec3 color = texture2D(uTex, uv).rgb * 0.1370;
+	color += texture2D(uTex, uv + vec2(r.x * 1.41, 0.0)).rgb * 0.1044;
+	color += texture2D(uTex, uv - vec2(r.x * 1.41, 0.0)).rgb * 0.1044;
+	color += texture2D(uTex, uv + vec2(0.0, r.y * 1.41)).rgb * 0.1044;
+	color += texture2D(uTex, uv - vec2(0.0, r.y * 1.41)).rgb * 0.1044;
+	color += texture2D(uTex, uv + vec2(r.x, r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv - vec2(r.x, r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv + vec2(r.x, -r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv - vec2(r.x, -r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv + vec2(r.x * 2.2, 0.0)).rgb * 0.0294;
+	color += texture2D(uTex, uv - vec2(r.x * 2.2, 0.0)).rgb * 0.0294;
+	color += texture2D(uTex, uv + vec2(0.0, r.y * 2.2)).rgb * 0.0294;
+	color += texture2D(uTex, uv - vec2(0.0, r.y * 2.2)).rgb * 0.0294;
 	gl_FragColor = vec4(color, 1.0);
 }
 `;

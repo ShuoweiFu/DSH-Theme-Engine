@@ -10,7 +10,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.20.223012";
+		const CLIENT_BUILD = "v.26.11.21.002811";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -34,7 +34,7 @@
 		/**
 		 * Hardware profiles. A preset only writes the knobs that keep the machine
 		 * alive (engine, frame cap, dynamic resolution, occluded-window
-		 * compositing) — never the wallpaper, the look or the capture cadence the
+		 * compositing) 鈥?never the wallpaper, the look or the capture cadence the
 		 * user picked, so switching profile cannot repaint their glass.
 		 */
 		const PRESETS = Object.freeze({
@@ -52,7 +52,7 @@
 		/**
 		 * Latest quantised wallpaper sample, shared with the settings panel so it
 		 * can show the measured brightness. 0.11 kept this in a useState scoped to
-		 * the overlay and then *used it in the panel's scope* — a ReferenceError on
+		 * the overlay and then *used it in the panel's scope* 鈥?a ReferenceError on
 		 * every panel render. A plain object fixes that without adding a store.
 		 */
 		const inkProbe = { sample: null };
@@ -134,20 +134,20 @@
 			unknown: "—",
 			source: "来源",
 			size: "大小",
+			version: "版本",
 			moveHint: "桌面上移动鼠标，可以看到玻璃上的高光跟随。",
 			perf: "性能保护",
 			fps: "最大帧率",
 			fpsHint: "核显建议 30；「无限制」只在独显台式机上使用。",
 			autoScale: "自动降分辨率",
 			renderMode: "渲染引擎",
-			renderModeHint: "WebGL 兼容最好；WebGPU 需要显卡/浏览器支持；纯 CSS 不启用 GPU 着色，只做毛玻璃与静态着色。",
+			renderModeHint: "WebGL 兼容最好；WebGPU 需要显卡/浏览器支持。两种模式都由 Shader 完成高斯模糊。",
 			renderWebgl: "WebGL（推荐）",
 			renderWebgpu: "WebGPU（实验）",
-			renderCss: "纯 CSS（零 GPU）",
-			webgpuUnavailable: "此环境不支持 WebGPU，已退回纯 CSS 模式。",
+			webgpuUnavailable: "此环境不支持 WebGPU，已自动切回 WebGL。",
 			autoScaleHint: "帧时间过高时降低着色器分辨率保命，流畅后自动恢复。",
 			unlimited: "无限制",
-			cssMode: "显卡过热保护：液态渲染已冻结，当前为静态磨砂玻璃。冷却后点「重新尝试」恢复。",
+			staticMode: "显卡渲染异常：已切换为静态半透明遮罩兜底。冷却后点「重新尝试」恢复液态玻璃。",
 			contextLost: "检测到显卡驱动重置，已切换为静态玻璃（保命模式）。",
 			autoDisabled: "连续两次显卡异常，已自动关闭液态玻璃。确认机器冷却后再手动开启。",
 			retry: "重新尝试",
@@ -218,20 +218,20 @@
 			unknown: "—",
 			source: "Source",
 			size: "Size",
+			version: "Version",
 			moveHint: "Move the pointer over the window to see the glass highlights follow.",
 			perf: "Performance guard",
 			fps: "Max frame rate",
 			fpsHint: "30 is the safe choice on integrated GPUs; use unlimited only on a discrete desktop GPU.",
 			autoScale: "Dynamic resolution",
 			renderMode: "Renderer",
-			renderModeHint: "WebGL is the most compatible; WebGPU needs GPU/browser support; CSS runs no GPU shading, only frosted blur and a static tint.",
+			renderModeHint: "WebGL is the most compatible; WebGPU needs GPU/browser support. Both run their Gaussian blur in the shader.",
 			renderWebgl: "WebGL (recommended)",
 			renderWebgpu: "WebGPU (experimental)",
-			renderCss: "CSS only (no GPU)",
-			webgpuUnavailable: "WebGPU is unavailable here; fell back to CSS mode.",
+			webgpuUnavailable: "WebGPU is unavailable here; switched back to WebGL.",
 			autoScaleHint: "Drops the shader resolution when frame times spike, and restores it when smooth again.",
 			unlimited: "Unlimited",
-			cssMode: "GPU overheat guard: liquid rendering is frozen, showing static frosted glass. Let the machine cool, then retry.",
+			staticMode: "Graphics failure: switched to the static translucent fallback. When the machine cools down, press Retry to restore liquid glass.",
 			contextLost: "The graphics driver reset; switched to static glass (fail-safe mode).",
 			autoDisabled: "The GPU failed twice, so liquid glass was disabled automatically. Re-enable it after the machine cools down.",
 			retry: "Retry",
@@ -296,7 +296,7 @@
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
 				source: source.source === "wallpaper" ? "wallpaper" : "desktop",
-				renderMode: source.renderMode === "css" ? "css" : source.renderMode === "webgpu" ? "webgpu" : "webgl",
+				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto"
@@ -441,8 +441,7 @@
 		/**
 		 * Seek a hidden <video> to ~18% of its duration and snapshot one frame,
 		 * capped at 2048 px. The host route supports Range, so only the head and
-		 * the seek target are fetched. Used by the wallpaper texture upload and by
-		 * the CSS-only ink probe.
+		 * the seek target are fetched. Used by the wallpaper texture upload.
 		 */
 		function frameFromVideo(url) {
 			return new Promise((resolve, reject) => {
@@ -731,8 +730,6 @@
 		}
 		const CSS = String.raw`
 :root {
-	--lg-wallpaper: none;
-	--lg-composer-bg: rgba(255, 255, 255, 0.06);
 	--lg-blur: 10px;
 	--lg-sat: 1.4;
 	--lg-dim: 0.08;
@@ -747,7 +744,11 @@ html[data-lg-enabled="on"] body {
 	background: transparent !important;
 }
 
-/* CSS fallback wallpaper; the WebGL canvas takes over when it is running. */
+/* Startup scrim: a flat themed base behind the app until the shader's first
+   frame arrives. The shader canvas covers it completely once running; when the
+   fifth protection layer trips, this same layer becomes the static translucent
+   fallback (see [data-lg-webgl="static"] below), so a dead GPU can never show a
+   black pane. */
 html[data-lg-enabled="on"] body::before {
 	content: "";
 	position: fixed;
@@ -755,26 +756,14 @@ html[data-lg-enabled="on"] body::before {
 	z-index: -2;
 	pointer-events: none;
 	background-color: var(--lg-fallback);
-	background-image: var(--lg-wallpaper, none);
-	background-position: center;
-	background-size: cover;
-	background-repeat: no-repeat;
 	opacity: calc(1 - var(--lg-dim));
+	transition: opacity 240ms ease;
 }
 
-/* The canvas owns the wallpaper in GPU modes: this element stays as the dark
-   fallback colour only. It used to paint the same wallpaper underneath, but
-   every recapture replaced that image with no transition, which read as the
-   background flashing on each refresh. */
-html[data-lg-enabled="on"][data-lg-webgl="on"] body::before,
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] body::before {
-	background-image: none !important;
-}
-
-/* WebGPU has no CPU-side blur prepass; a canvas filter is the cheapest way to
-   keep the glass soft without a second full-window compositor pass. */
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] canvas[data-liquid-glass] {
-	filter: blur(calc(var(--lg-blur) * 0.6));
+/* Static fallback: half-transparent scrim over the desktop, no wallpaper image,
+   no shader, no backdrop-filter. Text keeps its themed ink and stays legible. */
+html[data-lg-enabled="on"][data-lg-webgl="static"] body::before {
+	opacity: 0.62;
 }
 
 /* Soft moving sheen + depth over the wallpaper. */
@@ -813,35 +802,22 @@ html[data-lg-suppressed="on"] #root {
 	backdrop-filter: none !important;
 }
 
-/* The glass pane: blur + saturation of everything behind the app.
-   Only the pure-CSS backend keeps this: with WebGL/WebGPU the wallpaper is
-   already blurred by the shader prepass, and a compositor backdrop-filter here
-   would make Chromium blur the very same pixels a second time (double GPU
-   cost for no visual gain). */
-html[data-lg-enabled="on"][data-lg-webgl="off"] #root {
-	background: transparent !important;
-	-webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
-	backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
-}
-
+/* The glass pane. Every GPU backend blurs the wallpaper in its own shader
+   prepass, so the compositor must never run a second backdrop blur over the
+   canvas. The static fallback deliberately has none either: it is a flat
+   translucent scrim, which is exactly what "no GPU" can guarantee. */
 html[data-lg-enabled="on"][data-lg-webgl="on"] #root,
-html[data-lg-enabled="on"][data-lg-webgl="gpu"] #root {
+html[data-lg-enabled="on"][data-lg-webgl="gpu"] #root,
+html[data-lg-enabled="on"][data-lg-webgl="static"] #root,
+html[data-lg-enabled="on"][data-lg-webgl="off"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
 }
 
 /* DSH's composer card ships as an opaque white slab (rgb(255,255,255)), which
-   breaks the glass pane and piles a white background behind the input text —
-   white placeholder/label text then has nothing to stand out against. Give it
-   the same raised-surface token as every other nested panel, so it can only be
-   as dense as the frost the user actually chose. Class names are CSS-module
-   hashes ('GRgSLq_card'), so match the stable '_card' suffix plus the fact that
-   the element contains the editor. Suppressed mode keeps the shipped slab. */
-html[data-lg-enabled="on"]:not([data-lg-suppressed="on"]) [class*="_card"]:has([contenteditable="true"]),
-html[data-lg-enabled="on"]:not([data-lg-suppressed="on"]) [class*="_card"]:has(textarea) {
-	background: var(--lg-composer-bg, var(--dsw-alias-bg-layer-1)) !important;
-}
+   breaks the glass pane. It carries the stable data-composer-card attribute, so
+   the frosted treatment below targets it directly (no CSS-module hash games). */
 
 /* Edge bevel: reads as a thick pane with an inner lens ring. */
 html[data-lg-enabled="on"] #root::after {
@@ -918,7 +894,38 @@ html[data-lg-enabled="on"] #root::after {
 	}
 }
 
+/* ---- native message composer: frosted glass ---- */
+/*
+ * The conversation's input card is the one native surface the user stares at
+ * all day, so it gets the same treatment as the settings cards: a translucent
+ * wash of the overlay token plus a real backdrop blur, a hairline ring and a
+ * top-edge highlight.  The wallpaper and the transcript behind it stay visible
+ * (frosted), instead of the opaque input slab DSH ships by default.
+ */
+div[data-composer-card] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 82%, transparent);
+	-webkit-backdrop-filter: blur(26px) saturate(1.28);
+	backdrop-filter: blur(26px) saturate(1.28);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 12px 32px rgba(8, 12, 20, 0.12);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card] {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
 /* ---- main panel page (native plugin-page chrome) ---- */
+/*
+ * The page itself is bare glass: the wallpaper, the liquid shader and the
+ * frosted app backdrop must all stay visible through this column.  Clarity is
+ * bought locally — every settings group is its own translucent floating card —
+ * never by painting an opaque sheet over the whole workspace.
+ */
 .lg-page {
 	display: flex;
 	flex-direction: column;
@@ -926,12 +933,8 @@ html[data-lg-enabled="on"] #root::after {
 	width: 100%;
 	height: 100%;
 	min-height: 0;
-	background: rgba(250, 251, 253, 0.97);
+	background: transparent;
 	color: var(--dsw-alias-label-primary);
-}
-
-html[data-lg-mode="dark"] .lg-page {
-	background: rgba(12, 15, 22, 0.97);
 }
 
 .lg-page-head {
@@ -997,11 +1000,24 @@ html[data-lg-mode="dark"] .lg-page {
 	overscroll-behavior: contain;
 }
 
+/*
+ * One floating glass card per group: a faint wash of the theme's own layer-2
+ * token plus a backdrop blur.  The card, not the page, is what keeps labels
+ * legible over a busy wallpaper; the gaps between cards stay fully transparent
+ * so the liquid background reads through.
+ */
 .lg-group {
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	margin: 0 0 32px;
+	margin: 0 0 24px;
+	padding: 6px 18px;
+	border: 0.5px solid var(--dsw-alias-border-l1);
+	border-radius: 14px;
+	background: var(--dsw-alias-bg-layer-2);
+	-webkit-backdrop-filter: blur(24px) saturate(1.18);
+	backdrop-filter: blur(24px) saturate(1.18);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .lg-group:last-child {
@@ -1157,7 +1173,7 @@ html[data-lg-mode="dark"] .lg-page {
 .lg-field {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 12px;
 	padding: 16px 0;
 	border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
@@ -1167,21 +1183,40 @@ html[data-lg-mode="dark"] .lg-page {
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 16px;
+	min-width: 0;
 	font-size: 14px;
 	line-height: 20px;
 }
 
+.lg-field-head span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .lg-field-head b {
+	flex: none;
 	font-size: 12px;
 	font-weight: 500;
 	font-variant-numeric: tabular-nums;
 	color: var(--dsw-alias-label-secondary);
 }
 
+/*
+ * Apple-style damped glass slider. The track is a 4px hairline of the theme's
+ * own secondary ink at 20%; the travelled part is a barely-there brand wash,
+ * painted by a JS-fed custom property so every value change animates the fill
+ * without re-rendering anything but the input.
+ */
 .lg-range {
+	--lg-fill: 0%;
+	--lg-track: color-mix(in srgb, var(--dsw-alias-label-secondary) 20%, transparent);
+	--lg-fill-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 55%, transparent);
 	width: 100%;
-	height: 18px;
+	height: 20px;
 	margin: 0;
+	padding: 0;
 	appearance: none;
 	-webkit-appearance: none;
 	background: transparent;
@@ -1189,9 +1224,15 @@ html[data-lg-mode="dark"] .lg-page {
 }
 
 .lg-range::-webkit-slider-runnable-track {
-	height: 3px;
+	height: 4px;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--dsw-alias-label-secondary) 26%, transparent);
+	background: linear-gradient(
+		to right,
+		var(--lg-fill-color) 0,
+		var(--lg-fill-color) var(--lg-fill),
+		var(--lg-track) var(--lg-fill),
+		var(--lg-track) 100%
+	);
 }
 
 .lg-range::-webkit-slider-thumb {
@@ -1199,35 +1240,53 @@ html[data-lg-mode="dark"] .lg-page {
 	-webkit-appearance: none;
 	width: 16px;
 	height: 16px;
-	margin-top: -6.5px;
-	border: 0.5px solid var(--dsw-alias-border-l4);
+	margin-top: -6px;
+	border: 0;
 	border-radius: 50%;
 	background: #fff;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
-	transition: transform 0.12s ease;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.1);
+	transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease;
+	will-change: transform;
 }
 
 .lg-range:hover::-webkit-slider-thumb {
-	transform: scale(1.08);
+	transform: scale(1.15);
+	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .lg-range:active::-webkit-slider-thumb {
-	transform: scale(0.94);
+	transform: scale(0.95);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
 .lg-range::-moz-range-track {
-	height: 3px;
+	height: 4px;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--dsw-alias-label-secondary) 26%, transparent);
+	background: var(--lg-track);
+}
+
+.lg-range::-moz-range-progress {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--lg-fill-color);
 }
 
 .lg-range::-moz-range-thumb {
-	width: 15px;
-	height: 15px;
-	border: 0.5px solid var(--dsw-alias-border-l4);
+	width: 16px;
+	height: 16px;
+	border: 0;
 	border-radius: 50%;
 	background: #fff;
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.1);
+	transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.lg-range:hover::-moz-range-thumb {
+	transform: scale(1.15);
+}
+
+.lg-range:active::-moz-range-thumb {
+	transform: scale(0.95);
 }
 
 .lg-range:focus-visible {
@@ -1503,10 +1562,11 @@ void main() {
 }
 `;
 
-		// Blur prepass: one 13-tap poisson blur into a half-resolution FBO, run
-		// once per wallpaper upload (or when the blur slider moves) instead of
-		// letting the compositor run backdrop-filter over the whole window every
-		// frame. This is what keeps the GPU cost to a single pass.
+		// 13-tap poisson-disc Gaussian, normalised so repeated passes cannot
+		// accumulate brightness (an unnormalised kernel used to gain ~19% per
+		// pass). Offsets: centre, 4 axis at 1.41r, 4 diagonal at 1r, 4 axis at
+		// 2.2r. The renderer runs this one kernel 1–4 times (ping-pong) so the
+		// same 13 taps stay smooth all the way to a 48 px slider position.
 		const BLUR_FRAGMENT_SHADER = String.raw`
 precision mediump float;
 uniform sampler2D uTex;
@@ -1515,19 +1575,19 @@ uniform float uRadius;
 void main() {
 	vec2 uv = gl_FragCoord.xy * uTexel;
 	vec2 r = uTexel * uRadius;
-	vec3 color = texture2D(uTex, uv).rgb * 0.1633;
-	color += texture2D(uTex, uv + vec2(r.x * 1.41, 0.0)).rgb * 0.1245;
-	color += texture2D(uTex, uv - vec2(r.x * 1.41, 0.0)).rgb * 0.1245;
-	color += texture2D(uTex, uv + vec2(0.0, r.y * 1.41)).rgb * 0.1245;
-	color += texture2D(uTex, uv - vec2(0.0, r.y * 1.41)).rgb * 0.1245;
-	color += texture2D(uTex, uv + vec2(r.x, r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv - vec2(r.x, r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv + vec2(r.x, -r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv - vec2(r.x, -r.y)).rgb * 0.0977;
-	color += texture2D(uTex, uv + vec2(r.x * 2.2, 0.0)).rgb * 0.035;
-	color += texture2D(uTex, uv - vec2(r.x * 2.2, 0.0)).rgb * 0.035;
-	color += texture2D(uTex, uv + vec2(0.0, r.y * 2.2)).rgb * 0.035;
-	color += texture2D(uTex, uv - vec2(0.0, r.y * 2.2)).rgb * 0.035;
+	vec3 color = texture2D(uTex, uv).rgb * 0.1370;
+	color += texture2D(uTex, uv + vec2(r.x * 1.41, 0.0)).rgb * 0.1044;
+	color += texture2D(uTex, uv - vec2(r.x * 1.41, 0.0)).rgb * 0.1044;
+	color += texture2D(uTex, uv + vec2(0.0, r.y * 1.41)).rgb * 0.1044;
+	color += texture2D(uTex, uv - vec2(0.0, r.y * 1.41)).rgb * 0.1044;
+	color += texture2D(uTex, uv + vec2(r.x, r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv - vec2(r.x, r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv + vec2(r.x, -r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv - vec2(r.x, -r.y)).rgb * 0.0820;
+	color += texture2D(uTex, uv + vec2(r.x * 2.2, 0.0)).rgb * 0.0294;
+	color += texture2D(uTex, uv - vec2(r.x * 2.2, 0.0)).rgb * 0.0294;
+	color += texture2D(uTex, uv + vec2(0.0, r.y * 2.2)).rgb * 0.0294;
+	color += texture2D(uTex, uv - vec2(0.0, r.y * 2.2)).rgb * 0.0294;
 	gl_FragColor = vec4(color, 1.0);
 }
 `;
@@ -1547,12 +1607,12 @@ void main() {
 		 * Owns the WebGL canvas that paints the liquid wallpaper and its five
 		 * protection layers: visibility/focus circuit breaker, frame-rate
 		 * throttle, dynamic resolution, render-on-demand, and a context-lost
-		 * escape hatch that drops to static CSS glass.
+		 * escape hatch that drops to a static translucent scrim.
 		 */
 		// WebGPU backend: the same screen-space liquid pipeline, written in WGSL.
 		// It keeps the WebGL renderer's contract (start/stop/pause/fps/DRS) so the
 		// protection layers work unchanged; any setup failure returns null and the
-		// caller degrades to CSS mode.
+		// caller degrades to a static translucent scrim.
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
@@ -1580,6 +1640,15 @@ void main() {
 			let texture = null;
 			let sampler = null;
 			let textureVersion = 0;
+			let blurPipeline = null;
+			let blurUniformBuffer = null;
+			let wallpaperView = null;
+			let blurA = null;
+			let blurB = null;
+			let blurAView = null;
+			let blurBView = null;
+			let blurKey = "";
+			const blurUniforms = new Float32Array(4);
 			let running = false;
 			let disposed = false;
 			let shown = false;
@@ -1591,7 +1660,7 @@ void main() {
 			let fast = 0;
 			let scaleIndex = 1;
 			let mouse = { x: 0.5, y: 0.5 };
-			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55 };
+			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
 			const uniforms = new Float32Array(20);
 			const vertexShader = `
@@ -1660,6 +1729,49 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(clamp(col, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }`;
 
+			// 13-tap poisson-disc Gaussian for the WebGPU prepass, numerically the
+			// same kernel as BLUR_FRAGMENT_SHADER in 08-shaders.js: centre 0.1370,
+			// four axes at 1.41r 0.1044, four diagonals at 1r 0.0820, four axes at
+			// 2.2r 0.0294 (sum 1.0002, so repeated passes cannot gain brightness).
+			// The renderer ping-pongs this one kernel 1–4 times, which is what keeps
+			// a 48 px slider smooth instead of a clamped, banded smear.
+			const blurShader = `
+struct BlurU { texel: vec2<f32>, radius: f32, pad: f32 };
+@group(0) @binding(0) var<uniform> b: BlurU;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var src: texture_2d<f32>;
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex
+fn vs(@builtin(vertex_index) i: u32) -> VSOut {
+  var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  var out: VSOut;
+  out.pos = vec4<f32>(p[i], 0.0, 1.0);
+  out.uv = p[i] * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+fn tap(uv: vec2<f32>, off: vec2<f32>) -> vec3<f32> {
+  return textureSample(src, samp, uv + off * b.texel * b.radius).rgb;
+}
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  let uv = in.uv;
+  var col = tap(uv, vec2<f32>(0.0, 0.0)) * 0.1370;
+  col += tap(uv, vec2<f32>(1.41, 0.0)) * 0.1044;
+  col += tap(uv, vec2<f32>(-1.41, 0.0)) * 0.1044;
+  col += tap(uv, vec2<f32>(0.0, 1.41)) * 0.1044;
+  col += tap(uv, vec2<f32>(0.0, -1.41)) * 0.1044;
+  col += tap(uv, vec2<f32>(1.0, 1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(-1.0, -1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(1.0, -1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(-1.0, 1.0)) * 0.0820;
+  col += tap(uv, vec2<f32>(2.2, 0.0)) * 0.0294;
+  col += tap(uv, vec2<f32>(-2.2, 0.0)) * 0.0294;
+  col += tap(uv, vec2<f32>(0.0, 2.2)) * 0.0294;
+  col += tap(uv, vec2<f32>(0.0, -2.2)) * 0.0294;
+  return vec4<f32>(col, 1.0);
+}
+`;
+
 			function geometry() {
 				const frameX = Math.max(0, (window.outerWidth - window.innerWidth) / 2);
 				const frameY = Math.max(0, window.outerHeight - window.innerHeight);
@@ -1681,6 +1793,84 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					canvas.height = h;
 				}
 				return w / Math.max(1, window.innerWidth);
+			}
+			function makeBlurTargets(width, height) {
+				if (blurA && blurA.width === width && blurA.height === height) return;
+				for (const tex of [blurA, blurB]) {
+					try { tex?.destroy(); } catch { /* already gone */ }
+				}
+				const make = () =>
+					device.createTexture({
+						size: [width, height],
+						format: "rgba8unorm",
+						usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT
+					});
+				blurA = make();
+				blurB = make();
+				blurAView = blurA.createView();
+				blurBView = blurB.createView();
+				blurKey = "";
+			}
+			function blurBindGroup(view) {
+				return device.createBindGroup({
+					layout: blurPipeline.getBindGroupLayout(0),
+					entries: [
+						{ binding: 0, resource: { buffer: blurUniformBuffer } },
+						{ binding: 1, resource: sampler },
+						{ binding: 2, resource: view }
+					]
+				});
+			}
+			/**
+			 * Encode the blur prepass and return the view the main pass samples.
+			 * Same mapping as the WebGL renderer: the slider is in CSS pixels, the
+			 * target radius is in wallpaper texels, and the pass count grows with
+			 * it so every individual 13-tap pass keeps its radius inside the
+			 * kernel's well-sampled range.
+			 */
+			function runBlur(encoder) {
+				if (!blurPipeline || !blurUniformBuffer || !texture) return null;
+				if (params.blur <= 0.5) return wallpaperView;
+				const width = texture.width;
+				const height = texture.height;
+				makeBlurTargets(width, height);
+				const pixelScale = width / Math.max(1, window.innerWidth);
+				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
+				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
+				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
+				blurUniforms[0] = 1 / width;
+				blurUniforms[1] = 1 / height;
+				blurUniforms[2] = radius;
+				blurUniforms[3] = 0;
+				device.queue.writeBuffer(blurUniformBuffer, 0, blurUniforms);
+				let source = wallpaperView;
+				for (let pass = 0; pass < passes; pass++) {
+					const dest = pass % 2 === 0 ? blurAView : blurBView;
+					const command = encoder.beginRenderPass({
+						colorAttachments: [{
+							view: dest,
+							clearValue: { r: 0, g: 0, b: 0, a: 1 },
+							loadOp: "clear",
+							storeOp: "store"
+						}]
+					});
+					command.setPipeline(blurPipeline);
+					command.setBindGroup(0, blurBindGroup(source));
+					command.draw(3);
+					command.end();
+					source = dest;
+				}
+				return source;
+			}
+			function bindDisplay(view) {
+				bindGroup = device.createBindGroup({
+					layout: pipeline.getBindGroupLayout(0),
+					entries: [
+						{ binding: 0, resource: { buffer: uniformBuffer } },
+						{ binding: 1, resource: sampler },
+						{ binding: 2, resource: view }
+					]
+				});
 			}
 			function frameInterval() {
 				return perf.targetFps > 0 ? 1000 / perf.targetFps : 0;
@@ -1710,7 +1900,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				}
 			}
 			function draw(now) {
-				if (!device || !context || !bindGroup) return;
+				if (!device || !context || !pipeline) return;
 				const g = geometry();
 				const cScale = canvas.width / Math.max(1, window.innerWidth);
 				uniforms[0] = (now || performance.now()) / 1000;
@@ -1721,8 +1911,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
 				uniforms[12] = params.tint; uniforms[13] = cScale; uniforms[14] = g.dpr;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
-				const view = context.getCurrentTexture().createView();
 				const encoder = device.createCommandEncoder();
+				if (texture) {
+					// Wallpaper uploads and blur-slider moves invalidate the prepass;
+					// ordinary frames reuse the last blurred view.
+					const key = `${textureVersion}:${texture.width}x${texture.height}:${window.innerWidth}:${params.blur}`;
+					if (key !== blurKey || !bindGroup) {
+						const source = runBlur(encoder);
+						if (!source) return;
+						bindDisplay(source);
+						blurKey = key;
+					}
+				}
+				const view = context.getCurrentTexture().createView();
 				const pass = encoder.beginRenderPass({
 					colorAttachments: [{
 						view,
@@ -1731,9 +1932,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						storeOp: "store"
 					}]
 				});
-				pass.setPipeline(pipeline);
-				pass.setBindGroup(0, bindGroup);
-				pass.draw(3);
+				if (bindGroup) {
+					pass.setPipeline(pipeline);
+					pass.setBindGroup(0, bindGroup);
+					pass.draw(3);
+				}
 				pass.end();
 				device.queue.submit([encoder.finish()]);
 				if (!shown && texture) {
@@ -1809,14 +2012,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					});
 					device.queue.copyExternalImageToTexture({ source }, { texture }, [w, h]);
 					source.close?.();
-					bindGroup = device.createBindGroup({
-						layout: pipeline.getBindGroupLayout(0),
-						entries: [
-							{ binding: 0, resource: { buffer: uniformBuffer } },
-							{ binding: 1, resource: sampler },
-							{ binding: 2, resource: texture.createView() }
-						]
-					});
+					wallpaperView = texture.createView();
+					bindGroup = null;
+					blurKey = "";
 					draw(performance.now());
 					return true;
 				} catch (error) {
@@ -1847,6 +2045,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						fragment: { module: device.createShaderModule({ code: vertexShader }), entryPoint: "fs", targets: [{ format }] },
 						primitive: { topology: "triangle-list" }
 					});
+					blurUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+					blurPipeline = device.createRenderPipeline({
+						layout: "auto",
+						vertex: { module: device.createShaderModule({ code: blurShader }), entryPoint: "vs" },
+						fragment: { module: device.createShaderModule({ code: blurShader }), entryPoint: "fs", targets: [{ format: "rgba8unorm" }] },
+						primitive: { topology: "triangle-list" }
+					});
 					return true;
 				} catch (error) {
 					reportClientError(`webgpu init: ${error?.message ?? error}`, true);
@@ -1862,6 +2067,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					disposed = true;
 					stop();
 					try { texture?.destroy(); } catch {}
+					for (const tex of [blurA, blurB]) {
+						try { tex?.destroy(); } catch {}
+					}
+					blurA = null;
+					blurB = null;
+					blurAView = null;
+					blurBView = null;
+					wallpaperView = null;
+					bindGroup = null;
+					try { blurUniformBuffer?.destroy(); } catch {}
 					try { device?.destroy(); } catch {}
 					canvas.remove();
 				},
@@ -1870,6 +2085,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.tint === "number") params.tint = next.tint;
+					if (typeof next.blur === "number" && next.blur !== params.blur) {
+						params.blur = next.blur;
+						blurKey = "";
+						if (device && texture) draw(performance.now());
+					}
 				},
 				setMouse(x, y) { mouse.x = x; mouse.y = y; },
 				setTargetFps(v) { perf.targetFps = v > 0 ? Math.min(240, v) : 0; },
@@ -1896,7 +2116,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						msPerFrame: Number((elapsed / frames).toFixed(3)),
 						canvas: [canvas.width, canvas.height],
 						tex: [texture.width, texture.height],
-						blur: null,
+						blur: params.blur > 0.5 ? [texture.width, texture.height] : null,
 						scale: SCALES[scaleIndex],
 						backend: "webgpu"
 					};
@@ -1966,7 +2186,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			let frame = 0;
 			let lastRenderAt = 0;
 			let lastTickAt = 0;
-			const flick = { prev: -1, jumps: 0, max: 0, last: -1, events: [] };
 			let slowTicks = 0;
 			let fastTicks = 0;
 			let scaleIndex = 1;
@@ -2049,8 +2268,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			}
 
 			let texture = null;
-			/** Half-resolution blurred copy of the wallpaper: { tex, fbo, width, height }. */
+			/** Blurred copy of the wallpaper: { tex, fbo, width, height }. */
 			let blurTarget = null;
+			/** Ping-pong partner for multi-pass blur; always a scratch buffer. */
+			let blurTargetB = null;
 			/** Snapshot of the previous blurred frame, used for the swap cross-fade. */
 			let prevBlur = null;
 			/** Scratch FBO used to copy a texture into the snapshot. */
@@ -2135,13 +2356,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				return true;
 			}
 
-			/** (Re)allocate the half-resolution blur target, freeing the old one. */
-			function ensureBlurTarget(width, height) {
-				if (blurTarget && blurTarget.width === width && blurTarget.height === height) return blurTarget;
-				if (blurTarget) {
-					gl.deleteFramebuffer(blurTarget.fbo);
-					gl.deleteTexture(blurTarget.tex);
-					blurTarget = null;
+			/** (Re)allocate one full-resolution blur target, freeing the old one. */
+			function makeTarget(current, width, height) {
+				if (current && current.width === width && current.height === height) return current;
+				if (current) {
+					gl.deleteFramebuffer(current.fbo);
+					gl.deleteTexture(current.tex);
 				}
 				const tex = gl.createTexture();
 				gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -2154,88 +2374,75 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-				blurTarget = { tex, fbo, width, height };
-				return blurTarget;
+				return { tex, fbo, width, height };
 			}
 
 			/**
 			 * One-shot blur of the current wallpaper into an FBO. Runs on upload and
 			 * when the blur slider moves — never per frame.
 			 *
-			 * The target is FULL resolution on purpose: rendering into a half-size
-			 * target made the bilinear upscale do the blurring, which smeared icons
-			 * and text into what looked like astigmatism. Here only the poisson
-			 * kernel blurs, and blur = 0 removes the pass entirely so the wallpaper
-			 * is pixel-sharp.
+			 * Full resolution on purpose: a half-size target lets the bilinear
+			 * upscale do part of the blurring, which smears icons and text into
+			 * astigmatism. Only the 13-tap poisson kernel blurs, and blur = 0 skips
+			 * the pass entirely so the wallpaper stays pixel-sharp.
+			 *
+			 * One 13-tap pass bands visibly past ~10 texels, so the same kernel is
+			 * ping-ponged 1–4 times: the slider maps to a target radius in texture
+			 * texels, the pass count grows with it, and every pass keeps its radius
+			 * inside the kernel's well-sampled range. That is what makes 100% soft
+			 * instead of a clamped, undersampled smear.
 			 */
 			function renderBlur() {
 				if (!blurProgram || !texture) return;
 				if (params.blur <= 0.5) {
 					// Sharp mode: sample the wallpaper directly, zero extra GPU memory.
-					if (blurTarget) {
-						gl.deleteFramebuffer(blurTarget.fbo);
-						gl.deleteTexture(blurTarget.tex);
-						blurTarget = null;
+					for (const target of [blurTarget, blurTargetB]) {
+						if (!target) continue;
+						gl.deleteFramebuffer(target.fbo);
+						gl.deleteTexture(target.tex);
 					}
+					blurTarget = null;
+					blurTargetB = null;
 					return;
 				}
 				const width = texture.width;
 				const height = texture.height;
-				// Keep the previous blurred frame for the cross-fade before the new
-				// one overwrites the target.
+				// Keep the previous blurred frame for the cross-fade before the
+				// targets are reused.
 				if (blurTarget) copyToPrev(blurTarget);
-				const target = ensureBlurTarget(width, height);
-				const cssScale = width / Math.max(1, window.innerWidth || width);
-				gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-				gl.viewport(0, 0, width, height);
+				blurTarget = makeTarget(blurTarget, width, height);
+				blurTargetB = makeTarget(blurTargetB, width, height);
+				const pixelScale = width / Math.max(1, window.innerWidth || width);
+				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
+				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
+				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
 				gl.useProgram(blurProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				if (blurUniforms.aPos >= 0) {
 					gl.enableVertexAttribArray(blurUniforms.aPos);
 					gl.vertexAttribPointer(blurUniforms.aPos, 2, gl.FLOAT, false, 0, 0);
 				}
-				gl.activeTexture(gl.TEXTURE0);
-				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
 				gl.uniform1i(blurUniforms.tex, 0);
 				gl.uniform2f(blurUniforms.texel, 1 / width, 1 / height);
-				// 13 taps band badly past ~12 texels; the slider is in CSS pixels.
-				gl.uniform1f(blurUniforms.radius, Math.min(12, Math.max(0.8, params.blur * 0.75 * cssScale)));
-				gl.drawArrays(gl.TRIANGLES, 0, 3);
-				// TEMP FLICKER PROBE: sample the centre of the composited frame so a
-				// whole-surface brightness jump is measured instead of guessed.
-				try {
-					const probeSize = 4;
-					const pxW = gl.drawingBufferWidth;
-					const pxH = gl.drawingBufferHeight;
-					const px = new Uint8Array(probeSize * probeSize * 4);
-					gl.readPixels(
-						Math.max(0, (pxW >> 1) - 2),
-						Math.max(0, (pxH >> 1) - 2),
-						probeSize,
-						probeSize,
-						gl.RGBA,
-						gl.UNSIGNED_BYTE,
-						px
-					);
-					let sum = 0;
-					for (let i = 0; i < px.length; i += 4) sum += (px[i] + px[i + 1] + px[i + 2]) / 3;
-					const mean = sum / (px.length / 4) / 255;
-					if (flick.prev >= 0) {
-						const diff = Math.abs(mean - flick.prev);
-						if (diff > 0.1) {
-							flick.jumps += 1;
-							if (diff > flick.max) flick.max = Math.round(diff * 1000) / 1000;
-							if (flick.events.length < 12) {
-								flick.events.push(
-									`${Math.round(now)}|${Math.round(diff * 100)}|${mean.toFixed(2)}|tex:${texture ? 1 : 0}|blur:${blurTarget ? 1 : 0}|blend:${blendStart ? 1 : 0}|cw:${canvas.width}|f:${perf.frames}`
-								);
-							}
-						}
-					}
-					flick.prev = mean;
-					flick.last = Math.round(mean * 1000) / 1000;
-				} catch {
-					/* ignore */
+				gl.uniform1f(blurUniforms.radius, radius);
+				let source = texture.handle;
+				let finalIsB = false;
+				for (let pass = 0; pass < passes; pass++) {
+					const dest = pass % 2 === 0 ? blurTarget : blurTargetB;
+					gl.bindFramebuffer(gl.FRAMEBUFFER, dest.fbo);
+					gl.viewport(0, 0, width, height);
+					gl.activeTexture(gl.TEXTURE0);
+					gl.bindTexture(gl.TEXTURE_2D, source);
+					gl.drawArrays(gl.TRIANGLES, 0, 3);
+					source = dest.tex;
+					finalIsB = pass % 2 === 1;
+				}
+				// The main pass always samples blurTarget: swap the pair when the
+				// final pass landed in the scratch buffer.
+				if (finalIsB) {
+					const swap = blurTarget;
+					blurTarget = blurTargetB;
+					blurTargetB = swap;
 				}
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				// Start the 420 ms cross-fade from the snapshot to the fresh blur.
@@ -2303,42 +2510,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					gl.activeTexture(gl.TEXTURE0);
 				}
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
-				// TEMP FLICKER PROBE: sample the centre of the composited frame so a
-				// whole-surface brightness jump is measured instead of guessed.
-				try {
-					const probeSize = 4;
-					const pxW = gl.drawingBufferWidth;
-					const pxH = gl.drawingBufferHeight;
-					const px = new Uint8Array(probeSize * probeSize * 4);
-					gl.readPixels(
-						Math.max(0, (pxW >> 1) - 2),
-						Math.max(0, (pxH >> 1) - 2),
-						probeSize,
-						probeSize,
-						gl.RGBA,
-						gl.UNSIGNED_BYTE,
-						px
-					);
-					let sum = 0;
-					for (let i = 0; i < px.length; i += 4) sum += (px[i] + px[i + 1] + px[i + 2]) / 3;
-					const mean = sum / (px.length / 4) / 255;
-					if (flick.prev >= 0) {
-						const diff = Math.abs(mean - flick.prev);
-						if (diff > 0.1) {
-							flick.jumps += 1;
-							if (diff > flick.max) flick.max = Math.round(diff * 1000) / 1000;
-							if (flick.events.length < 12) {
-								flick.events.push(
-									`${Math.round(now)}|${Math.round(diff * 100)}|${mean.toFixed(2)}|tex:${texture ? 1 : 0}|blur:${blurTarget ? 1 : 0}|blend:${blendStart ? 1 : 0}|cw:${canvas.width}|f:${perf.frames}`
-								);
-							}
-						}
-					}
-					flick.prev = mean;
-					flick.last = Math.round(mean * 1000) / 1000;
-				} catch {
-					/* ignore */
-				}
 				if (!shown && source) {
 					shown = true;
 					canvas.style.opacity = "1";
@@ -2656,8 +2827,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						ms: Math.round((perf.ms || 0) * 10) / 10,
 						frameGap: Math.round((perf.frameGap || 0) * 10) / 10,
 						texErr: textureError || null,
-						canvases: document.querySelectorAll("canvas").length,
-						flick: { n: flick.jumps, max: flick.max, last: flick.last, e: flick.events }
+						canvases: document.querySelectorAll("canvas").length
 					};
 				},
 				start,
@@ -2672,13 +2842,18 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						gl.deleteTexture(blurTarget.tex);
 						blurTarget = null;
 					}
+					if (blurTargetB) {
+						gl.deleteFramebuffer(blurTargetB.fbo);
+						gl.deleteTexture(blurTargetB.tex);
+						blurTargetB = null;
+					}
 					if (prevBlur) {
 						gl.deleteTexture(prevBlur.tex);
 						prevBlur = null;
 					}
 					// copyFbo is created lazily by snapshotTexture() and survives every
 					// other reset; without this it leaks one framebuffer per renderer
-					// rebuild (every renderMode / degrade / webglEpoch change).
+					// rebuild (every backend / degrade / webglEpoch change).
 					if (copyFbo) gl.deleteFramebuffer(copyFbo);
 					copyFbo = null;
 					if (blurProgram) gl.deleteProgram(blurProgram);
@@ -2708,16 +2883,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 		}
 
 		function Slider({ label, value, min, max, step, display, onChange }) {
+			const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
 			return h(
 				"label",
-				{ className: "lg-slider" },
-				h("div", { className: "lg-slider-head" }, h("span", null, label), h("b", null, display)),
+				{ className: "lg-field" },
+				h("div", { className: "lg-field-head" }, h("span", null, label), h("b", null, display)),
 				h("input", {
 					type: "range",
+					className: "lg-range",
 					min,
 					max,
 					step,
 					value,
+					style: { "--lg-fill": `${pct}%` },
 					onChange: (event) => onChange(Number(event.target.value))
 				})
 			);
@@ -2855,7 +3033,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				const state = useWallpaper();
 				const lang = useLang();
 				const [mode, setMode] = useState(currentMode);
-				// Layer 5: 'webgl' → 'css' (static glass) → 'off' (plugin disabled).
+				// Layer 5: 'webgl' → 'static' (translucent scrim, no black pane) →
+				// 'off' (plugin disabled). There is no CSS wallpaper mode any more:
+				// the shader is the only wallpaper renderer.
 				const [degrade, setDegrade] = useState("webgl");
 				const [webglEpoch, setWebglEpoch] = useState(0);
 				const [notice, setNotice] = useState(() => (startupNotice ? makeTranslate(activeLang)(startupNotice) : ""));
@@ -2908,14 +3088,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = mode;
-					root.style.setProperty(
-						"--lg-wallpaper",
-						value.wallpaper && state.url && state.kind !== "video" ? `url("${state.url}")` : "none"
-					);
-					root.style.setProperty("--lg-blur", `${value.blur}px`);
-					root.style.setProperty("--lg-sat", String(value.saturation));
 					root.style.setProperty("--lg-dim", String(value.dim));
-					root.style.setProperty("--lg-tint", String(value.tint));
 					root.style.setProperty("--lg-fallback", mode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
 				}, [value, state.url, state.kind, mode, appsBehind]);
@@ -2949,7 +3122,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					};
 				}, [value.enabled]);
 
-				// Layer 5: a lost context freezes WebGL and drops to static CSS glass;
+				// Layer 5: a lost context freezes WebGL and drops to the static scrim;
 				// a second failure inside ten minutes turns the plugin off entirely.
 				const onFault = (kind) => {
 					if (kind === "restored") return;
@@ -2968,9 +3141,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						setSettings({ enabled: false });
 						reportClientError("degrade: off", true);
 					} else {
-						setDegrade("css");
-						setNotice(translate("cssMode"));
-						reportClientError("degrade: css", true);
+						// Fifth protection layer: keep the app legible, never a black
+						// pane. A flat translucent scrim replaces the shader output.
+						setDegrade("static");
+						setNotice(translate("staticMode"));
+						reportClientError("degrade: static", true);
 					}
 				};
 
@@ -3010,36 +3185,42 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				}, [value.enabled, value.fps, value.autoScale, translate]);
 
 				useEffect(() => {
-					if (!value.enabled || degrade !== "webgl") return;
-					const mode = value.renderMode;
-					// CSS backend: no canvas at all; the stylesheet paints the wallpaper
-					// behind a frosted #root (blur + tint, zero GPU shading). The flag has
-					// to be flipped here too: a first load straight into CSS would
-					// otherwise keep whatever the previous renderer left behind.
-					if (mode === "css") {
-						document.documentElement.dataset.lgWebgl = "off";
+					const root = document.documentElement;
+					if (!value.enabled) return;
+					if (degrade !== "webgl") {
+						// The stylesheet owns the static scrim; make sure a stale canvas
+						// flag cannot keep the WebGL-only rules alive.
+						root.dataset.lgWebgl = "static";
 						return;
 					}
+					const mode = value.renderMode;
 					let cancelled = false;
 					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk }) : createLiquidCanvas({ onFault, onInk });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
-						setSettings({ renderMode: "css" });
-						setNotice(translate(mode === "webgpu" ? "webgpuUnavailable" : "cssMode"));
+						if (mode === "webgpu") {
+							// WebGPU is the only mode with an alternative backend: fall
+							// back to WebGL instead of degrading the whole plugin.
+							setSettings({ renderMode: "webgl" });
+							setNotice(translate("webgpuUnavailable"));
+						} else {
+							setDegrade("static");
+							setNotice(translate("staticMode"));
+						}
 						return;
 					}
 					if (liquid.ready) {
 						liquid.ready.then((ok) => {
 							if (cancelled || ok) return;
 							liquid.dispose();
-							setSettings({ renderMode: "css" });
+							setSettings({ renderMode: "webgl" });
 							setNotice(translate("webgpuUnavailable"));
 						});
 					}
 					document.body.appendChild(liquid.canvas);
 					liquidRef.current = liquid;
 					activeRenderer = liquid;
-					document.documentElement.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
+					root.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
 					liquid.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
 					liquid.setTargetFps(value.fps);
 					liquid.setAutoScale(value.autoScale);
@@ -3049,8 +3230,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						liquid.dispose();
 						liquidRef.current = null;
 						if (activeRenderer === liquid) activeRenderer = null;
-						if (document.documentElement.dataset.lgWebgl !== "off") {
-							document.documentElement.dataset.lgWebgl = "off";
+						if (root.dataset.lgWebgl !== "static") {
+							root.dataset.lgWebgl = "off";
 						}
 					};
 					// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3119,33 +3300,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					liquidRef.current?.setWallpaper(wallpaperUrl, wallpaperKind);
 				}, [wallpaperUrl, wallpaperKind]);
 
-				// CSS mode has no renderer to report ink, so sample the same bitmap
-				// here; the fetch is an ImageBitmap decode, not a GPU upload.
-				useEffect(() => {
-					if (value.renderMode !== "css" || degrade === "off" || !wallpaperUrl) return;
-					let cancelled = false;
-					(async () => {
-						try {
-							let source;
-							if (wallpaperKind === "video") {
-								source = await frameFromVideo(wallpaperUrl);
-							} else {
-								const response = await fetch(wallpaperUrl, { cache: "no-store" });
-								if (!response.ok) return;
-								source = await createImageBitmap(await response.blob());
-							}
-							if (!source || cancelled) return;
-							onInk(measureInk(source));
-							source.close?.();
-						} catch {
-							// Ink stays on the theme default.
-						}
-					})();
-					return () => {
-						cancelled = true;
-					};
-				}, [value.renderMode, degrade, wallpaperUrl, wallpaperKind, onInk]);
-
 				// Token layering is the supported way to restyle shipped surfaces:
 				// the theme service composes our layer above the active theme.
 				//
@@ -3181,15 +3335,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							ink = decided.ink;
 							veil = decided.veil;
 						}
-						// The composer is its own surface: give it a ground that matches the
-						// ink actually in use, so white text sits on dark glass and dark text
-						// on light glass instead of both fighting the wallpaper.
-						document.documentElement.style.setProperty(
-							"--lg-composer-bg",
-							ink === "light"
-								? `rgba(12,14,20,${(0.42 + 0.33 * veil).toFixed(3)})`
-								: `rgba(255,255,255,${(0.06 + 0.5 * veil).toFixed(3)})`
-						);
+						// The composer is its own surface: the frosted card reads the overlay
+						// token, which glassTokens() already tints toward the ink in use.
 						const next = glassTokens(value.tint, veil, ink);
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
@@ -3360,8 +3507,6 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								appsBehind: state.appsBehind === true,
 								kind: state.kind ?? null,
 								mode: root.dataset.lgMode ?? null,
-								blur: root.style.getPropertyValue("--lg-blur"),
-								wallpaper: root.style.getPropertyValue("--lg-wallpaper").slice(0, 72),
 								rootBackground: rootStyle?.backgroundColor ?? null,
 								rootBackdrop: rootStyle?.backdropFilter || rootStyle?.webkitBackdropFilter || null,
 								bodyBeforeImage: String(bodyBefore.backgroundImage || "").slice(0, 72),
@@ -3429,7 +3574,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						? h(
 								"div",
 								{ className: "lg-warn", "data-degrade": degrade, "data-liquid-glass": "warn" },
-								h("span", { className: "lg-warn-text" }, notice || t("cssMode")),
+								h("span", { className: "lg-warn-text" }, notice || t("staticMode")),
 								degrade !== "webgl"
 									? h(
 											"button",
@@ -3666,8 +3811,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									"select",
 									{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
 									h("option", { value: "webgl" }, t("renderWebgl")),
-									h("option", { value: "webgpu" }, t("renderWebgpu")),
-									h("option", { value: "css" }, t("renderCss"))
+									h("option", { value: "webgpu" }, t("renderWebgpu"))
 								)
 							),
 							h(
@@ -3723,7 +3867,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—"))
+								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
+								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
 							)
 						),
 						h(

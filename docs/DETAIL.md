@@ -127,25 +127,25 @@ macOS / Linux 仍走 `System Events` / `gsettings` 的静态路径。
 ### 不黑屏的六道保险
 
 1. GPU 引擎出图前 canvas `opacity: 0`，首帧 `drawArrays` / `submit` 完成后才淡入 —— 不会有「先黑一下再出画面」。
-2. 壁纸层的 `body::before` 在 WebGL/WebGPU 模式下被隐藏（GPU 画布独占壁纸），合成图只走 GPU 画布；纯 CSS 模式仍由 `body::before` 承担，换图是硬切，但那是零 GPU 的兜底路径。
+2. 壁纸层的 `body::before` 在 GPU 模式下只承担「首帧前的启动遮罩 / 第五层保护触发后的静态半透明遮罩」：GPU 画布出图后由画布独占壁纸，遮罩退居其后。
 3. 合成失败（助手崩溃、GDI+ 报错、超时）时继续用磁盘上的上一帧，`/state` 会带 `captureError` 但不影响显示。
 4. **宿主侧亮度闸门**：助手会把它刚合成的那一帧的 8×8 网格平均亮度（`lum`）写进 JSON；若亮度突然从 >0.12 掉到 <0.05，宿主直接丢弃这一帧、不 rename、继续供应上一张，并把原因写进 `captureError`。连续两次后第三次仍然相信（真的换成深色壁纸时不会被一直拦）。引擎内部还会先按住 8 个 tick 的纯暗帧，所以这两道闸门实际上很少需要开火。
 5. **客户端相对闸门**：万一还有近黑帧溜过（PowerShell 回退、解码问题），客户端 `isBlackSwap()` 用「上一张**已接受**帧」比较，被拒帧不更新基准值，所以不会出现「拒一次之后基准变黑、后面全放行」的老 bug；连拒 2 次后接受，避免和用户真实换的深色壁纸打架。
-6. `webglcontextlost` → 立刻切纯 CSS 静态玻璃 + 底部提示条；10 分钟内第二次 → 自动关闭插件。
+6. `webglcontextlost` → 立刻切**静态半透明遮罩**（主题色薄纱，不黑屏）+ 底部提示条；10 分钟内第二次 → 自动关闭插件。
 
 ## 液态玻璃层（client 半）
 
-三种渲染引擎可在设置里自由切换，切换即时生效（重建渲染器，无需重启）：
+两种 GPU 渲染引擎可在设置里自由切换，切换即时生效（重建渲染器，无需重启）；模糊全部由引擎自己的 shader 前置通道完成，不存在「纯 CSS 渲染」这条混合回退路径：
 
-- **WebGL**（默认）：全屏 canvas 垫在 `<body>` 下（`z-index: -2`），对壁纸做**域扭曲（fbm domain warp）+ 指针涟漪 + 色散（chromatic dispersion）+ 焦散与高光**。
-- **WebGPU**（实验）：同一套屏幕空间管线用 WGSL 重写（全屏三角形 + `copyExternalImageToTexture`），接口与 WebGL 渲染器完全一致（`start/stop/dispose/setParams/setTargetFps/setAutoScale/setPaused/wake/stats/setWallpaper`），因此五层防护照常工作；拿不到 adapter 或 `device.lost` 时自动退回纯 CSS。
-- **纯 CSS**：不创建 canvas，只保留 `backdrop-filter: blur() saturate()` + 静态着色，GPU 着色开销为 0。
+- **WebGL**（默认，推荐）：全屏 canvas 垫在 `<body>` 下（`z-index: -2`），对壁纸做**域扭曲（fbm domain warp）+ 指针涟漪 + 色散（chromatic dispersion）+ 焦散与高光**。
+- **WebGPU**（实验）：同一套屏幕空间管线用 WGSL 重写（全屏三角形 + `copyExternalImageToTexture` + 独立的 13-tap 模糊 prepass），接口与 WebGL 渲染器完全一致（`start/stop/dispose/setParams/setTargetFps/setAutoScale/setPaused/wake/stats/setWallpaper`），因此五层防护照常工作；拿不到 adapter、初始化失败或 `device.lost` 时自动退回 WebGL，而不是退回 CSS。
+- **显卡彻底崩溃**：不再有「纯 CSS 渲染」兜底；第五层保护直接触发静态半透明遮罩（同一套主题 token，文字保持清晰），不会黑屏。
 
-`#root` 用 `backdrop-filter: blur() saturate()` 磨砂，并通过 `theme.overrideTokens()` 把 `--dsw-alias-bg-base / bg-layer-1 / bg-layer-2 / bg-overlay / sidebar-fill / border-l1 / border-l2` 调成半透明，让 DSH 自己的面板、侧边栏、弹窗都透出壁纸；窗口边缘还有内阴影与高光构成的「玻璃厚度」。设置页文案跟随 DSH 语言（`locale` 服务的 `getSnapshot().active` + `subscribe`）。
+`#root` 通过 `theme.overrideTokens()` 把 `--dsw-alias-bg-base / bg-layer-1 / bg-layer-2 / bg-overlay / sidebar-fill / border-l1 / border-l2` 调成半透明，让 DSH 自己的面板、侧边栏、弹窗都透出壁纸；窗口边缘还有内阴影与高光构成的「玻璃厚度」。设置页文案跟随 DSH 语言（`locale` 服务的 `getSnapshot().active` + `subscribe`）。
 
 ### 只算一次：着色器内模糊，关掉合成器 backdrop-filter
 
-WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：壁纸先在**离屏 FBO 里模糊一次**（800×534 的低分辨率双线性采样就是模糊本身），主着色器直接采样这张已模糊的纹理。之前是「合成器模糊真实壁纸 + WebGL 再渲染一层玻璃」两套像素流水线同时跑，等于同一屏幕算两遍 —— 这是之前 GPU 负载翻倍的主因。只有纯 CSS 引擎还保留 `backdrop-filter`。
+WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：壁纸先由引擎自己**在离屏 FBO / storage texture 里做 13-tap 泊松高斯模糊**，主着色器直接采样这张已模糊的纹理。13-tap 单次只能覆盖约 10 texel，所以同一个核会 ping-pong 1–4 次：滑杆值先映射成目标半径（含 DPI 像素比换算），再由目标半径决定 pass 数，每次 pass 的半径始终落在核的良好采样区间内 —— 这就是「模糊拉到 100% 仍然丝滑」而不是被硬夹死或糊成带状的原因。之前是「合成器模糊真实壁纸 + WebGL 再渲染一层玻璃」两套像素流水线同时跑，等于同一屏幕算两遍 —— 这是之前 GPU 负载翻倍的主因。现在合成器不再重复模糊；静态遮罩也没有 backdrop-filter。
 
 另外两处降载：canvas 长边按 **CSS 像素**渲染（`dpr` 上限 1，1.5 倍屏从此不再多算 2.25 倍片元，壁纸本来就模糊，肉眼无差）；色散的两张额外采样在静止（flow < 0.02）时用 `step()` 归零。
 
@@ -158,13 +158,15 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 - 曲线对齐：`veil = 100%`、`tint = 100%` 时 `bg-base ≈ 0.52`，与 0.8 原配方在 tint 100% 的厚度**完全一致**；`veil = 0%` 时降到 0.02，接近裸玻璃。一键恢复的默认值就是 `veil 100% / tint 100%`，所以接回滑条不会把用户刚验收的玻璃再改一版。
 - 0.11 的公式是 `0.02 + 0.30 × veil`，最厚也只有 0.32，再叠加被调暗的 sheen/bevel/扫光，整块玻璃就变成一张几乎全透的黑纸 —— 0.13 重新标定了斜率，而不是照抄那条曲线。高光层（指针光斑）与扫光保留 0.8 的 0.55 / 0.14。
 
-## 设置入口（左侧边栏）
+## 设置入口（左侧边栏 → 主工作区）
 
-设置不再占用 DSH 的系统设置页。`v.26.11.20.223012` 起，它直接长在左侧边栏里：在「插件」「自动化任务」下面多出一行同样的列表项（水滴图标 + 「液态玻璃」+ 展开箭头），点一下就在原地下方展开原来的三张卡片（硬件与预设 / 开关与滑块 / 渲染模式与性能），不弹窗、不遮罩，工作区列表被自然往下推。展开状态记在 `localStorage` 键 `dsh-liquid-glass:panel-open`；侧边栏收起成 rail 时这一行只留图标。宿主的 `/liquid-glass/log` 会收到 `ready: sidebar-inline <版本>` 与 `dom: panelList=found|missing`，`/state` 的 `clientReady` 可作为「入口真的挂进侧边栏了」的证据。
+设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.002811` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
+
+`shell.overlay` 只保留玻璃背景层：`<style>`、壁纸 canvas 与自适应 ink 采样都由它承载。旧的 `nav.panelList` portal / 800ms `place()` / 内联折叠表单已彻底删除，不再有「把大表单塞进窄边栏」这条路。
 
 为什么不是占用槽位：会话列表下方的 `sidebar.workspaces.directoryFlow` 是 **single 且已被占用** 的「选择工作区目录」交互洞（`replaceRisk: shadows-shipped-ui`），注册进去会换掉自带的目录选择流程；`sidebar.panellist` 的 id 映射的是**主面板**，点它只会切换主视图，无法就地展开。所以这一行由插件自己挂到真实的 `nav.panelList` 末尾，用 `react-dom` 的 portal 渲染自己的宿主（不接管 DSH 的 React 树）；React 重排后用 800 ms 一次的 `place()` 自愈。`shell.overlay` 里只剩玻璃背景层与这个 portal 宿主。
 
-面板内容：总开关、壁纸同步、**背景来源**（真实桌面 / 壁纸本体）、**渲染引擎**（WebGL / WebGPU / 纯 CSS）、背景模糊、饱和度、玻璃着色、霜面浓度、文字颜色、壁纸压暗、液态流动强度、帧率上限、动态分辨率，以及实时指标（渲染模式 / 目标帧率 / 渲染分辨率 / 累计帧数）。设置保存在 `localStorage` 键 `dsh-liquid-glass.settings.v3`。0.11 的预设曾把 `flow / refreshSec / blur / saturation / behind` 一起改写，连 `.v2` 备份键都被覆盖，等于「用户设置被吃掉」。0.12 起预设只写引擎 / 帧率 / 分辨率 / 遮挡合成；首次加载时若没有 `dsh-liquid-glass.recovered-0.13` 标记，会把恢复出的用户原值（`blur 0 / saturation 1.4 / tint 1 / veil 1 / dim 0 / refreshSec 5 / flow 1.5 / fps 30 / autoScale`）写入 v3 与 v2 并打标记，之后 v3 就是权威。`veil 1` 是特意选的：它等于 0.8 配方在 `tint 1` 的厚度，接回滑条不会重新做一遍观感。
+面板内容：总开关、壁纸同步、**背景来源**（真实桌面 / 壁纸本体）、**渲染引擎**（WebGL / WebGPU；模糊都由引擎 shader 完成）、背景模糊、饱和度、玻璃着色、霜面浓度、文字颜色、壁纸压暗、液态流动强度、帧率上限、动态分辨率，以及实时指标（渲染模式 / 目标帧率 / 渲染分辨率 / 累计帧数）。设置保存在 `localStorage` 键 `dsh-liquid-glass.settings.v3`。0.11 的预设曾把 `flow / refreshSec / blur / saturation / behind` 一起改写，连 `.v2` 备份键都被覆盖，等于「用户设置被吃掉」。0.12 起预设只写引擎 / 帧率 / 分辨率 / 遮挡合成；首次加载时若没有 `dsh-liquid-glass.recovered-0.13` 标记，会把恢复出的用户原值（`blur 0 / saturation 1.4 / tint 1 / veil 1 / dim 0 / refreshSec 5 / flow 1.5 / fps 30 / autoScale`）写入 v3 与 v2 并打标记，之后 v3 就是权威。`veil 1` 是特意选的：它等于 0.8 配方在 `tint 1` 的厚度，接回滑条不会重新做一遍观感。
 
 ## 版本号
 
@@ -176,7 +178,7 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 2. **帧率上限**：24 / 30 / 40 / 48 / 60 / 90 / 120 / 144 / 无限制，默认 30。
 3. **动态分辨率**：连续 10 帧超预算 → 1.0 → 0.8 → 0.65 → 0.5 逐级降；流畅 300 帧后再升回。画面因屏幕空间映射而不会跳位。默认从 0.8 起步，且目标帧率 ≤ 40 时 0.8 就是上限 —— 全分辨率在这个帧率下只是多花两倍片元。
 4. **按需渲染**：「液态流动」为 0 且鼠标静止 1.5 秒 → 完全挂起；移动/滚动/拖动立即唤醒。指针涟漪另有一层判断：鼠标静止 2.5 秒后 `uRipple` 归零，整屏跳过 `sin/exp`。
-5. **逃生舱**：`webglcontextlost` → 冻结并切 CSS 静态磨砂 + 底部提示；10 分钟内第二次则自动关闭插件，可在提示条或侧边栏里的「液态玻璃」那行重试。纹理长边上限 2048；换帧时旧纹理先拷进快照、交叉淡入结束后再 `deleteTexture`，既不会闪也不会泄漏。
+5. **逃生舱**：`webglcontextlost` → 冻结并切**静态半透明遮罩**（主题色薄纱，不黑屏）+ 底部提示；10 分钟内第二次则自动关闭插件，可在提示条或侧边栏里的「液态玻璃」那行重试。纹理长边上限 2048；换帧时旧纹理先拷进快照、交叉淡入结束后再 `deleteTexture`，既不会闪也不会泄漏。
 6. **重测尺寸**：窗口还原 / 缩放 / 从隐藏恢复时重新测量画布，避免停在 300×150 的默认后备缓冲（那会让整个着色器按 300×150 跑而被 CSS 拉伸）。
 
 ## 与苹果「液态玻璃」的差距

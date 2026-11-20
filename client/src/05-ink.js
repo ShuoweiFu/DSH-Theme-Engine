@@ -1,3 +1,10 @@
+		// Shared darkness thresholds. 06-guard rejects a frame that drops below
+		// BLACK_LUM after a bright one; anything above RECOVER_LUM counts as a
+		// real bright frame. Kept here so the guard and the ink sampler cannot
+		// drift apart again (they used to disagree about what "black" means).
+		const BLACK_LUM = 0.05;
+		const RECOVER_LUM = 0.12;
+
 		/** sRGB channel → linear light, per WCAG 2.1 relative luminance. */
 		function linearize(channel) {
 			const c = Math.min(1, Math.max(0, channel));
@@ -63,33 +70,4 @@
 			const floor = darkTheme ? 0.05 : 0.02;
 			const neededVeil = Math.min(1, Math.max(0, (alpha / tintLift - floor) / 0.45));
 			return { ink, veil: Math.max(veil, neededVeil) };
-		}
-
-		/**
-		 * Decides the ink colour by contrast, not by a raw brightness threshold.
-		 * The wallpaper is only part of the answer: the column in front of the text
-		 * also paints the frost tint, so a bright wallpaper plus a white veil is
-		 * still a *bright* backdrop and needs dark text. The sampled wallpaper
-		 * luminance is composited with the surface colour first, then both label
-		 * candidates are scored with WCAG contrast.
-		 */
-		function pickInk(contentLum, tint, veil, darkTheme) {
-			const tokens = glassTokens(tint, veil, null);
-			const surface = darkTheme ? tokens["--dsw-alias-bg-base"].dark : tokens["--dsw-alias-bg-base"].light;
-			const match = /rgba?\(([^)]+)\)/.exec(surface);
-			const parts = match ? match[1].split(",").map((s) => Number.parseFloat(s)) : [255, 255, 255, 0.2];
-			const alpha = Number.isFinite(parts[3]) ? parts[3] : 0.2;
-			// Alpha compositing happens in encoded sRGB, not in linear light: the
-			// blend is applied first, *then* converted. Mixing linear values here was
-			// what made a dark wallpaper read as "bright enough for dark text".
-			const surfaceSrgb = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
-			const composed = linearize(contentLum * (1 - alpha) + surfaceSrgb * alpha);
-			const darkInk = relativeLum(12, 14, 20);
-			const lightInk = relativeLum(246, 248, 252);
-			const onDark = contrastRatio(composed, lightInk);
-			const onLight = contrastRatio(composed, darkInk);
-			// A 0.35 gap stops the colour from flickering on borderline wallpaper.
-			if (onLight >= onDark + 0.35) return "dark";
-			if (onDark >= onLight + 0.35) return "light";
-			return darkTheme ? "light" : "dark";
 		}

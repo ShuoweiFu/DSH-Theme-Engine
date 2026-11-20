@@ -7,7 +7,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.002811";
+		const CLIENT_BUILD = "v.26.11.21.004441";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -29,9 +29,22 @@
 		});
 
 		/**
+		 * One cap for both backends: above 1.5x the wallpaper is blurred by the
+		 * shader anyway, so the extra fragments are invisible but the GPU still
+		 * pays DPR² of them. WebGL used to cap at 1 while WebGPU capped at 2,
+		 * which made the two engines resolve noticeably differently on HiDPI.
+		 */
+		const DPR_CAP = 1.5;
+
+		/** Power hint for the renderer: high-end presets ask for the dGPU. */
+		function preferredPower(preset, tier) {
+			return preset === "beast" || tier === "beast" ? "high-performance" : "low-power";
+		}
+
+		/**
 		 * Hardware profiles. A preset only writes the knobs that keep the machine
 		 * alive (engine, frame cap, dynamic resolution, occluded-window
-		 * compositing) 鈥?never the wallpaper, the look or the capture cadence the
+		 * compositing) — never the wallpaper, the look or the capture cadence the
 		 * user picked, so switching profile cannot repaint their glass.
 		 */
 		const PRESETS = Object.freeze({
@@ -49,7 +62,7 @@
 		/**
 		 * Latest quantised wallpaper sample, shared with the settings panel so it
 		 * can show the measured brightness. 0.11 kept this in a useState scoped to
-		 * the overlay and then *used it in the panel's scope* 鈥?a ReferenceError on
+		 * the overlay and then *used it in the panel's scope* — a ReferenceError on
 		 * every panel render. A plain object fixes that without adding a store.
 		 */
 		const inkProbe = { sample: null };

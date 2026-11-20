@@ -283,8 +283,11 @@
 						return;
 					}
 					const mode = value.renderMode;
+					// The high-end preset is also how the user asks for the discrete
+					// GPU; everything else hints low-power so laptops stay on the iGPU.
+					const powerPreference = preferredPower(value.preset, hw.tier);
 					let cancelled = false;
-					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk }) : createLiquidCanvas({ onFault, onInk });
+					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, powerPreference }) : createLiquidCanvas({ onFault, onInk, powerPreference });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
 						if (mode === "webgpu") {
@@ -823,7 +826,7 @@
 							h(
 								"div",
 								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("source")), h("span", { className: "lg-hint" }, t("sourceHint"))),
+								h("div", { className: "lg-label" }, h("span", null, t("sourceLabel")), h("span", { className: "lg-hint" }, t("sourceHint"))),
 								h(
 									"select",
 									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },

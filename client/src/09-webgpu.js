@@ -11,6 +11,10 @@
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			// Per preset: the caller passes high-performance for the high-end
+			// profile and low-power for integrated/unknown hardware. Hard-coding
+			// low-power made a discrete GPU run the glass on the iGPU.
+			const powerPreference = options.powerPreference ?? "low-power";
 			if (!navigator.gpu) return null;
 			const canvas = document.createElement("canvas");
 			canvas.setAttribute("aria-hidden", "true");
@@ -57,13 +61,13 @@
 			let mouse = { x: 0.5, y: 0.5 };
 			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(20);
+			const uniforms = new Float32Array(16);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
-  tint: f32, cScale: f32, dpr: f32, pad: f32,
+  tint: f32, dpr: f32, vpW: f32, vpH: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -92,8 +96,10 @@ fn noise(p: vec2<f32>) -> f32 {
 }
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let res = vec2<f32>(textureDimensions(tex));
-  let fragCss = in.frag * vec2<f32>(res.x / u.cScale, res.y / u.cScale);
+  // CSS viewport, not texture size: the wallpaper is capped at 2048 px, so
+  // deriving the CSS coordinate from res/cScale shifted and stretched the
+  // desktop mapping whenever the texture and the canvas differed in size.
+  let fragCss = in.frag * vec2<f32>(u.vpW, u.vpH);
   let screenUv = (vec2<f32>(u.winX, u.winY) + fragCss) / vec2<f32>(u.scrW, u.scrH);
   let screenDev = vec2<f32>(u.scrW, u.scrH) * u.dpr;
   let cover = max(screenDev.x / u.texW, screenDev.y / u.texH);
@@ -180,7 +186,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				};
 			}
 			function resize() {
-				const ratio = Math.min(2, (window.devicePixelRatio || 1) * SCALES[scaleIndex]);
+				const ratio = Math.min(DPR_CAP, (window.devicePixelRatio || 1) * SCALES[scaleIndex]);
 				const w = Math.max(2, Math.round(window.innerWidth * ratio));
 				const h = Math.max(2, Math.round(window.innerHeight * ratio));
 				if (canvas.width !== w || canvas.height !== h) {
@@ -297,14 +303,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function draw(now) {
 				if (!device || !context || !pipeline) return;
 				const g = geometry();
-				const cScale = canvas.width / Math.max(1, window.innerWidth);
 				uniforms[0] = (now || performance.now()) / 1000;
 				uniforms[1] = mouse.x; uniforms[2] = mouse.y;
 				uniforms[3] = g.scrW; uniforms[4] = g.scrH;
 				uniforms[5] = g.winX; uniforms[6] = g.winY;
 				uniforms[7] = texture ? texture.width : 1; uniforms[8] = texture ? texture.height : 1;
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
-				uniforms[12] = params.tint; uniforms[13] = cScale; uniforms[14] = g.dpr;
+				uniforms[12] = params.tint; uniforms[13] = g.dpr;
+				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {
@@ -419,7 +425,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			}
 			const ready = (async () => {
 				try {
-					const adapter = await navigator.gpu.requestAdapter({ powerPreference: "low-power" });
+					const adapter = await navigator.gpu.requestAdapter({ powerPreference });
 					if (!adapter) throw new Error("no adapter");
 					device = await adapter.requestDevice();
 					device.lost?.then((info) => {

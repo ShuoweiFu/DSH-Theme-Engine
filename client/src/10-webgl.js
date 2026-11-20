@@ -27,7 +27,7 @@
 				// Keep the last frame on screen when the guard freezes the loop;
 				// otherwise a paused WebGL canvas can composite as transparent/black.
 				preserveDrawingBuffer: true,
-				powerPreference: "high-performance"
+				powerPreference: options.powerPreference ?? "high-performance"
 			});
 			if (!gl) return null;
 
@@ -138,10 +138,10 @@
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
 			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10 };
-			// The wallpaper is blurred by the prepass anyway, so rendering above CSS
-			// pixel density buys nothing visible but costs DPR² twice the fragments
-			// (1.5x DPR = 2.25x pixels on this machine).
-			const dpr = () => Math.min(1, window.devicePixelRatio || 1);
+			// The wallpaper is blurred by the prepass anyway, so above DPR_CAP
+			// rendering costs DPR² fragments that cannot be seen. Both backends
+			// share the same cap so switching engines never changes sharpness.
+			const dpr = () => Math.min(DPR_CAP, window.devicePixelRatio || 1);
 
 			function setScale(next) {
 				const index = Math.max(0, Math.min(SCALES.length - 1, next));
@@ -211,6 +211,14 @@
 				return true;
 			}
 
+			/** Free one blur target (idempotent). */
+			function freeTarget(target) {
+				if (!target) return null;
+				gl.deleteFramebuffer(target.fbo);
+				gl.deleteTexture(target.tex);
+				return null;
+			}
+
 			/** (Re)allocate one full-resolution blur target, freeing the old one. */
 			function makeTarget(current, width, height) {
 				if (current && current.width === width && current.height === height) return current;
@@ -251,13 +259,8 @@
 				if (!blurProgram || !texture) return;
 				if (params.blur <= 0.5) {
 					// Sharp mode: sample the wallpaper directly, zero extra GPU memory.
-					for (const target of [blurTarget, blurTargetB]) {
-						if (!target) continue;
-						gl.deleteFramebuffer(target.fbo);
-						gl.deleteTexture(target.tex);
-					}
-					blurTarget = null;
-					blurTargetB = null;
+					blurTarget = freeTarget(blurTarget);
+					blurTargetB = freeTarget(blurTargetB);
 					return;
 				}
 				const width = texture.width;
@@ -265,12 +268,14 @@
 				// Keep the previous blurred frame for the cross-fade before the
 				// targets are reused.
 				if (blurTarget) copyToPrev(blurTarget);
-				blurTarget = makeTarget(blurTarget, width, height);
-				blurTargetB = makeTarget(blurTargetB, width, height);
 				const pixelScale = width / Math.max(1, window.innerWidth || width);
 				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
 				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
 				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
+				blurTarget = makeTarget(blurTarget, width, height);
+				// Single-pass blurs read the source straight into blurTarget, so the
+				// scratch buffer (another full-resolution texture) is pure waste.
+				blurTargetB = passes > 1 ? makeTarget(blurTargetB, width, height) : freeTarget(blurTargetB);
 				gl.useProgram(blurProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				if (blurUniforms.aPos >= 0) {
@@ -693,14 +698,10 @@
 					textureRequest += 1;
 					if (texture) gl.deleteTexture(texture.handle);
 					if (blurTarget) {
-						gl.deleteFramebuffer(blurTarget.fbo);
-						gl.deleteTexture(blurTarget.tex);
-						blurTarget = null;
+						blurTarget = freeTarget(blurTarget);
 					}
 					if (blurTargetB) {
-						gl.deleteFramebuffer(blurTargetB.fbo);
-						gl.deleteTexture(blurTargetB.tex);
-						blurTargetB = null;
+						blurTargetB = freeTarget(blurTargetB);
 					}
 					if (prevBlur) {
 						gl.deleteTexture(prevBlur.tex);

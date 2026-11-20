@@ -1,4 +1,4 @@
-// wgc-probe 鈥?one-shot Windows.Graphics.Capture probe for dsh-liquid-glass.
+// wgc-probe —one-shot Windows.Graphics.Capture probe for dsh-liquid-glass.
 //
 //   wgc-probe <window-handle-in-decimal|display> <out.bmp>
 //
@@ -155,7 +155,7 @@ HWND findProgman() {
   return found;
 }
 
-// BitBlt the whole screen into a BMP 鈥?used to see whether the capture border is
+// BitBlt the whole screen into a BMP —used to see whether the capture border is
 // actually drawn while a session is running.
 bool grabScreen(const char* path) {
   HDC screen = GetDC(nullptr);

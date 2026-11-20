@@ -22,6 +22,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
+#include <shellapi.h>
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -107,15 +108,12 @@ struct Com {
 // WinRT string + activation helpers
 // ---------------------------------------------------------------------------
 
-struct HStr {
-  HSTRING h = nullptr;
-  ~HStr() {
-    if (h) WindowsDeleteString(h);
-  }
-};
-
 template <class I>
 bool activate(const wchar_t* className, Com<I>& out) {
+  // The caller may reuse a Com<> slot: release whatever it held before the
+  // activation factory overwrites the pointer, otherwise the previous WinRT
+  // object leaks on every call.
+  out.reset();
   HSTRING_HEADER header;
   HSTRING name = nullptr;
   if (FAILED(WindowsCreateStringReference(className, (UINT32)wcslen(className), &header, &name))) return false;
@@ -130,22 +128,53 @@ static std::string toUtf8(const std::wstring& text) {
   return out;
 }
 
+/**
+ * Decode a UTF-8 command-line path into UTF-16. The old code widened the
+ * narrow bytes one-for-one (std::wstring(begin, end)), which turned every
+ * non-ASCII byte into a separate Latin-1 char, so a Chinese folder name never
+ * resolved and the capture came back black.
+ */
+static std::wstring utf8ToWide(const std::string& text) {
+  if (text.empty()) return std::wstring();
+  int needed = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0);
+  if (needed <= 0) return std::wstring();
+  std::wstring out((size_t)needed, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), out.data(), needed);
+  return out;
+}
+
 static std::string esc(const std::wstring& text, size_t limit = 60) {
-  std::wstring cut = text.size() > limit ? text.substr(0, limit) : text;
+  size_t cutLen = std::min(text.size(), limit);
+  // Don't truncate in the middle of a surrogate pair: the high half alone is
+  // not valid UTF-8 and shows up as a replacement glyph (emoji turned to ??).
+  if (cutLen > 0 && cutLen < text.size() && text[cutLen - 1] >= 0xD800 && text[cutLen - 1] <= 0xDBFF) cutLen++;
+  std::wstring cut = text.substr(0, cutLen);
   std::string out;
-  out.reserve(cut.size());
+  out.reserve(cut.size() * 3);
+  std::wstring pending;
+  auto flush = [&out, &pending]() {
+    if (!pending.empty()) {
+      out += toUtf8(pending);
+      pending.clear();
+    }
+  };
   for (wchar_t wc : cut) {
     if (wc == L'"' || wc == L'\\') {
+      flush();
       out.push_back('\\');
       out.push_back((char)wc);
     } else if (wc < 0x20) {
+      flush();
       out.push_back(' ');
     } else if (wc < 0x80) {
+      flush();
       out.push_back((char)wc);
     } else {
-      out += toUtf8(std::wstring(1, wc));
+      // Convert whole runs at once so surrogate pairs stay together.
+      pending.push_back(wc);
     }
   }
+  flush();
   return out;
 }
 
@@ -155,6 +184,15 @@ static std::string nowJson(bool ok, const std::string& body) {
 
 static std::string errJson(const std::string& message) {
   return nowJson(false, "\"error\":\"" + message + "\"");
+}
+
+// Fixed six decimals, locale-independent. std::to_string(...).substr(0, 6)
+// rounded the string itself, so 0.047619 became "0.0476" and any value below
+// 0.0001 lost its significant digits entirely.
+static std::string fixed6(double value) {
+  char buffer[32];
+  std::snprintf(buffer, sizeof(buffer), "%.6f", value);
+  return buffer;
 }
 
 static void setDpiAware() {
@@ -482,6 +520,19 @@ class Capture {
   }
 
   /**
+   * Drop capture streams whose window is gone. `windows_` is append-only while
+   * streaming, so every closed window used to leave its D3D textures behind
+   * forever; prune on each frame build and cap the map as a backstop.
+   */
+  void prune(const std::vector<HWND>& live, size_t limit = 16) {
+    for (auto it = windows_.begin(); it != windows_.end();) {
+      if (std::find(live.begin(), live.end(), it->first) == live.end()) it = windows_.erase(it);
+      else ++it;
+    }
+    while (windows_.size() > limit) windows_.erase(windows_.begin());
+  }
+
+  /**
    * Pull whatever frames the pool has queued (non-blocking, capped) so the
    * stream's texture really is the newest DWM composited frame before a
    * readback. Returns how many frames were consumed.
@@ -598,7 +649,18 @@ struct Composer {
    * so repeated calls are cheap and always use the newest composited frame.
    */
   bool buildFrame(bool behind, Frame& f) {
+    // Frames are reused by the streaming loop (33 MB per tick was pure churn),
+    // so every per-frame field must start from a clean slate.
+    f.used.clear();
+    f.note.clear();
+    f.engine = "wgc";
     std::vector<Win> list = listWindows();
+    {
+      std::vector<HWND> live;
+      live.reserve(list.size());
+      for (const Win& w : list) live.push_back((HWND)w.handle);
+      capture.prune(live);
+    }
     int dshIndex = -1;
     indexOfDsh(list, dshIndex);
     int progmanIndex = findProgman(list);
@@ -705,8 +767,8 @@ struct Composer {
     if (!saveJpeg(canvas, outPath, targetW)) return errJson("save failed");
     int targetH = (int)llround((double)f.h * targetW / f.w);
     std::string body = payload(targetW, targetH, elapsedMs, f.used, f.engine, f.note);
-    body += ",\"lum\":" + std::to_string(f.lum).substr(0, 6);
-    body += ",\"dark\":" + std::to_string(f.dark).substr(0, 6);
+    body += ",\"lum\":" + fixed6(f.lum);
+    body += ",\"dark\":" + fixed6(f.dark);
     body += ",\"borderless\":";
     body += f.borderless ? "true" : "false";
     return nowJson(true, body);
@@ -758,9 +820,20 @@ struct Composer {
         int sxi = std::min(sw - 1, std::max(0, (int)sx));
         const uint8_t* s = srcRow + (size_t)sxi * 4;
         uint8_t* d = dstRow + (size_t)x * 4;
-        d[0] = s[0];
-        d[1] = s[1];
-        d[2] = s[2];
+        // DWM/WGC frames are premultiplied BGRA. Compositing them as opaque
+        // turned every rounded corner and every transparent window region into
+        // a black fringe; source-over keeps the desktop visible through them.
+        const int a = s[3];
+        if (a >= 254) {
+          d[0] = s[0];
+          d[1] = s[1];
+          d[2] = s[2];
+        } else if (a > 0) {
+          const int inv = 255 - a;
+          d[0] = (uint8_t)std::min(255, (int)s[0] + d[0] * inv / 255);
+          d[1] = (uint8_t)std::min(255, (int)s[1] + d[1] * inv / 255);
+          d[2] = (uint8_t)std::min(255, (int)s[2] + d[2] * inv / 255);
+        }
         d[3] = 255;
       }
     }
@@ -819,6 +892,7 @@ struct Engine {
   uint64_t seq = 0;
   int darkRun = 0;
   double lastLum = -1;
+  Composer::Frame frame;  // reused: its pixel buffer is the 33 MB allocation
 
   void loop() {
     ULONGLONG next = GetTickCount64();
@@ -831,7 +905,6 @@ struct Engine {
       if (now >= next) {
         next = now + interval;
         std::lock_guard<std::mutex> lock(busy);
-        Composer::Frame frame;
         const ULONGLONG started = GetTickCount64();
         if (composer->buildFrame(behind, frame)) {
           // DWM sometimes hands back a desktop frame without the wallpaper
@@ -862,8 +935,8 @@ struct Engine {
               seq++;
               lastLum = frame.lum;
               std::string event = "{\"event\":\"frame\",\"seq\":" + std::to_string(seq);
-              event += ",\"lum\":" + std::to_string(frame.lum).substr(0, 6);
-              event += ",\"dark\":" + std::to_string(frame.dark).substr(0, 6);
+              event += ",\"lum\":" + fixed6(frame.lum);
+              event += ",\"dark\":" + fixed6(frame.dark);
               event += ",\"borderless\":";
               event += frame.borderless ? "true" : "false";
               event += ",\"apps\":" + std::to_string(frame.used.size());
@@ -874,7 +947,12 @@ struct Engine {
           }
         }
       }
-      Sleep(4);
+      // GetTickCount64 ticks every ~15.6 ms, so Sleep(4) burned CPU while
+      // still rounding to the same tick. Sleep until the next frame instead,
+      // capped at one frame so `stop` / `fps` commands stay responsive.
+      const ULONGLONG wake = GetTickCount64();
+      if (wake < next) Sleep((DWORD)std::min<ULONGLONG>(next - wake, 16));
+      else Sleep(1);
     }
   }
 
@@ -952,7 +1030,7 @@ int main(int argc, char** argv) {
   auto* composer = new Composer();
 
   auto oneShot = [&](const std::string& rest, bool behind) -> std::string {
-    return composer->compose(std::wstring(rest.begin(), rest.end()), behind);
+    return composer->compose(utf8ToWide(rest), behind);
   };
 
   if (argc >= 2 && std::string(argv[1]) == "--serve") {
@@ -981,7 +1059,7 @@ int main(int argc, char** argv) {
           const bool behind = rest.substr(s1 + 1, s2 - s1 - 1) == "1";
           const bool force = rest.substr(s2 + 1, s3 - s2 - 1) == "1";
           const std::string path = rest.substr(s3 + 1);
-          engine.start(fps > 0 ? fps : 8, behind, force, std::wstring(path.begin(), path.end()));
+          engine.start(fps > 0 ? fps : 8, behind, force, utf8ToWide(path));
           answer = nowJson(true, "\"streaming\":true,\"fps\":" + std::to_string(engine.fps.load()) + ",\"behind\":" +
                                     (engine.behind ? "true" : "false") + ",\"force\":" + (engine.force ? "true" : "false"));
         }
@@ -1014,18 +1092,27 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  // One-shot: <out> [behind]
-  if (argc < 2) {
+  // One-shot: <out> [behind]. argv[] is decoded in the process ANSI code page,
+  // so a non-ASCII output path would be mangled before it ever reaches GDI+;
+  // read the UTF-16 command line instead.
+  int wideArgc = 0;
+  LPWSTR* wideArgv = CommandLineToArgvW(GetCommandLineW(), &wideArgc);
+  std::wstring out;
+  bool behind = false;
+  if (wideArgv) {
+    if (wideArgc >= 2) out = wideArgv[1];
+    behind = wideArgc >= 3 && std::wstring(wideArgv[2]) == L"1";
+    LocalFree(wideArgv);
+  }
+  if (out.empty()) {
     fputs(errJson("missing output path").c_str(), stdout);
     return 1;
   }
-  if (std::string(argv[1]) == "version") {
+  if (out == L"version") {
     emit(nowJson(true, "\"version\":\"wgc-2\""));
     return 0;
   }
-  std::string out = argv[1];
-  bool behind = argc >= 3 && std::string(argv[2]) == "1";
-  std::string answer = oneShot(out, behind);
+  std::string answer = composer->compose(out, behind);
   emit(answer);
   return 0;
 }

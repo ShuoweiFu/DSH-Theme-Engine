@@ -10,12 +10,13 @@
 		 * compared against black and pass. After two refusals the third frame is
 		 * believed, so switching to a dark wallpaper is not fought forever.
 		 */
-		const blackWatch = { accepted: -1, skips: 0 };
+		const blackWatch = { accepted: -1, last: -1, skips: 0 };
 		function isBlackSwap(sample) {
 			const lum = Number(sample?.lum);
 			if (!Number.isFinite(lum)) return false;
+			blackWatch.last = lum;
 			const previous = blackWatch.accepted;
-			if (lum < 0.05 && previous > 0.12 && blackWatch.skips < 2) {
+			if (lum < BLACK_LUM && previous > RECOVER_LUM && blackWatch.skips < 2) {
 				blackWatch.skips += 1;
 				return true;
 			}

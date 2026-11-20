@@ -67,12 +67,20 @@
 		 * Average luminance of the wallpaper behind the window, plus how busy it
 		 * is. Sampled from the same bitmap that becomes the texture, so it costs
 		 * one 24x24 draw per wallpaper update and never touches the GPU loop.
-		 * `content` measures the right ~78% of the window (the column where the
-		 * chat text lives); `busy` is the standard deviation of the whole frame.
+		 * `content` measures the column where the chat text lives; `busy` is the
+		 * standard deviation of the whole frame.
 		 */
 		function measureInk(source) {
 			try {
 				const size = 24;
+				// The sidebar can be collapsed, icon-rail or expanded, so a fixed
+				// 24% cut sampled the wrong pixels in two of those states. Measure
+				// the real scrollport; fall back to the old 24% when it is hidden.
+				const scrollport = document.querySelector("[data-sidebar-scrollport]");
+				const sidebarWidth = scrollport?.getBoundingClientRect?.().width ?? 0;
+				const viewport = window.innerWidth || 0;
+				const contentStart =
+					viewport > 0 && sidebarWidth > 0 ? Math.min(0.45, Math.max(0.16, sidebarWidth / viewport)) : 0.24;
 				const probe = document.createElement("canvas");
 				probe.width = size;
 				probe.height = size;
@@ -90,7 +98,7 @@
 						const l = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
 						sum += l;
 						sum2 += l * l;
-						if (x >= size * 0.24) {
+						if (x / size >= contentStart) {
 							contentSum += l;
 							contentN += 1;
 						}

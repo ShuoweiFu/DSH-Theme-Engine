@@ -4,7 +4,7 @@
  */
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { CACHE_DIR } from './paths.js';
 import { CAPTURE_SCRIPT, MACOS_SCRIPT, POWERSHELL_SCRIPT } from './scripts.js';
@@ -46,10 +46,20 @@ export function mimeOf(data, file) {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') {
+    const brand = bytes.toString('ascii', 8, 12);
+    // HEIC/HEIF stills are common Wallpaper Engine poster frames; without this
+    // they were served as image/jpeg and the browser refused to decode them.
+    if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'mif1') return 'image/heic';
+    if (brand === 'avif' || brand === 'avis') return 'image/avif';
+    if (brand === 'mp42' || brand === 'isom') return 'video/mp4';
+  }
   const lower = String(file).toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
+  if (lower.endsWith('.avif')) return 'image/avif';
   if (lower.endsWith('.mp4')) return 'video/mp4';
   if (lower.endsWith('.webm')) return 'video/webm';
   return 'image/jpeg';
@@ -70,7 +80,7 @@ export async function readWallpaperEngine() {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      "(Get-CimInstance Win32_Process -Filter \"Name='wallpaper64.exe'\" | Select-Object -First 1).ExecutablePath",
+      "(Get-CimInstance Win32_Process -Filter \"Name='wallpaper64.exe' OR Name='wallpaper32.exe'\" | Sort-Object { $_.Name -eq 'wallpaper64.exe' } -Descending | Select-Object -First 1).ExecutablePath",
     ], 6000);
     const path = exe.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? '';
     if (!path) return null;
@@ -125,7 +135,7 @@ export async function readWallpaperEngine() {
 export async function streamFile(file, type, mtime, request) {
   const total = (await stat(file)).size;
   const range = request?.headers?.get?.('range') ?? '';
-  const match = /bytes=(\d*)-(\d*)/.exec(range ?? '');
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
   const baseHeaders = {
     'content-type': type,
     'accept-ranges': 'bytes',
@@ -133,9 +143,20 @@ export async function streamFile(file, type, mtime, request) {
     'x-liquid-glass-mtime': mtime,
   };
   if (match) {
-    const start = match[1] ? Number(match[1]) : 0;
-    const end = match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
-    if (Number.isFinite(start) && start <= end) {
+    const hasStart = match[1] !== '';
+    const hasEnd = match[2] !== '';
+    let start = 0;
+    let end = total - 1;
+    if (!hasStart && hasEnd) {
+      // Suffix range (`bytes=-500`): the last N bytes, not the first N.
+      const suffix = Number(match[2]);
+      start = Number.isFinite(suffix) ? Math.max(0, total - suffix) : total;
+      end = total - 1;
+    } else if (hasStart) {
+      start = Number(match[1]);
+      end = hasEnd ? Math.min(Number(match[2]), total - 1) : total - 1;
+    }
+    if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && start < total && start <= end) {
       const body = Readable.toWeb(createReadStream(file, { start, end }));
       return new Response(body, {
         status: 206,
@@ -146,6 +167,12 @@ export async function streamFile(file, type, mtime, request) {
         },
       });
     }
+    // A range past EOF (or a zero-length suffix) must be 416, not the whole
+    // file with a 200: the renderer would treat that as a successful seek.
+    return new Response(null, {
+      status: 416,
+      headers: { ...baseHeaders, 'content-range': `bytes */${total}` },
+    });
   }
   const body = Readable.toWeb(createReadStream(file));
   return new Response(body, { status: 200, headers: { ...baseHeaders, 'content-length': String(total) } });

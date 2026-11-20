@@ -81,7 +81,7 @@ export function apply(ctx, config) {
   let lastClientError = '';
   let lastClientReady = '';
   let lastHardware = '';
-let lastClientBench = '';
+  let lastClientBench = '';
 
   /** @type {{ at: number, value: any } | null} */
   let gateCache = null;

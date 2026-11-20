@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { copyFile, mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CACHE_DIR, CAPTURE_EXE, CAPTURE_IMAGE_PATH, COMPOSITE_SCRIPT_PATH, STAGE_IMAGE_PATH } from './paths.js';
-import { CAPTURE_SCRIPT, COMPOSITE_SCRIPT } from './scripts.js';
+import { COMPOSITE_SCRIPT } from './scripts.js';
 import { run, runPowerShellFile } from './run.js';
 
 /**
@@ -41,8 +41,6 @@ export const captureStats = {
 
 
 
-
-/** Wall-clock cost of the last capture, in ms (the native helper is ~10x faster). */
 
 /** Cached promise while the helper is being checked, so parallel polls do not race. */
 let captureHelperPromise = null;
@@ -198,9 +196,10 @@ export async function startHelper() {
  * @returns {Promise<string|null>}
  */
 export function helperCommand(payload, timeoutMs = 6000) {
-  const run = async () => {
-    if (!helperProcess && !(await startHelper())) return null;
-    if (!helperProcess) return null;
+  const execute = async () => {
+    // A leftover request means the previous reply never arrived; drop that
+    // session first, then (re)start exactly once. The old code checked
+    // helperProcess twice and started it twice for no benefit.
     if (helperPending) resetHelper('overlapping command');
     if (!helperProcess && !(await startHelper())) return null;
     return new Promise((resolve) => {
@@ -217,7 +216,7 @@ export function helperCommand(payload, timeoutMs = 6000) {
       }
     });
   };
-  const next = helperChain.then(run, run);
+  const next = helperChain.then(execute, execute);
   helperChain = next.then(
     () => null,
     () => null
@@ -232,7 +231,10 @@ export function helperCommand(payload, timeoutMs = 6000) {
  * @returns {Promise<string|null>}
  */
 export async function captureViaHelper(outPath, behind) {
-  return helperCommand(`${behind ? '1' : '0'} ${outPath}\n`);
+  // A cold helper needs WGC session start + a first frame, which can take a few
+  // seconds on a busy desktop; the old 6 s default timed out and forced the
+  // expensive PowerShell fallback on the very first capture.
+  return helperCommand(`${behind ? '1' : '0'} ${outPath}\n`, 12000);
 }
 
 /** True while a stream frame is being renamed into place; later frames drop. */

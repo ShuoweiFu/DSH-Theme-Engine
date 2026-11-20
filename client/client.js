@@ -10,7 +10,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.002811";
+		const CLIENT_BUILD = "v.26.11.21.004441";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -32,9 +32,22 @@
 		});
 
 		/**
+		 * One cap for both backends: above 1.5x the wallpaper is blurred by the
+		 * shader anyway, so the extra fragments are invisible but the GPU still
+		 * pays DPR² of them. WebGL used to cap at 1 while WebGPU capped at 2,
+		 * which made the two engines resolve noticeably differently on HiDPI.
+		 */
+		const DPR_CAP = 1.5;
+
+		/** Power hint for the renderer: high-end presets ask for the dGPU. */
+		function preferredPower(preset, tier) {
+			return preset === "beast" || tier === "beast" ? "high-performance" : "low-power";
+		}
+
+		/**
 		 * Hardware profiles. A preset only writes the knobs that keep the machine
 		 * alive (engine, frame cap, dynamic resolution, occluded-window
-		 * compositing) 鈥?never the wallpaper, the look or the capture cadence the
+		 * compositing) — never the wallpaper, the look or the capture cadence the
 		 * user picked, so switching profile cannot repaint their glass.
 		 */
 		const PRESETS = Object.freeze({
@@ -52,7 +65,7 @@
 		/**
 		 * Latest quantised wallpaper sample, shared with the settings panel so it
 		 * can show the measured brightness. 0.11 kept this in a useState scoped to
-		 * the overlay and then *used it in the panel's scope* 鈥?a ReferenceError on
+		 * the overlay and then *used it in the panel's scope* — a ReferenceError on
 		 * every panel render. A plain object fixes that without adding a store.
 		 */
 		const inkProbe = { sample: null };
@@ -120,7 +133,7 @@
 			refresh: "背景更新速度",
 			flow: "液态流动",
 			flowHint: "壁纸折射、色散与高光的流动强度。",
-			source: "背景来源",
+			sourceLabel: "背景来源",
 			sourceHint: "「真实桌面」按屏幕坐标 1:1 映射桌面（含图标）；「壁纸本体」只取壁纸原图，不含图标。",
 			sourceDesktop: "真实桌面（含图标）",
 			sourceWallpaper: "壁纸本体（无图标）",
@@ -132,7 +145,7 @@
 			error: "读取失败",
 			off: "已关闭",
 			unknown: "—",
-			source: "来源",
+			sourceValue: "来源",
 			size: "大小",
 			version: "版本",
 			moveHint: "桌面上移动鼠标，可以看到玻璃上的高光跟随。",
@@ -204,7 +217,7 @@
 			refresh: "Background refresh",
 			flow: "Liquid flow",
 			flowHint: "Strength of the refraction, dispersion and moving highlights.",
-			source: "Background source",
+			sourceLabel: "Background source",
 			sourceHint: "Real desktop maps the desktop 1:1 in screen space (icons included); Wallpaper only takes the icon-free wallpaper picture.",
 			sourceDesktop: "Real desktop (icons)",
 			sourceWallpaper: "Wallpaper only (no icons)",
@@ -216,7 +229,7 @@
 			error: "Read failed",
 			off: "Disabled",
 			unknown: "—",
-			source: "Source",
+			sourceValue: "Source",
 			size: "Size",
 			version: "Version",
 			moveHint: "Move the pointer over the window to see the glass highlights follow.",
@@ -512,12 +525,20 @@
 		 * Average luminance of the wallpaper behind the window, plus how busy it
 		 * is. Sampled from the same bitmap that becomes the texture, so it costs
 		 * one 24x24 draw per wallpaper update and never touches the GPU loop.
-		 * `content` measures the right ~78% of the window (the column where the
-		 * chat text lives); `busy` is the standard deviation of the whole frame.
+		 * `content` measures the column where the chat text lives; `busy` is the
+		 * standard deviation of the whole frame.
 		 */
 		function measureInk(source) {
 			try {
 				const size = 24;
+				// The sidebar can be collapsed, icon-rail or expanded, so a fixed
+				// 24% cut sampled the wrong pixels in two of those states. Measure
+				// the real scrollport; fall back to the old 24% when it is hidden.
+				const scrollport = document.querySelector("[data-sidebar-scrollport]");
+				const sidebarWidth = scrollport?.getBoundingClientRect?.().width ?? 0;
+				const viewport = window.innerWidth || 0;
+				const contentStart =
+					viewport > 0 && sidebarWidth > 0 ? Math.min(0.45, Math.max(0.16, sidebarWidth / viewport)) : 0.24;
 				const probe = document.createElement("canvas");
 				probe.width = size;
 				probe.height = size;
@@ -535,7 +556,7 @@
 						const l = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
 						sum += l;
 						sum2 += l * l;
-						if (x >= size * 0.24) {
+						if (x / size >= contentStart) {
 							contentSum += l;
 							contentN += 1;
 						}
@@ -552,6 +573,13 @@
 				return null;
 			}
 		}
+		// Shared darkness thresholds. 06-guard rejects a frame that drops below
+		// BLACK_LUM after a bright one; anything above RECOVER_LUM counts as a
+		// real bright frame. Kept here so the guard and the ink sampler cannot
+		// drift apart again (they used to disagree about what "black" means).
+		const BLACK_LUM = 0.05;
+		const RECOVER_LUM = 0.12;
+
 		/** sRGB channel → linear light, per WCAG 2.1 relative luminance. */
 		function linearize(channel) {
 			const c = Math.min(1, Math.max(0, channel));
@@ -618,35 +646,6 @@
 			const neededVeil = Math.min(1, Math.max(0, (alpha / tintLift - floor) / 0.45));
 			return { ink, veil: Math.max(veil, neededVeil) };
 		}
-
-		/**
-		 * Decides the ink colour by contrast, not by a raw brightness threshold.
-		 * The wallpaper is only part of the answer: the column in front of the text
-		 * also paints the frost tint, so a bright wallpaper plus a white veil is
-		 * still a *bright* backdrop and needs dark text. The sampled wallpaper
-		 * luminance is composited with the surface colour first, then both label
-		 * candidates are scored with WCAG contrast.
-		 */
-		function pickInk(contentLum, tint, veil, darkTheme) {
-			const tokens = glassTokens(tint, veil, null);
-			const surface = darkTheme ? tokens["--dsw-alias-bg-base"].dark : tokens["--dsw-alias-bg-base"].light;
-			const match = /rgba?\(([^)]+)\)/.exec(surface);
-			const parts = match ? match[1].split(",").map((s) => Number.parseFloat(s)) : [255, 255, 255, 0.2];
-			const alpha = Number.isFinite(parts[3]) ? parts[3] : 0.2;
-			// Alpha compositing happens in encoded sRGB, not in linear light: the
-			// blend is applied first, *then* converted. Mixing linear values here was
-			// what made a dark wallpaper read as "bright enough for dark text".
-			const surfaceSrgb = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
-			const composed = linearize(contentLum * (1 - alpha) + surfaceSrgb * alpha);
-			const darkInk = relativeLum(12, 14, 20);
-			const lightInk = relativeLum(246, 248, 252);
-			const onDark = contrastRatio(composed, lightInk);
-			const onLight = contrastRatio(composed, darkInk);
-			// A 0.35 gap stops the colour from flickering on borderline wallpaper.
-			if (onLight >= onDark + 0.35) return "dark";
-			if (onDark >= onLight + 0.35) return "light";
-			return darkTheme ? "light" : "dark";
-		}
 				/**
 		 * Second line of defence behind the host luminance check. A capture can
 		 * still land black (a compositor pause, a decoder hiccup, the PowerShell
@@ -659,12 +658,13 @@
 		 * compared against black and pass. After two refusals the third frame is
 		 * believed, so switching to a dark wallpaper is not fought forever.
 		 */
-		const blackWatch = { accepted: -1, skips: 0 };
+		const blackWatch = { accepted: -1, last: -1, skips: 0 };
 		function isBlackSwap(sample) {
 			const lum = Number(sample?.lum);
 			if (!Number.isFinite(lum)) return false;
+			blackWatch.last = lum;
 			const previous = blackWatch.accepted;
-			if (lum < 0.05 && previous > 0.12 && blackWatch.skips < 2) {
+			if (lum < BLACK_LUM && previous > RECOVER_LUM && blackWatch.skips < 2) {
 				blackWatch.skips += 1;
 				return true;
 			}
@@ -1616,6 +1616,10 @@ void main() {
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			// Per preset: the caller passes high-performance for the high-end
+			// profile and low-power for integrated/unknown hardware. Hard-coding
+			// low-power made a discrete GPU run the glass on the iGPU.
+			const powerPreference = options.powerPreference ?? "low-power";
 			if (!navigator.gpu) return null;
 			const canvas = document.createElement("canvas");
 			canvas.setAttribute("aria-hidden", "true");
@@ -1662,13 +1666,13 @@ void main() {
 			let mouse = { x: 0.5, y: 0.5 };
 			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(20);
+			const uniforms = new Float32Array(16);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
-  tint: f32, cScale: f32, dpr: f32, pad: f32,
+  tint: f32, dpr: f32, vpW: f32, vpH: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -1697,8 +1701,10 @@ fn noise(p: vec2<f32>) -> f32 {
 }
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let res = vec2<f32>(textureDimensions(tex));
-  let fragCss = in.frag * vec2<f32>(res.x / u.cScale, res.y / u.cScale);
+  // CSS viewport, not texture size: the wallpaper is capped at 2048 px, so
+  // deriving the CSS coordinate from res/cScale shifted and stretched the
+  // desktop mapping whenever the texture and the canvas differed in size.
+  let fragCss = in.frag * vec2<f32>(u.vpW, u.vpH);
   let screenUv = (vec2<f32>(u.winX, u.winY) + fragCss) / vec2<f32>(u.scrW, u.scrH);
   let screenDev = vec2<f32>(u.scrW, u.scrH) * u.dpr;
   let cover = max(screenDev.x / u.texW, screenDev.y / u.texH);
@@ -1785,7 +1791,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				};
 			}
 			function resize() {
-				const ratio = Math.min(2, (window.devicePixelRatio || 1) * SCALES[scaleIndex]);
+				const ratio = Math.min(DPR_CAP, (window.devicePixelRatio || 1) * SCALES[scaleIndex]);
 				const w = Math.max(2, Math.round(window.innerWidth * ratio));
 				const h = Math.max(2, Math.round(window.innerHeight * ratio));
 				if (canvas.width !== w || canvas.height !== h) {
@@ -1902,14 +1908,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function draw(now) {
 				if (!device || !context || !pipeline) return;
 				const g = geometry();
-				const cScale = canvas.width / Math.max(1, window.innerWidth);
 				uniforms[0] = (now || performance.now()) / 1000;
 				uniforms[1] = mouse.x; uniforms[2] = mouse.y;
 				uniforms[3] = g.scrW; uniforms[4] = g.scrH;
 				uniforms[5] = g.winX; uniforms[6] = g.winY;
 				uniforms[7] = texture ? texture.width : 1; uniforms[8] = texture ? texture.height : 1;
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
-				uniforms[12] = params.tint; uniforms[13] = cScale; uniforms[14] = g.dpr;
+				uniforms[12] = params.tint; uniforms[13] = g.dpr;
+				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {
@@ -2024,7 +2030,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			}
 			const ready = (async () => {
 				try {
-					const adapter = await navigator.gpu.requestAdapter({ powerPreference: "low-power" });
+					const adapter = await navigator.gpu.requestAdapter({ powerPreference });
 					if (!adapter) throw new Error("no adapter");
 					device = await adapter.requestDevice();
 					device.lost?.then((info) => {
@@ -2172,7 +2178,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// Keep the last frame on screen when the guard freezes the loop;
 				// otherwise a paused WebGL canvas can composite as transparent/black.
 				preserveDrawingBuffer: true,
-				powerPreference: "high-performance"
+				powerPreference: options.powerPreference ?? "high-performance"
 			});
 			if (!gl) return null;
 
@@ -2283,10 +2289,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
 			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10 };
-			// The wallpaper is blurred by the prepass anyway, so rendering above CSS
-			// pixel density buys nothing visible but costs DPR² twice the fragments
-			// (1.5x DPR = 2.25x pixels on this machine).
-			const dpr = () => Math.min(1, window.devicePixelRatio || 1);
+			// The wallpaper is blurred by the prepass anyway, so above DPR_CAP
+			// rendering costs DPR² fragments that cannot be seen. Both backends
+			// share the same cap so switching engines never changes sharpness.
+			const dpr = () => Math.min(DPR_CAP, window.devicePixelRatio || 1);
 
 			function setScale(next) {
 				const index = Math.max(0, Math.min(SCALES.length - 1, next));
@@ -2356,6 +2362,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				return true;
 			}
 
+			/** Free one blur target (idempotent). */
+			function freeTarget(target) {
+				if (!target) return null;
+				gl.deleteFramebuffer(target.fbo);
+				gl.deleteTexture(target.tex);
+				return null;
+			}
+
 			/** (Re)allocate one full-resolution blur target, freeing the old one. */
 			function makeTarget(current, width, height) {
 				if (current && current.width === width && current.height === height) return current;
@@ -2396,13 +2410,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				if (!blurProgram || !texture) return;
 				if (params.blur <= 0.5) {
 					// Sharp mode: sample the wallpaper directly, zero extra GPU memory.
-					for (const target of [blurTarget, blurTargetB]) {
-						if (!target) continue;
-						gl.deleteFramebuffer(target.fbo);
-						gl.deleteTexture(target.tex);
-					}
-					blurTarget = null;
-					blurTargetB = null;
+					blurTarget = freeTarget(blurTarget);
+					blurTargetB = freeTarget(blurTargetB);
 					return;
 				}
 				const width = texture.width;
@@ -2410,12 +2419,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// Keep the previous blurred frame for the cross-fade before the
 				// targets are reused.
 				if (blurTarget) copyToPrev(blurTarget);
-				blurTarget = makeTarget(blurTarget, width, height);
-				blurTargetB = makeTarget(blurTargetB, width, height);
 				const pixelScale = width / Math.max(1, window.innerWidth || width);
 				const targetRadius = Math.min(36, Math.max(1.2, params.blur * pixelScale * 0.9));
 				const passes = Math.max(1, Math.min(4, Math.ceil(targetRadius / 9)));
 				const radius = Math.max(1.2, Math.min(10, targetRadius / passes));
+				blurTarget = makeTarget(blurTarget, width, height);
+				// Single-pass blurs read the source straight into blurTarget, so the
+				// scratch buffer (another full-resolution texture) is pure waste.
+				blurTargetB = passes > 1 ? makeTarget(blurTargetB, width, height) : freeTarget(blurTargetB);
 				gl.useProgram(blurProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				if (blurUniforms.aPos >= 0) {
@@ -2838,14 +2849,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					textureRequest += 1;
 					if (texture) gl.deleteTexture(texture.handle);
 					if (blurTarget) {
-						gl.deleteFramebuffer(blurTarget.fbo);
-						gl.deleteTexture(blurTarget.tex);
-						blurTarget = null;
+						blurTarget = freeTarget(blurTarget);
 					}
 					if (blurTargetB) {
-						gl.deleteFramebuffer(blurTargetB.fbo);
-						gl.deleteTexture(blurTargetB.tex);
-						blurTargetB = null;
+						blurTargetB = freeTarget(blurTargetB);
 					}
 					if (prevBlur) {
 						gl.deleteTexture(prevBlur.tex);
@@ -3194,8 +3201,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						return;
 					}
 					const mode = value.renderMode;
+					// The high-end preset is also how the user asks for the discrete
+					// GPU; everything else hints low-power so laptops stay on the iGPU.
+					const powerPreference = preferredPower(value.preset, hw.tier);
 					let cancelled = false;
-					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk }) : createLiquidCanvas({ onFault, onInk });
+					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, powerPreference }) : createLiquidCanvas({ onFault, onInk, powerPreference });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
 						if (mode === "webgpu") {
@@ -3734,7 +3744,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							h(
 								"div",
 								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("source")), h("span", { className: "lg-hint" }, t("sourceHint"))),
+								h("div", { className: "lg-label" }, h("span", null, t("sourceLabel")), h("span", { className: "lg-hint" }, t("sourceHint"))),
 								h(
 									"select",
 									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },

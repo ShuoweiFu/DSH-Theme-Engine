@@ -1,0 +1,156 @@
+/**
+ * Inline PowerShell fallbacks. The C++ helper is the primary path; these scripts
+ * only run when the helper is missing or fails, and on macOS for the wallpaper
+ * path.
+ */
+export const POWERSHELL_SCRIPT = [
+  "$ErrorActionPreference = 'SilentlyContinue'",
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class LgWallpaper { [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int SystemParametersInfo(int action, int param, StringBuilder buffer, int update); }'",
+  '$buffer = New-Object System.Text.StringBuilder 2048',
+  '$null = [LgWallpaper]::SystemParametersInfo(0x0073, 2048, $buffer, 0)',
+  '$path = $buffer.ToString()',
+  "if (-not $path) { $path = (Get-ItemProperty 'HKCU:\\Control Panel\\Desktop' -Name WallPaper).WallPaper }",
+  "if (-not $path) { $path = Join-Path $env:APPDATA 'Microsoft\\Windows\\Themes\\TranscodedWallpaper' }",
+  '$path',
+].join('\n');
+
+export const CAPTURE_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -AssemblyName System.Drawing",
+  "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class LgDpi { [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware(); }'",
+  "[void][LgDpi]::SetProcessDPIAware()",
+  "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public static class LgCapture { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; } public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam); [DllImport(\"user32.dll\")] public static extern bool EnumWindows(EnumProc proc, IntPtr lParam); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder buffer, int max); [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect); [DllImport(\"user32.dll\")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags); }'",
+  "$out = $env:LG_OUT",
+  "$script:progman = [IntPtr]::Zero",
+  "$callback = [LgCapture+EnumProc]{ param($window, $lparam) $buffer = New-Object System.Text.StringBuilder 256; [void][LgCapture]::GetClassName($window, $buffer, 256); if ($buffer.ToString() -eq 'Progman') { $script:progman = $window; return $false }; return $true }",
+  "[void][LgCapture]::EnumWindows($callback, [IntPtr]::Zero)",
+  "$hwnd = $script:progman",
+  "if ($hwnd -eq [IntPtr]::Zero) { throw 'Progman window not found' }",
+  '$rect = New-Object LgCapture+RECT',
+  '[void][LgCapture]::GetWindowRect($hwnd, [ref]$rect)',
+  '$width = $rect.Right - $rect.Left',
+  '$height = $rect.Bottom - $rect.Top',
+  'if ($width -le 0 -or $height -le 0) { throw "bad Progman rect ${width}x${height}" }',
+  '$bitmap = New-Object System.Drawing.Bitmap $width, $height',
+  '$graphics = [System.Drawing.Graphics]::FromImage($bitmap)',
+  '$hdc = $graphics.GetHdc()',
+  '$ok = [LgCapture]::PrintWindow($hwnd, $hdc, 2)',
+  '$graphics.ReleaseHdc($hdc)',
+  '$graphics.Dispose()',
+  'if (-not $ok) { $bitmap.Dispose(); throw "PrintWindow failed" }',
+  '$encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" } | Select-Object -First 1',
+  '$parameters = New-Object System.Drawing.Imaging.EncoderParameters 1',
+  '$parameters.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality, [long]90)',
+  'New-Item -ItemType Directory -Path (Split-Path $out) -Force | Out-Null',
+  '$bitmap.Save($out, $encoder, $parameters)',
+  '$bitmap.Dispose()',
+  'Write-Output ("{`"ok`":true,`"width`":$width,`"height`":$height}")',
+].join('\n');
+
+/**
+ * Enumerate the top-level windows in z-order, locate the DSH window, and report
+ * whether a real application window sits below it (i.e. is hidden by the glass).
+ */
+export const GATE_SCRIPT = [
+  "$ErrorActionPreference = 'SilentlyContinue'",
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class LgDpiGate { [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware(); }'",
+  "[void][LgDpiGate]::SetProcessDPIAware()",
+  "Add-Type -TypeDefinition 'using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices; public static class LgGate { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; } public class W { public IntPtr h; public string cls = \"\"; public string title = \"\"; public int x, y, w, hh; public uint pid; public bool vis; } public delegate bool EnumProc(IntPtr hWnd, IntPtr l); [DllImport(\"user32.dll\")] public static extern bool EnumWindows(EnumProc proc, IntPtr l); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder buffer, int max); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder buffer, int max); [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect); [DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid); public static List<W> List() { var list = new List<W>(); EnumWindows(delegate(IntPtr h, IntPtr l) { var w = new W(); w.h = h; var sb = new StringBuilder(256); GetClassName(h, sb, 256); w.cls = sb.ToString(); sb.Clear(); GetWindowText(h, sb, 256); w.title = sb.ToString(); RECT r; GetWindowRect(h, out r); w.x = r.Left; w.y = r.Top; w.w = r.Right - r.Left; w.hh = r.Bottom - r.Top; uint p; GetWindowThreadProcessId(h, out p); w.pid = p; w.vis = IsWindowVisible(h); list.Add(w); return true; }, IntPtr.Zero); return list; } }'",
+  '$list = [LgGate]::List()',
+  '$index = -1',
+  'for ($i = 0; $i -lt $list.Count; $i++) { $w = $list[$i]; if ($w.cls -eq "Chrome_WidgetWin_1" -and $w.title -like "*DeepSeek Harness*" -and $w.w -gt 300 -and $w.hh -gt 300) { $script:index = $i; break } }',
+  'if ($index -lt 0) { Write-Output "{`"found`":false}"; exit 0 }',
+  '$dsh = $list[$index]',
+  '$skip = @("Progman","WorkerW","Shell_TrayWnd","Shell_SecondaryTrayWnd","Windows.UI.Core.CoreWindow","ApplicationFrameWindow","ShellHandwritingCanvas","SysTrayIcon","MS_WebcheckMonitor","DangleMonitor","WM_Class","HelperWndClass","ForegroundStaging","MultitaskingViewFrame","XamlExplorerHostIslandWindow","TaskListThumbnailWnd","Chrome_WidgetWin_0","IME","MSCTFIME UI","GDI+ Hook Window Class","EdgeUiInputTopWndClass","EdgeUiInputWndClass","EdgeUiInputTipWndClass")',
+  '$apps = New-Object System.Collections.ArrayList',
+  'for ($j = $index + 1; $j -lt $list.Count; $j++) { $w = $list[$j]; if (-not $w.vis) { continue }; if ($w.pid -eq $dsh.pid) { continue }; if ($w.title -eq $dsh.title) { continue }; if ($skip -contains $w.cls) { continue }; $ox = [Math]::Max(0, [Math]::Min($dsh.x + $dsh.w, $w.x + $w.w) - [Math]::Max($dsh.x, $w.x)); $oy = [Math]::Max(0, [Math]::Min($dsh.y + $dsh.hh, $w.y + $w.hh) - [Math]::Max($dsh.y, $w.y)); $area = $ox * $oy; if ($area -ge 40000) { [void]$apps.Add([pscustomobject]@{ cls = $w.cls; title = $w.title.Substring(0, [Math]::Min(60, $w.title.Length)); x = $w.x; y = $w.y; w = $w.w; h = $w.hh }) } }',
+  '$payload = [pscustomobject]@{ found = $true; x = $dsh.x; y = $dsh.y; w = $dsh.w; h = $dsh.hh; appsBehind = ($apps.Count -gt 0); apps = $apps }',
+  '$payload | ConvertTo-Json -Compress -Depth 5',
+].join('\n');
+
+/**
+ * Compose "what is behind the DSH window": the desktop surface at the bottom,
+ * then every visible application window that sits below the DSH window in the
+ * z-order, painted from its own window bitmap. The result is a full-screen
+ * picture of the composited reality under the glass, so occluded apps show
+ * through instead of the UI pausing.
+ */
+export const COMPOSITE_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -AssemblyName System.Drawing",
+  "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class LgDpiComp { [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware(); }'",
+  "[void][LgDpiComp]::SetProcessDPIAware()",
+  "Add-Type -TypeDefinition 'using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices; public static class LgComp { [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; } public class W { public IntPtr h; public string cls = \"\"; public string title = \"\"; public int x, y, w, hh; public uint pid; public bool vis; } public delegate bool EnumProc(IntPtr hWnd, IntPtr l); [DllImport(\"user32.dll\")] public static extern bool EnumWindows(EnumProc proc, IntPtr l); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder buffer, int max); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder buffer, int max); [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect); [DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid); [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int index); [DllImport(\"user32.dll\")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdc, uint flags); public static int ScreenW() { return GetSystemMetrics(0); } public static int ScreenH() { return GetSystemMetrics(1); } public static List<W> List() { var list = new List<W>(); EnumWindows(delegate(IntPtr h, IntPtr l) { var w = new W(); w.h = h; var sb = new StringBuilder(256); GetClassName(h, sb, 256); w.cls = sb.ToString(); sb.Clear(); GetWindowText(h, sb, 256); w.title = sb.ToString(); RECT r; GetWindowRect(h, out r); w.x = r.Left; w.y = r.Top; w.w = r.Right - r.Left; w.hh = r.Bottom - r.Top; uint p; GetWindowThreadProcessId(h, out p); w.pid = p; w.vis = IsWindowVisible(h); list.Add(w); return true; }, IntPtr.Zero); return list; } }'",
+  '$out = $env:LG_OUT',
+  '$list = [LgComp]::List()',
+  '$screenW = [LgComp]::ScreenW()',
+  '$screenH = [LgComp]::ScreenH()',
+  'if ($screenW -le 0 -or $screenH -le 0) { throw "bad screen size" }',
+  '$progman = $null',
+  'foreach ($c in $list) { if ($c.cls -eq "Progman") { $progman = $c; break } }',
+  'if ($null -eq $progman) { throw "Progman window not found" }',
+  '$dshIndex = -1',
+  'for ($i = 0; $i -lt $list.Count; $i++) { $c = $list[$i]; if ($c.cls -eq "Chrome_WidgetWin_1" -and $c.title -like "*DeepSeek Harness*" -and $c.w -gt 300 -and $c.hh -gt 300) { $dshIndex = $i; break } }',
+  '$bitmap = New-Object System.Drawing.Bitmap $screenW, $screenH',
+  '$graphics = [System.Drawing.Graphics]::FromImage($bitmap)',
+  '$graphics.Clear([System.Drawing.Color]::FromArgb(24, 24, 24))',
+  '$hdc = $graphics.GetHdc()',
+  '[void][LgComp]::PrintWindow($progman.h, $hdc, 2)',
+  '$graphics.ReleaseHdc($hdc)',
+  '$skip = @("Progman","WorkerW","Shell_TrayWnd","Shell_SecondaryTrayWnd","Windows.UI.Core.CoreWindow","ApplicationFrameWindow","ShellHandwritingCanvas","SysTrayIcon","MS_WebcheckMonitor","DangleMonitor","WM_Class","HelperWndClass","ForegroundStaging","MultitaskingViewFrame","XamlExplorerHostIslandWindow","TaskListThumbnailWnd","Chrome_WidgetWin_0","IME","MSCTFIME UI","GDI+ Hook Window Class","EdgeUiInputTopWndClass","EdgeUiInputWndClass","EdgeUiInputTipWndClass")',
+  '$apps = New-Object System.Collections.ArrayList',
+  // `LG_BEHIND=0` skips the per-window PrintWindow pass: the glass then shows the
+  // wallpaper plus desktop icons only, which is the integrated-GPU profile.
+  '$behind = $env:LG_BEHIND -ne "0"',
+  'if ($behind -and $dshIndex -ge 0) {',
+  '  $dsh = $list[$dshIndex]',
+  '  for ($j = $list.Count - 1; $j -gt $dshIndex; $j--) {',
+  '    $c = $list[$j]',
+  '    if (-not $c.vis) { continue }',
+  '    if ($c.pid -eq $dsh.pid) { continue }',
+  '    if ($c.title -eq $dsh.title) { continue }',
+  '    if ($c.title -like "*DeepSeek Harness*") { continue }',
+  '    if ($skip -contains $c.cls) { continue }',
+  '    if ($c.w -lt 80 -or $c.hh -lt 50) { continue }',
+  '    if (($c.w * $c.hh) -lt 8000) { continue }',
+  '    if ([LgComp]::IsIconic($c.h)) { continue }',
+  '    $ox = [Math]::Max(0, [Math]::Min($dsh.x + $dsh.w, $c.x + $c.w) - [Math]::Max($dsh.x, $c.x))',
+  '    $oy = [Math]::Max(0, [Math]::Min($dsh.y + $dsh.hh, $c.y + $c.hh) - [Math]::Max($dsh.y, $c.y))',
+  '    if (($ox * $oy) -le 0) { continue }',
+  '    $tmp = New-Object System.Drawing.Bitmap $c.w, $c.hh',
+  '    $tg = [System.Drawing.Graphics]::FromImage($tmp)',
+  '    $thdc = $tg.GetHdc()',
+  '    $ok = [LgComp]::PrintWindow($c.h, $thdc, 2)',
+  '    $tg.ReleaseHdc($thdc)',
+  '    $tg.Dispose()',
+  '    if ($ok) { $graphics.DrawImage($tmp, $c.x, $c.y, $c.w, $c.hh); [void]$apps.Add([pscustomobject]@{ cls = $c.cls; title = $c.title.Substring(0, [Math]::Min(60, $c.title.Length)); x = $c.x; y = $c.y; w = $c.w; h = $c.hh }) }',
+  '    $tmp.Dispose()',
+  '  }',
+  '}',
+  '$graphics.Dispose()',
+  '$tw = [Math]::Min(1600, $screenW)',
+  '$th = [int][Math]::Round($screenH * $tw / $screenW)',
+  'if ($tw -ne $screenW) {',
+  '  $scaled = New-Object System.Drawing.Bitmap $tw, $th',
+  '  $sg = [System.Drawing.Graphics]::FromImage($scaled)',
+  '  $sg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic',
+  '  $sg.DrawImage($bitmap, 0, 0, $tw, $th)',
+  '  $sg.Dispose()',
+  '  $bitmap.Dispose()',
+  '  $bitmap = $scaled',
+  '}',
+  '$encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" } | Select-Object -First 1',
+  '$parameters = New-Object System.Drawing.Imaging.EncoderParameters 1',
+  '$parameters.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality, [long]82)',
+  'New-Item -ItemType Directory -Path (Split-Path $out) -Force | Out-Null',
+  '$bitmap.Save($out, $encoder, $parameters)',
+  '$bitmap.Dispose()',
+  '$payload = [pscustomobject]@{ ok = $true; width = $tw; height = $th; appsBehind = ($apps.Count -gt 0); apps = $apps }',
+  '$payload | ConvertTo-Json -Compress -Depth 5',
+].join('\n');
+
+export const MACOS_SCRIPT = 'tell application "System Events" to get picture of current desktop';

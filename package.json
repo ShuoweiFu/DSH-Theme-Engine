@@ -1,0 +1,49 @@
+{
+  "name": "dsh-liquid-glass",
+  "version": "26.11.20-223012",
+  "private": true,
+  "description": "Live wallpaper + liquid-glass background for DeepSeek Harness: native desktop capture, 0.8-grade water shader, contrast-driven adaptive ink, frost-density and tint controls, hardware-adaptive profiles, occluded-window compositing, WebGL/WebGPU/CSS backends, five-layer performance guard.",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build:capture": "node scripts/build-capture.mjs"
+  },
+  "files": [
+    "README.md",
+    "index.js",
+    "client",
+    "locale",
+    "docs",
+    "bin",
+    "cordis.patch.yml",
+    "icon.svg",
+    "host",
+    "tools",
+    "scripts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

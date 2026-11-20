@@ -1,9 +1,9 @@
 {
   "name": "dsh-theme-engine",
-  "version": "26.11.21-011029",
+  "version": "26.11.21-011937",
   "private": true,
   "description": "Live wallpaper + liquid-glass background for DeepSeek Harness: native desktop capture, 0.8-grade water shader, contrast-driven adaptive ink, frost-density and tint controls, hardware-adaptive profiles, occluded-window compositing, WebGL/WebGPU backends, five-layer performance guard.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ShuoweiFu/DSH-Theme-Engine.git"
@@ -29,6 +29,8 @@
   },
   "files": [
     "README.md",
+    "LICENSE",
+    "NOTICE",
     "index.js",
     "client",
     "locale",

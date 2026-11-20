@@ -1,7 +1,7 @@
 # DSH Theme Engine
 
-[![version](https://img.shields.io/badge/version-v.26.11.21.011029-blue)](https://github.com/ShuoweiFu/DSH-Theme-Engine/releases)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![version](https://img.shields.io/badge/version-v.26.11.21.011937-blue)](https://github.com/ShuoweiFu/DSH-Theme-Engine/releases)
+[![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-lightgrey)](#硬件兼容性)
 
 > Liquid glass for DeepSeek Harness — your desktop wallpaper lives behind the UI, and the whole window behaves like a piece of frosted, slightly liquid glass.
@@ -10,7 +10,7 @@
 
 模糊不是 CSS 滤镜糊出来的：两种 GPU 后端（WebGL / WebGPU）都用自己的 **13-tap 泊松核高斯**，多次 ping-pong 覆盖大半径；第五层保护触发时退到一层静态半透明遮罩，绝不黑屏。
 
-当前版本 **v.26.11.21.011029**（版本号按 `v.年月日.时分秒`，西安授时）。
+当前版本 **v.26.11.21.011937**（版本号按 `v.年月日.时分秒`，西安授时）。
 
 ![Liquid Glass 效果](docs/screenshot.png)
 
@@ -159,10 +159,12 @@ plugin_manager set_bundle target=dsh-theme-engine enabled=false
 
 ## 版本与发布
 
-- `package.json` 用 `26.11.21-011029`（无 `v` 前缀）。
-- UI、日志、文档、Git tag 统一用 `v.26.11.21.011029`。
+- `package.json` 用 `26.11.21-011937`（无 `v` 前缀）。
+- UI、日志、文档、Git tag 统一用 `v.26.11.21.011937`。
 - 项目原名 `dsh-liquid-glass`（DSH Liquid Glass），现名 **DSH Theme Engine**；内部路由 `/liquid-glass` 与侧边栏显示名「液态玻璃」保留，避免破坏已存设置。
 
 ## License
 
-[MIT](LICENSE) © DSH Theme Engine contributors
+[Apache License 2.0](LICENSE) © DSH Theme Engine contributors
+
+本项目基于 Apache License 2.0 发布：允许商用、修改、再分发，需保留版权与许可声明；详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。

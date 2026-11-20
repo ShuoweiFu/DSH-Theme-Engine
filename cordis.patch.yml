@@ -1,7 +1,7 @@
 # dsh bundle patch: inserts this plugin into a profile's layer stack.
 - insert:
     - id: liquid-glass
-      name: 'dsh-liquid-glass'
+      name: 'dsh-theme-engine'
       config:
         # Leave empty to follow the current desktop wallpaper. Point at an image
         # (png/jpg/webp/gif/bmp) to pin a fixed background instead.

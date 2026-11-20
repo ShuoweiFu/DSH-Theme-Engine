@@ -160,7 +160,7 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 
 ## 设置入口（左侧边栏 → 主工作区）
 
-设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.005918` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
+设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.011029` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
 
 `shell.overlay` 只保留玻璃背景层：`<style>`、壁纸 canvas 与自适应 ink 采样都由它承载。旧的 `nav.panelList` portal / 800ms `place()` / 内联折叠表单已彻底删除，不再有「把大表单塞进窄边栏」这条路。
 

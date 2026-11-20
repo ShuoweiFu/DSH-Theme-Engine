@@ -1,5 +1,5 @@
 /**
- * dsh-liquid-glass — host half.
+ * DSH Theme Engine (liquid-glass) — host half.
  *
  * Resolves the desktop wallpaper and serves it over the DSH web server so the
  * client half can paint it behind the transparent UI. Only the `webServer`

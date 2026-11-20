@@ -1,3 +1,3 @@
 window.__ModuleLoader__.load({
-	id: "dsh-liquid-glass",
+	id: "dsh-theme-engine",
 	factory: (require) => {

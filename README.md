@@ -1,10 +1,10 @@
-# Liquid Glass for DeepSeek Harness
+# DSH Theme Engine
 
-把 DSH 的界面变成一层会流动的液态玻璃：桌面壁纸（含 Wallpaper Engine 动态壁纸）实时同步到窗口背后，面板、侧边栏与文字像悬空在玻璃上；窗口后面压着别的应用时，被遮住的那一块也会被合成进来。0.16 起用 `Windows.Graphics.Capture` 抓桌面，不再出现「壁纸不定时闪一下黑」；0.17 把它改成**常驻捕获流**（默认 8 fps，只在画面真的变化时编码），背景随后方窗口一起动，系统那个黄色「正在捕获」边框也关掉了。
+Liquid Glass for DeepSeek Harness：把 DSH 的界面变成一层会流动的液态玻璃。桌面壁纸（含 Wallpaper Engine 动态壁纸）实时同步到窗口背后，面板、侧边栏与文字像悬空在玻璃上；窗口后面压着别的应用时，被遮住的那一块也会被合成进来。0.16 起用 `Windows.Graphics.Capture` 抓桌面，不再出现「壁纸不定时闪一下黑」；0.17 把它改成**常驻捕获流**（默认 8 fps，只在画面真的变化时编码），背景随后方窗口一起动，系统那个黄色「正在捕获」边框也关掉了。
 
 两种 GPU 渲染引擎（WebGL / WebGPU，模糊都由引擎自己的 shader 完成）、按显卡自动选择的三档性能预设、五层性能保护 —— 它会在你的机器上先保命，再谈好看。
 
-当前版本 **v.26.11.21.005918**（版本号按 `v.年月日.时分秒` 走西安授时）。
+当前版本 **v.26.11.21.011029**（版本号按 `v.年月日.时分秒` 走西安授时）。
 
 ![Liquid Glass 效果](docs/screenshot.png)
 
@@ -40,12 +40,12 @@
 要求：Windows 10 20348+ / Windows 11、DSH 桌面版。
 
 ```powershell
-git clone https://github.com/<your-name>/dsh-liquid-glass.git
+git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
 # 然后在 DSH 里把本地目录装成 bundle：
 # plugin_manager install_bundle target="<clone 出来的绝对路径>"
 ```
 
-装好并刷新页面后：**侧边栏里「插件」「自动化任务」下面那一行「液态玻璃」**。点它，设置页会像原生「插件」页一样**整页铺在右侧主工作区**（不再挤在侧边栏里折叠展开）；刷新后自动回到会话。`v.26.11.21.005918` 起它同时不再占用 DSH 的系统设置页。
+装好并刷新页面后：**侧边栏里「插件」「自动化任务」下面那一行「液态玻璃」**。点它，设置页会像原生「插件」页一样**整页铺在右侧主工作区**（不再挤在侧边栏里折叠展开）；刷新后自动回到会话。`v.26.11.21.011029` 起它同时不再占用 DSH 的系统设置页。
 
 ## 设置项
 

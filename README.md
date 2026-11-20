@@ -1,61 +1,113 @@
+<div align="center">
+
+**[中文](README.md)** · [English](README.en.md)
+
 # DSH Theme Engine
 
-[![version](https://img.shields.io/badge/version-v.26.11.21.011937-blue)](https://github.com/ShuoweiFu/DSH-Theme-Engine/releases)
-[![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-lightgrey)](#硬件兼容性)
+**把桌面壁纸变成 DSH 界面上的一层会流动的液态玻璃。**
 
-> Liquid glass for DeepSeek Harness — your desktop wallpaper lives behind the UI, and the whole window behaves like a piece of frosted, slightly liquid glass.
+[![version](https://img.shields.io/github/v/tag/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=version&color=8fd6a0)](https://github.com/ShuoweiFu/DSH-Theme-Engine/tags)
+[![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](LICENSE)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-5a544a?style=flat-square)](#兼容与限制)
+[![stars](https://img.shields.io/github/stars/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=stars&color=ffd84a)](https://github.com/ShuoweiFu/DSH-Theme-Engine/stargazers)
 
-把 DSH 的界面变成一层会流动的液态玻璃：桌面壁纸（含 Wallpaper Engine 动态壁纸）实时同步到窗口背后，面板、侧边栏、输入框和文字像悬空在玻璃上；窗口后面压着别的应用时，被遮住的那一块也会被合成进来。
+</div>
 
-模糊不是 CSS 滤镜糊出来的：两种 GPU 后端（WebGL / WebGPU）都用自己的 **13-tap 泊松核高斯**，多次 ping-pong 覆盖大半径；第五层保护触发时退到一层静态半透明遮罩，绝不黑屏。
+![DSH Theme Engine 界面效果](docs/screenshot.png)
 
-当前版本 **v.26.11.21.011937**（版本号按 `v.年月日.时分秒`，西安授时）。
-
-![Liquid Glass 效果](docs/screenshot.png)
+<p align="center"><sub>真实界面截图：壁纸、液态玻璃、设置页与输入框磨砂同步生效。</sub></p>
 
 ---
 
-## 特性
+## 简介
 
-- **真实桌面当背景**：走 `Windows.Graphics.Capture` 常驻捕获流，默认 8 fps，画面真的变化才编码推帧；桌面静止时零编码、零重绘。
-- **被遮挡窗口也合成**：DSH 下面压着的应用（浏览器、编辑器、视频）按屏幕坐标裁剪后贴回玻璃背后，不用把窗口挪开。
-- **Shader 完成的模糊**：WebGL 端 1–4 次 ping-pong 的 13-tap 高斯；WebGPU 端独立的 WGSL 模糊前置通道。半径映射随 `背景模糊` 滑杆连续变化，不是截断的 CSS blur。
-- **自动文字颜色**：按背景亮度在黑白字之间切换（WCAG 7:1 目标），手动选择后不再被自动改写。
-- **硬件自适应**：启动时静默识别显卡，套用核显保命 / 独显均衡 / 火神狂暴三档，不冒进。
-- **五层性能保护**：帧时间超预算 → 降分辨率 → 关遮挡合成 → 静态半透明兜底 → 自动关闭；第二次崩溃不黑屏。
-- **原生主视图**：侧边栏只留一行「液态玻璃」，点开后设置页像原生「插件」页一样整页铺在右侧主工作区，刷新后回到会话。
+把本机桌面（含 **Wallpaper Engine** 动态壁纸）实时同步到 DSH 窗口背后，面板、侧边栏、输入框与文字像悬空在玻璃上；窗口后面压着别的应用时，被遮住的那一块也会按屏幕坐标合成进来。
 
-## 安装
+模糊由 GPU **Shader** 完成：WebGL / WebGPU 双后端共用同一套 **13-tap 泊松核高斯**，多次 ping-pong 覆盖大半径。没有纯 CSS 渲染模式，也不会用 CSS `filter` 冒充磨砂。
 
-要求：Windows 10 20348+ / Windows 11、DSH 桌面版。
+插件不向 agent 注册工具、不注入提示文本，**不增加模型 token 开销**。
+
+当前版本 **v.26.11.21.011937**。
+
+## 目录
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <ul>
+        <li><a href="#主要能力">主要能力</a> · <a href="#硬件档位">硬件档位</a></li>
+        <li><a href="#快速开始">快速开始</a> · <a href="#使用">使用</a></li>
+        <li><a href="#设置项">设置项</a> · <a href="#性能基线">性能基线</a></li>
+        <li><a href="#兼容与限制">兼容与限制</a> · <a href="#开发与贡献">开发与贡献</a></li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <ul>
+        <li>授时版本：<code>v.26.11.21.011937</code></li>
+        <li>平台：Windows 10 20348+ / Windows 11</li>
+        <li>宿主：DeepSeek Harness 桌面版</li>
+        <li>许可：<a href="LICENSE">Apache-2.0</a></li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+## 主要能力
+
+- **壁纸与捕获**：`Windows.Graphics.Capture` 常驻流，默认 8 fps，只在画面真的变化时编码推帧；桌面静止时零编码、零重绘。支持 WE Scene / Video、静态图片与动态视频。
+- **遮挡窗口合成**：DSH 下面压着的浏览器、编辑器、播放器按屏幕坐标裁剪后贴回玻璃背后，不用把窗口挪开；圆角与透明区按预乘 alpha 合成，不贴黑边。
+- **Shader 模糊**：WebGL 端 1–4 次 ping-pong 的 13-tap 高斯；WebGPU 端独立 WGSL 模糊前置通道。`背景模糊` 拉满时是大半径平滑过渡，不是截断的 CSS blur。
+- **自适应文字**：按背景亮度在黑白字之间切换（WCAG 7:1 目标）；手动指定后不再被自动改写。
+- **双后端**：WebGL（兼容最好）/ WebGPU（实验）；WebGPU 不可用时自动回落 WebGL，不弹错、不黑屏。
+- **性能保护**：核显保命 / 独显均衡 / 火神狂暴三档预设；帧时间超预算 → 降分辨率 → 关遮挡合成 → 静态半透明遮罩 → 自动关闭，五层逐级保命。
+- **原生主视图**：侧边栏只多一行「液态玻璃」，点开后设置页像原生「插件」页一样整页铺在右侧主工作区；刷新后回到会话。
+
+## 硬件档位
+
+启动时静默读取显卡型号（`WEBGL_debug_renderer_info`，本地读取、不上传），自动套用下表档位。**先看表再开高帧率。**
+
+| 显卡 | 检测特征 | 默认预设 | 引擎 | 帧率 | 动态降分辨率 | 遮挡合成 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Intel Iris Xe / UHD / HD，AMD Radeon / Vega APU，Apple M 系列 | `Intel`, `Iris`, `UHD`, `Radeon Graphics`, `Vega`, `Apple M*` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
+| 未知 / 虚拟机 / 软件渲染 | `SwiftShader`, `llvmpipe`, `Microsoft Basic Render` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
+| GTX 10 / 16 系、RTX 20 / 30 系、RX 5000–7000、Arc A 系 | `GTX`, `RTX 20/30`, `RX 5xxx–7xxx` | ⚖ 独显均衡档 | WebGL | 60 FPS | ✅ | ✅ |
+| RTX 40 / 50 系、RX 9000 系、Arc B 系、RTX A 系 | `RTX 40xx/50xx`, `RX 9xxx` | 🔥 火神狂暴档 | WebGPU（不可用回落 WebGL） | 144 FPS | ❌ | ✅ |
+
+> 核显强开高帧率的真实结局：i7-12700H + Iris Xe + 10 GB LPDDR5，手动解除帧率限制并关闭动态分辨率，连续渲染 10 分钟后 GPU 96 °C，随后蓝屏。核显没有独立显存，超过 40 FPS 的每一帧只是在发热。插件因此做了三件事：首次启动按显卡套档；手动超上限显示 ⚠；连续 5 秒超预算或 `webglcontextlost` 自动回落安全配置。
+
+## 快速开始
+
+前置：**Windows 10 20348+ / Windows 11**、**DSH 桌面版**。构建客户端只需要 Node.js（无第三方依赖），编译原生助手需要 MSYS2 UCRT64 的 `clang++`。
+
+**安装（源码）**
 
 ```powershell
 git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
 ```
 
-然后在 DSH 里把 clone 出来的目录装成 bundle：
+在 DSH 里把 clone 出来的目录装成 bundle：
 
 ```
 plugin_manager install_bundle target="<clone 出来的绝对路径>"
 ```
 
-刷新页面后，侧边栏「插件」「自动化任务」下面会出现一行 **液态玻璃**。点它，设置页进入右侧主工作区。首次启动会自动按显卡选档，不需要手动配置。
+刷新页面，侧边栏「插件」「自动化任务」下面会出现一行 **液态玻璃**。点它，设置页进入右侧主工作区。
 
-## 硬件兼容性
+**构建**
 
-**先看表再开高帧率。** 插件启动时会静默读取显卡型号（`WEBGL_debug_renderer_info`，本地读取、不上传），自动套用下表档位。
+```powershell
+pnpm build:client    # client/src/*.js → client/client.js
+pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅维护者需要）
+```
 
-| 你用的显卡 | 检测特征 | 默认预设 | 引擎 | 帧率 | 动态降分辨率 | 遮挡窗口合成 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Intel Iris Xe / UHD / HD，AMD Radeon / Vega APU，Apple M 系列 | `Intel`, `Iris`, `UHD`, `Radeon Graphics`, `Vega`, `Apple M*` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
-| 未知 / 虚拟机 / 软件渲染 | `SwiftShader`, `llvmpipe`, `Microsoft Basic Render` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
-| GTX 10 / 16 系、RTX 20 / 30 系、RX 5000–7000、Arc A 系 | `GTX`, `RTX 20/30`, `RX 5xxx–7xxx` | ⚖ 独显均衡档 | WebGL | 60 FPS | ✅ | ✅ |
-| RTX 40 / 50 系、RX 9000 系、Arc B 系、RTX A 系 | `RTX 40xx/50xx`, `RX 9xxx` | 🔥 火神狂暴档 | WebGPU（不可用自动回落 WebGL） | 144 FPS | ❌ | ✅ |
+- `build:client` 只需要 Node.js；产物已随仓库提交，改 UI 后跑它即可。
+- `build:capture` 需要 `clang++`，可用环境变量 `LG_CLANG` 指定；普通用户无需编译，`bin/lg-capture.exe` 已随仓库打包。
 
-> **核显强开高帧率的真实结局**：一台 i7-12700H + Iris Xe + 10 GB LPDDR5 的笔记本，手动解除帧率限制并关掉动态分辨率，连续渲染 10 分钟后 GPU 96 °C，随后蓝屏。核显没有独立显存，它借系统内存带宽、和 CPU 抢同一个散热模组——超过 40 FPS 的每一帧只是在发热。
->
-> 所以插件不是只写一句警告：首次启动按显卡套档；手动超出档位上限会显示 ⚠；连续 5 秒帧时间超预算或 `webglcontextlost` 时自动回落到安全配置。
+## 使用
+
+1. 点击侧边栏 **液态玻璃**，设置页整页渲染在右侧主工作区。
+2. 在「智能预设」里选档位，或逐项调背景模糊、饱和度、霜面浓度、文字颜色、液态流动。
+3. 所有修改即时生效并保存；刷新或重启后回到会话页面，设置不丢。
 
 ## 设置项
 
@@ -76,39 +128,49 @@ plugin_manager install_bundle target="<clone 出来的绝对路径>"
 | 性能 | 合成被遮挡的窗口 | 按档位 | 关掉可省每次截图 0.02–0.06 s |
 | 性能 | 壁纸刷新 | 自动 | 常驻捕获流（默认 8 fps）：变化才编码；页面 0.22 s 一次 digest 检查；换图交叉淡入 420 ms |
 
-## 工作原理
+## 性能基线
 
-```
-┌──────────────────────── 宿主（Node, index.js + host/） ────────────────────────┐
-│  本机路由 /liquid-glass/{state,wallpaper,gate,log}                              │
-│  lg-capture.exe (C++/WGC) ──常驻流──▶ 桌面帧 + 遮挡窗口合成 → JPEG 帧            │
-│  壁纸识别：Wallpaper Engine（64/32 位）· 静态图片 · 动态视频                     │
-└──────────────────────────────────┬──────────────────────────────────────────────┘
-                                   │ HTTP（仅 127.0.0.1）
-┌──────────────────────────────────▼──────────────────────────────────────────────┐
-│  客户端（client/client.js，12 个模块按序拼接）                                   │
-│  GlassLayer：shell.overlay 覆盖层，渲染「背景玻璃 + 主题 token」                 │
-│  设置页：main 槽 key=liquid-glass + sidebar.panellist 同名入口                   │
-│  WebGL：Blur 双重缓冲 ping-pong · WebGPU：WGSL blur prepass                      │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+| 项目 | 数值（i7-12700H / Iris Xe / 2520×1680@150%） |
+| --- | --- |
+| 单帧渲染（1680×1119，scale 1.0） | **16.9 ms** |
+| 单帧渲染（1344×895，scale 0.8，默认档） | **≈10–11 ms** |
+| 插件显存增量 | **20–25 MB**（纹理 6.8 MB + 模糊缓冲 1.7 MB + 后备缓冲） |
+| 常驻 GPU 显存（A/B 对比） | 开 286 MB / 关 275 MB |
+| 捕获流一帧（WGC 读回 + 合成 + JPEG） | **≈32 ms 均值**（15–60 ms），8 fps 上限 |
+| 桌面合成一次（冷路径 / 一次性进程） | 78–125 ms；关掉遮挡合成 60–75 ms |
+| 端到端响应（窗口在 DSH 下变化 → 玻璃更新） | **≈0.25–0.4 s**（流式）；桌面静止时零编码、零重绘 |
 
-- **捕获**：`Windows.Graphics.Capture` 常驻流，`tools/capture/lg-capture.cpp` 负责枚举窗口、合成被遮挡区域、编码 JPEG；DSH 窗口本身排除在外。
-- **合成**：按屏幕坐标把窗口内容裁进画布，圆角/透明区按预乘 alpha 做 source-over，不贴黑边。
-- **渲染**：背景纹理先过模糊通道，再用主题 token 叠霜面、着色、压暗；文字颜色由对比度决策实时切换。
-- **保护**：帧时间监控 → 降分辨率 → 停遮挡合成 → 静态半透明遮罩 → 自动关闭，逐层保命。
+## 兼容与限制
 
-更细的屏幕空间映射、五层保护阈值、着色器参数见 [docs/DETAIL.md](docs/DETAIL.md)。
+- 只支持主显示器；多屏时其它屏幕不会被映射。
+- 被遮挡的 UWP / DRM / 已最小化窗口可能抓到空表面：跳过不贴黑，`apps` 里仍列出。
+- 显卡彻底崩溃时只剩一层静态半透明遮罩（没有折射与流动）；10 分钟内第二次崩溃会自动关闭插件。
+- 非 Windows 平台暂不支持「被遮挡窗口合成」，只能同步静态壁纸文件。
+- 无边框捕获（`IGraphicsCaptureSession3`）需要 Windows 11 / 10 20348+；更老系统上系统黄框会回来，背景照常刷新。
+- 窗口最小化 / 完全不可见时 Chromium 会停掉渲染循环，这是浏览器行为，也是省电设计。
 
-## 从源码构建
+## 开发与贡献
 
-```powershell
-pnpm build:client    # client/src/*.js → client/client.js
-pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅维护者需要）
-```
+欢迎提交 Bug 复现、兼容反馈、文档修正和功能 PR。反馈时请附宿主 / 插件版本、操作系统、显卡型号、复现步骤与脱敏日志。
 
-- `build:client` 只需要 Node.js，无第三方依赖；产物已随仓库提交，改 UI 后跑它即可。
-- `build:capture` 需要 MSYS2 UCRT64 的 `clang++`，也可用环境变量 `LG_CLANG` 指定编译器。普通用户无需编译，`bin/lg-capture.exe` 已随仓库打包。
+- [实现细节](docs/DETAIL.md)：合成原理、屏幕空间映射、五层保护、着色器参数。
+- [仓库结构](README.md#仓库结构)：每个目录负责什么。
+- 构建：`node scripts/build-client.mjs`、`node scripts/build-capture.mjs`。
+
+## 致谢
+
+感谢所有贡献者 ❤️
+
+<a href="https://github.com/ShuoweiFu/DSH-Theme-Engine/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ShuoweiFu/DSH-Theme-Engine" alt="Contributors">
+</a>
+
+<a href="https://star-history.com/#ShuoweiFu/DSH-Theme-Engine&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date&theme=dark">
+    <img src="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date" alt="Star History" width="720">
+  </picture>
+</a>
 
 ## 仓库结构
 
@@ -122,46 +184,6 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅
 | `bin/lg-capture.exe` | 预编译助手，随插件分发 |
 | `docs/` | 实现细节与截图 |
 | `scripts/` | 两个构建脚本 |
-
-## 权限与隐私
-
-- 显卡型号只在浏览器内读取一次，用于选档位，**不会**发送到任何服务器。
-- 桌面截图由随插件打包的本地助手在本机生成，经 `http://127.0.0.1` 本地路由提供给页面（仅监听回环地址，不校验登录）。
-- 没有任何遥测。
-
-## 已知限制
-
-- 只支持主显示器；多屏时其它屏幕不会被映射。
-- 被遮挡的 UWP / DRM / 已最小化窗口可能抓到空表面：跳过不贴黑，`apps` 里仍列出。
-- 显卡彻底崩溃时只剩一层静态半透明遮罩（没有折射与流动）；10 分钟内第二次崩溃会自动关闭插件。
-- 非 Windows 平台暂不支持「被遮挡窗口合成」，只能同步静态壁纸文件。
-- 无边框捕获（`IGraphicsCaptureSession3`）需要 Windows 11 / 10 20348+；更老系统上系统黄框会回来，背景照常刷新。
-- 窗口最小化 / 完全不可见时 Chromium 会停掉渲染循环，这是浏览器行为，也是省电设计。
-
-## FAQ
-
-**为什么看不到壁纸？**
-先确认插件已启用（侧边栏有「液态玻璃」行），再看 `/liquid-glass/state` 的 `clientError`。若提示静态遮罩，说明显卡渲染失败，等冷却后点「重新尝试」。
-
-**会不会把我的屏幕截图传出去？**
-不会。捕获、合成、编码全部在本机完成，页面只从 `127.0.0.1` 取帧。
-
-**为什么 100% 模糊时帧率会掉？**
-模糊半径越大，ping-pong pass 数越多（最多 4 次）。核显档建议 10–20 px。
-
-**怎么卸载？**
-
-```
-plugin_manager set_bundle target=dsh-theme-engine enabled=false
-```
-
-再删掉 profile 里对应的 `node_modules` junction 与依赖项即可。
-
-## 版本与发布
-
-- `package.json` 用 `26.11.21-011937`（无 `v` 前缀）。
-- UI、日志、文档、Git tag 统一用 `v.26.11.21.011937`。
-- 项目原名 `dsh-liquid-glass`（DSH Liquid Glass），现名 **DSH Theme Engine**；内部路由 `/liquid-glass` 与侧边栏显示名「液态玻璃」保留，避免破坏已存设置。
 
 ## License
 

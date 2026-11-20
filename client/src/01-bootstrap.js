@@ -1,13 +1,12 @@
 		const React = require("react");
-		const ReactDOM = require("react-dom");
-		const { createElement: h, Fragment, useCallback, useEffect, useEffect: useLayoutEffect, useRef, useState, useSyncExternalStore } = React;
+		const { createElement: h, Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } = React;
 
 		const SOURCE = "dsh-liquid-glass";
 		const STORAGE_KEY = "dsh-liquid-glass.settings.v3";
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.004441";
+		const CLIENT_BUILD = "v.26.11.21.005918";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,

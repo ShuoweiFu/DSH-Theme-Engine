@@ -1,9 +1,6 @@
 		const CSS = String.raw`
 :root {
-	--lg-blur: 10px;
-	--lg-sat: 1.4;
 	--lg-dim: 0.08;
-	--lg-tint: 0.55;
 	--lg-mx: 50%;
 	--lg-my: 30%;
 	--lg-fallback: #0b0e14;
@@ -186,6 +183,35 @@ html[data-lg-mode="dark"] div[data-composer-card] {
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
+/*
+ * The "edited N files" turn summary is another floating surface on the
+ * transcript, so it gets the same frosted treatment as the composer instead of
+ * DSH's filled header slab.  The data-changed-files attribute on the card root
+ * (ChangedFiles.tsx) is stable; the module class names are hashed.  The
+ * header/list inherit --changes-fill / --changes-hover, so overriding the
+ * tokens is enough to keep hover and focus states readable.
+ */
+div[data-changed-files] {
+	--changes-fill: color-mix(in srgb, var(--dsw-alias-bg-overlay) 78%, transparent);
+	--changes-hover: color-mix(in srgb, var(--dsw-alias-bg-overlay) 92%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 76%, transparent);
+	border-color: color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent);
+	-webkit-backdrop-filter: blur(26px) saturate(1.28);
+	backdrop-filter: blur(26px) saturate(1.28);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		0 12px 32px rgba(8, 12, 20, 0.12);
+}
+
+html[data-lg-mode="dark"] div[data-changed-files] {
+	--changes-fill: color-mix(in srgb, var(--dsw-alias-bg-overlay) 72%, transparent);
+	--changes-hover: color-mix(in srgb, var(--dsw-alias-bg-overlay) 86%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 70%, transparent);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		0 14px 36px rgba(0, 0, 0, 0.42);
 }
 

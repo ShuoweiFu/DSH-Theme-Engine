@@ -2,15 +2,14 @@
 	id: "dsh-liquid-glass",
 	factory: (require) => {
 		const React = require("react");
-		const ReactDOM = require("react-dom");
-		const { createElement: h, Fragment, useCallback, useEffect, useEffect: useLayoutEffect, useRef, useState, useSyncExternalStore } = React;
+		const { createElement: h, Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } = React;
 
 		const SOURCE = "dsh-liquid-glass";
 		const STORAGE_KEY = "dsh-liquid-glass.settings.v3";
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.004441";
+		const CLIENT_BUILD = "v.26.11.21.005918";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -115,13 +114,11 @@
 		}
 		const zh = {
 			section: "液态玻璃",
-			close: "关闭",
 			title: "液态玻璃",
 			look: "外观",
 			renderGroup: "渲染与状态",
 			intro: "把桌面壁纸同步为 DSH 的背景，并让界面变成一层会流动的液态玻璃：面板与文字像悬空在壁纸上。",
 			enable: "启用液态玻璃",
-			enableHint: "关闭后立即恢复 DSH 原本的外观，设置会保留。",
 			wallpaper: "同步桌面壁纸",
 			wallpaperHint: "抓取当前桌面（含 Wallpaper Engine 动态壁纸）；窗口后面压着别的应用时，会把那个应用被遮住的部分一起合成进来。",
 			blur: "背景模糊",
@@ -130,7 +127,6 @@
 			veil: "霜面浓度",
 			veilHint: "越低越通透（接近裸玻璃），越高越像磨砂玻璃；文字在亮壁纸上对比不足时，把它调高一点。",
 			dim: "壁纸压暗",
-			refresh: "背景更新速度",
 			flow: "液态流动",
 			flowHint: "壁纸折射、色散与高光的流动强度。",
 			sourceLabel: "背景来源",
@@ -145,8 +141,6 @@
 			error: "读取失败",
 			off: "已关闭",
 			unknown: "—",
-			sourceValue: "来源",
-			size: "大小",
 			version: "版本",
 			moveHint: "桌面上移动鼠标，可以看到玻璃上的高光跟随。",
 			perf: "性能保护",
@@ -161,7 +155,6 @@
 			autoScaleHint: "帧时间过高时降低着色器分辨率保命，流畅后自动恢复。",
 			unlimited: "无限制",
 			staticMode: "显卡渲染异常：已切换为静态半透明遮罩兜底。冷却后点「重新尝试」恢复液态玻璃。",
-			contextLost: "检测到显卡驱动重置，已切换为静态玻璃（保命模式）。",
 			autoDisabled: "连续两次显卡异常，已自动关闭液态玻璃。确认机器冷却后再手动开启。",
 			retry: "重新尝试",
 			noticeClose: "知道了",
@@ -199,13 +192,11 @@
 		};
 		const en = {
 			section: "Liquid Glass",
-			close: "Close",
 			title: "Liquid Glass",
 			look: "Appearance",
 			renderGroup: "Rendering & status",
 			intro: "Mirror the desktop wallpaper behind DeepSeek Harness and turn every surface into flowing liquid glass, so panels and text appear to float on the wallpaper.",
 			enable: "Enable Liquid Glass",
-			enableHint: "Turning this off restores the stock look immediately; settings are kept.",
 			wallpaper: "Sync desktop wallpaper",
 			wallpaperHint: "Captures the live desktop (Wallpaper Engine included); when another app sits behind this window, the occluded part of that app is composited in too.",
 			blur: "Background blur",
@@ -214,7 +205,6 @@
 			veil: "Frost density",
 			veilHint: "Lower is clearer (bare glass), higher is more frosted; raise it a little when text is hard to read over a bright wallpaper.",
 			dim: "Wallpaper dim",
-			refresh: "Background refresh",
 			flow: "Liquid flow",
 			flowHint: "Strength of the refraction, dispersion and moving highlights.",
 			sourceLabel: "Background source",
@@ -229,8 +219,6 @@
 			error: "Read failed",
 			off: "Disabled",
 			unknown: "—",
-			sourceValue: "Source",
-			size: "Size",
 			version: "Version",
 			moveHint: "Move the pointer over the window to see the glass highlights follow.",
 			perf: "Performance guard",
@@ -245,7 +233,6 @@
 			autoScaleHint: "Drops the shader resolution when frame times spike, and restores it when smooth again.",
 			unlimited: "Unlimited",
 			staticMode: "Graphics failure: switched to the static translucent fallback. When the machine cools down, press Retry to restore liquid glass.",
-			contextLost: "The graphics driver reset; switched to static glass (fail-safe mode).",
 			autoDisabled: "The GPU failed twice, so liquid glass was disabled automatically. Re-enable it after the machine cools down.",
 			retry: "Retry",
 			noticeClose: "Got it",
@@ -586,13 +573,6 @@
 			return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 		}
 
-		/** Contrast ratio between two relative luminances (1 … 21). */
-		function contrastRatio(a, b) {
-			const hi = Math.max(a, b);
-			const lo = Math.min(a, b);
-			return (hi + 0.05) / (lo + 0.05);
-		}
-
 		/** WCAG relative luminance of a raw `r,g,b` triple in 0…255. */
 		function relativeLum(r, g, b) {
 			return 0.2126 * linearize(r / 255) + 0.7152 * linearize(g / 255) + 0.0722 * linearize(b / 255);
@@ -730,10 +710,7 @@
 		}
 		const CSS = String.raw`
 :root {
-	--lg-blur: 10px;
-	--lg-sat: 1.4;
 	--lg-dim: 0.08;
-	--lg-tint: 0.55;
 	--lg-mx: 50%;
 	--lg-my: 30%;
 	--lg-fallback: #0b0e14;
@@ -916,6 +893,35 @@ html[data-lg-mode="dark"] div[data-composer-card] {
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
+/*
+ * The "edited N files" turn summary is another floating surface on the
+ * transcript, so it gets the same frosted treatment as the composer instead of
+ * DSH's filled header slab.  The data-changed-files attribute on the card root
+ * (ChangedFiles.tsx) is stable; the module class names are hashed.  The
+ * header/list inherit --changes-fill / --changes-hover, so overriding the
+ * tokens is enough to keep hover and focus states readable.
+ */
+div[data-changed-files] {
+	--changes-fill: color-mix(in srgb, var(--dsw-alias-bg-overlay) 78%, transparent);
+	--changes-hover: color-mix(in srgb, var(--dsw-alias-bg-overlay) 92%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 76%, transparent);
+	border-color: color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent);
+	-webkit-backdrop-filter: blur(26px) saturate(1.28);
+	backdrop-filter: blur(26px) saturate(1.28);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		0 12px 32px rgba(8, 12, 20, 0.12);
+}
+
+html[data-lg-mode="dark"] div[data-changed-files] {
+	--changes-fill: color-mix(in srgb, var(--dsw-alias-bg-overlay) 72%, transparent);
+	--changes-hover: color-mix(in srgb, var(--dsw-alias-bg-overlay) 86%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 70%, transparent);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		0 14px 36px rgba(0, 0, 0, 0.42);
 }
 

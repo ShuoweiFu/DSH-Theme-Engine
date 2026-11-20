@@ -16,7 +16,6 @@ export const CACHE_DIR = join(tmpdir(), 'dsh-liquid-glass');
 // overlapping requests. Keeping it short is what makes the wallpaper feel live:
 // client poll + cache + capture stays under the 1.5 s response budget.
 export const STATE_TTL_MS = 700;
-export const CAPTURE_SCRIPT_PATH = join(CACHE_DIR, 'capture.ps1');
 export const COMPOSITE_SCRIPT_PATH = join(CACHE_DIR, 'composite.ps1');
 export const GATE_SCRIPT_PATH = join(CACHE_DIR, 'gate.ps1');
 export const CAPTURE_IMAGE_PATH = join(CACHE_DIR, 'wallpaper.jpg');

@@ -1,6 +1,6 @@
 {
   "name": "dsh-liquid-glass",
-  "version": "26.11.21-004441",
+  "version": "26.11.21-005918",
   "private": true,
   "description": "Live wallpaper + liquid-glass background for DeepSeek Harness: native desktop capture, 0.8-grade water shader, contrast-driven adaptive ink, frost-density and tint controls, hardware-adaptive profiles, occluded-window compositing, WebGL/WebGPU backends, five-layer performance guard.",
   "license": "MIT",

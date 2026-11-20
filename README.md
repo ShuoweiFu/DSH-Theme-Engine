@@ -4,7 +4,9 @@
 
 两种 GPU 渲染引擎（WebGL / WebGPU，模糊都由引擎自己的 shader 完成）、按显卡自动选择的三档性能预设、五层性能保护 —— 它会在你的机器上先保命，再谈好看。
 
-当前版本 **v.26.11.21.004441**（版本号按 `v.年月日.时分秒` 走西安授时）。
+当前版本 **v.26.11.21.005918**（版本号按 `v.年月日.时分秒` 走西安授时）。
+
+![Liquid Glass 效果](docs/screenshot.png)
 
 ---
 
@@ -35,12 +37,15 @@
 
 ## 安装
 
+要求：Windows 10 20348+ / Windows 11、DSH 桌面版。
+
 ```powershell
-# 从本地目录安装（开发 / 自用）
-#   在 DSH 里：plugin_manager install_bundle target="D:\Deepseek\dsh-liquid-glass"
+git clone https://github.com/<your-name>/dsh-liquid-glass.git
+# 然后在 DSH 里把本地目录装成 bundle：
+# plugin_manager install_bundle target="<clone 出来的绝对路径>"
 ```
 
-装好并刷新页面后：**侧边栏里「插件」「自动化任务」下面那一行「液态玻璃」**。点它，设置页会像原生「插件」页一样**整页铺在右侧主工作区**（不再挤在侧边栏里折叠展开）；刷新后自动回到会话。`v.26.11.21.004441` 起它同时不再占用 DSH 的系统设置页。
+装好并刷新页面后：**侧边栏里「插件」「自动化任务」下面那一行「液态玻璃」**。点它，设置页会像原生「插件」页一样**整页铺在右侧主工作区**（不再挤在侧边栏里折叠展开）；刷新后自动回到会话。`v.26.11.21.005918` 起它同时不再占用 DSH 的系统设置页。
 
 ## 设置项
 
@@ -89,6 +94,29 @@
 
 更多实现细节（合成原理、屏幕空间映射、五层保护、着色器参数）见 [docs/DETAIL.md](docs/DETAIL.md)。
 
+## 从源码构建
+
+```powershell
+pnpm build:client    # client/src/*.js → client/client.js
+pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅维护者需要）
+```
+
+- `build:client` 只需要 Node.js（无第三方依赖）；产物已随仓库提交，改 UI 时跑它即可。
+- `build:capture` 需要 MSYS2 UCRT64 的 `clang++`（也可用环境变量 `LG_CLANG` 指定编译器）。普通用户无需编译，`bin/lg-capture.exe` 已随仓库打包。
+
+## 仓库结构
+
+| 路径 | 作用 |
+| --- | --- |
+| `index.js` | 宿主插件入口：`/liquid-glass/*` 本地路由、捕获调度与状态缓存 |
+| `host/` | 宿主能力：壁纸识别、常驻捕获助手、PowerShell 回退、运行封装 |
+| `client/src/` | 前端源码（`01`→`12` 按序拼接为 `client/client.js`） |
+| `client/client.js` | 构建产物，DSH 通过 `exports["./client"]` 加载 |
+| `tools/capture/lg-capture.cpp` | 原生捕获/合成助手源码（WGC + GDI+） |
+| `bin/lg-capture.exe` | 预编译助手，随插件分发 |
+| `docs/` | 实现细节与截图 |
+| `scripts/` | 两个构建脚本 |
+
 ## License
 
-MIT
+[MIT](LICENSE) © Liquid Glass contributors

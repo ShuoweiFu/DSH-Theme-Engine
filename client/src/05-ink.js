@@ -11,13 +11,6 @@
 			return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 		}
 
-		/** Contrast ratio between two relative luminances (1 … 21). */
-		function contrastRatio(a, b) {
-			const hi = Math.max(a, b);
-			const lo = Math.min(a, b);
-			return (hi + 0.05) / (lo + 0.05);
-		}
-
 		/** WCAG relative luminance of a raw `r,g,b` triple in 0…255. */
 		function relativeLum(r, g, b) {
 			return 0.2126 * linearize(r / 255) + 0.7152 * linearize(g / 255) + 0.0722 * linearize(b / 255);

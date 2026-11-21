@@ -1,5 +1,35 @@
 		/* ---- Wallpaper Engine center (task 7 / task 10) --------------------- */
 		/*
+		 * The panel components below are declared at module scope, but the settings
+		 * store, the locale subscription and setSettings() live inside apply()'s
+		 * closure. apply() publishes those live bindings into panelHooks when it
+		 * runs; the thin wrappers keep the components readable (and keep React's
+		 * hook order intact — each wrapper adds no hooks of its own).
+		 */
+		const panelHooks = {
+			useSettings: null,
+			setSettings: null,
+			useLang: null,
+			useWallpaper: null
+		};
+
+		function useSettings() {
+			return panelHooks.useSettings();
+		}
+
+		function setSettings(patch) {
+			return panelHooks.setSettings(patch);
+		}
+
+		function useLang() {
+			return panelHooks.useLang();
+		}
+
+		function useWallpaper() {
+			return panelHooks.useWallpaper();
+		}
+
+		/*
 		 * A read-only bridge to the local Steam / Wallpaper Engine installation:
 		 * the grid lists the real workshop projects, the apply buttons pin a video
 		 * file as the glass wallpaper (the only kind we can read directly), and the

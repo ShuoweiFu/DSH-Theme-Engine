@@ -81,6 +81,8 @@ export function apply(ctx, config) {
   /** @type {ReturnType<typeof setInterval> | null} */
   let desktopWatcher = null;
   let lastClientError = '';
+  /** Overlay render crashes are kept apart: perf reports would overwrite them. */
+  let lastClientOverlay = '';
   let lastClientReady = '';
   let lastHardware = '';
   let lastClientBench = '';
@@ -370,7 +372,8 @@ export function apply(ctx, config) {
       try {
         const url = new URL(request.url, 'http://127.0.0.1');
         const text = String(url.searchParams.get('msg') ?? '').slice(0, 4000);
-        if (text.startsWith('ready:') || text.startsWith('build:')) lastClientReady = text;
+        if (text.startsWith('overlay:')) lastClientOverlay = text;
+        else if (text.startsWith('ready:') || text.startsWith('build:')) lastClientReady = text;
         else if (text.startsWith('hw:')) lastHardware = text;
         else if (text.startsWith('bench:')) lastClientBench = text;
         else if (text) lastClientError = text;
@@ -423,6 +426,7 @@ export function apply(ctx, config) {
           borderless: captureStats.borderless,
           captureError: captureStats.error,
           clientError: lastClientError,
+          clientOverlayError: lastClientOverlay,
           clientReady: lastClientReady,
           clientHardware: lastHardware,
           bench: Number(options.bench) || 0,

@@ -77,6 +77,13 @@
 			}
 
 			render() {
-				return this.state.error ? null : this.props.children;
+				if (!this.state.error) return this.props.children;
+				return h(
+					"section",
+					{ className: "lg-group", "data-liquid-glass": "crash" },
+					h("h2", { className: "lg-group-title" }, "液态玻璃：界面渲染出错"),
+					h("p", { className: "lg-hint", "data-warn": "on" }, this.state.error),
+					h("p", { className: "lg-hint" }, "请把上面这段错误文字发给项目经理，我会按堆栈修复。")
+				);
 			}
 		}

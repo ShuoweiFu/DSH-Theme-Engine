@@ -99,6 +99,13 @@
 			};
 			const useWallpaper = () => useSyncExternalStore(subscribeWallpaper, getWallpaper, getWallpaper);
 
+			// The panel components (13-we.js) live outside this closure; hand them the
+			// live store hooks so every surface reads the same settings object.
+			panelHooks.useSettings = useSettings;
+			panelHooks.setSettings = setSettings;
+			panelHooks.useLang = useLang;
+			panelHooks.useWallpaper = useWallpaper;
+
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
 			// the glass keeps flowing and simply shows the real app behind it.

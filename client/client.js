@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.153026";
+		const CLIENT_BUILD = "v.26.11.21.154004";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -1062,7 +1062,14 @@
 			}
 
 			render() {
-				return this.state.error ? null : this.props.children;
+				if (!this.state.error) return this.props.children;
+				return h(
+					"section",
+					{ className: "lg-group", "data-liquid-glass": "crash" },
+					h("h2", { className: "lg-group-title" }, "液态玻璃：界面渲染出错"),
+					h("p", { className: "lg-hint", "data-warn": "on" }, this.state.error),
+					h("p", { className: "lg-hint" }, "请把上面这段错误文字发给项目经理，我会按堆栈修复。")
+				);
 			}
 		}
 		const CSS = String.raw`
@@ -3792,6 +3799,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			};
 			const useWallpaper = () => useSyncExternalStore(subscribeWallpaper, getWallpaper, getWallpaper);
 
+			// The panel components (13-we.js) live outside this closure; hand them the
+			// live store hooks so every surface reads the same settings object.
+			panelHooks.useSettings = useSettings;
+			panelHooks.setSettings = setSettings;
+			panelHooks.useLang = useLang;
+			panelHooks.useWallpaper = useWallpaper;
+
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
 			// the glass keeps flowing and simply shows the real app behind it.
@@ -4885,6 +4899,36 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			);
 		}
 		/* ---- Wallpaper Engine center (task 7 / task 10) --------------------- */
+		/*
+		 * The panel components below are declared at module scope, but the settings
+		 * store, the locale subscription and setSettings() live inside apply()'s
+		 * closure. apply() publishes those live bindings into panelHooks when it
+		 * runs; the thin wrappers keep the components readable (and keep React's
+		 * hook order intact — each wrapper adds no hooks of its own).
+		 */
+		const panelHooks = {
+			useSettings: null,
+			setSettings: null,
+			useLang: null,
+			useWallpaper: null
+		};
+
+		function useSettings() {
+			return panelHooks.useSettings();
+		}
+
+		function setSettings(patch) {
+			return panelHooks.setSettings(patch);
+		}
+
+		function useLang() {
+			return panelHooks.useLang();
+		}
+
+		function useWallpaper() {
+			return panelHooks.useWallpaper();
+		}
+
 		/*
 		 * A read-only bridge to the local Steam / Wallpaper Engine installation:
 		 * the grid lists the real workshop projects, the apply buttons pin a video

@@ -160,7 +160,7 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 
 ## 设置入口（左侧边栏 → 主工作区）
 
-设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.153026` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
+设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.154004` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
 
 `shell.overlay` 只保留玻璃背景层：`<style>`、壁纸 canvas 与自适应 ink 采样都由它承载。旧的 `nav.panelList` portal / 800ms `place()` / 内联折叠表单已彻底删除，不再有「把大表单塞进窄边栏」这条路。
 
@@ -214,7 +214,7 @@ iOS 26 的 Liquid Glass 是 RenderServer 的 GPU 着色器：SDF（`CASDFLayer` 
 
 ## 壁纸中枢（Wallpaper Engine 桥）
 
-v.26.11.21.153026 起，设置页的「壁纸中枢」直接读本机 Wallpaper Engine 的壁纸库，不复制其代码、不修改其配置：
+v.26.11.21.154004 起，设置页的「壁纸中枢」直接读本机 Wallpaper Engine 的壁纸库，不复制其代码、不修改其配置：
 
 - 路径发现：注册表 HKCU\Software\Valve\Steam 的 SteamPath，加上每个 Steam 库根目录下 steamapps\libraryfolders.vdf 的 path 列表；路径统一清洗（反斜杠、盘符大小写）。
 - 库扫描：<root>\steamapps\workshop\content\431960\<id>\project.json，取 title / type / file / preview / tags；场景缺 file 时回落到 scene.pkg，网页回落到 index.html。
@@ -225,7 +225,7 @@ v.26.11.21.153026 起，设置页的「壁纸中枢」直接读本机 Wallpaper 
 
 ## 声临其境（音频矩阵）
 
-v.26.11.21.153026 起，设置页新增「声音」分组：
+v.26.11.21.154004 起，设置页新增「声音」分组：
 
 - 本地播放列表：客户端 `<audio>` 元素按顺序循环，源走 `/liquid-glass/media?path=…`（Range 流式，不整段读入）；支持 mp3 / flac / wav / ogg / m4a / aac / opus，倍速 1.0–2.0、音量 0–1。
 - 系统音频：`getDisplayMedia({ audio: true })` 取音轨后只接 `AnalyserNode`，不接扬声器，避免二次播放；授权失败时按钮回落并给出中文提示。
@@ -234,7 +234,7 @@ v.26.11.21.153026 起，设置页新增「声音」分组：
 
 ## 四象模式与智能取色
 
-v.26.11.21.153026 起，设置页「外观」分组新增颜色模式，玻璃的底色不再只有跟随系统主题一种选择：
+v.26.11.21.154004 起，设置页「外观」分组新增颜色模式，玻璃的底色不再只有跟随系统主题一种选择：
 
 - 浅色 / 深色：强制使用对应的亮/暗 token 色板，文字颜色同步取反，保证壁纸很亮或很暗时仍然可读。
 - 自定义颜色：用一个 `#rrggbb` 基色给玻璃染色；`glassTokens(..., { base })` 把基色与白/黑按固定比例混合出四层表面色，透明度曲线保持不变，所以「霜面浓度」的手感不变。

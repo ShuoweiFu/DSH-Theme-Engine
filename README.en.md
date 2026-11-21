@@ -27,7 +27,7 @@ Blur runs on the GPU: both backends (WebGL / WebGPU) share the same **13-tap Poi
 
 The plugin registers no agent tools and injects no prompt text, so it adds **zero model token cost**.
 
-Current version **v.26.11.21.153026**.
+Current version **v.26.11.21.154004**.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ Current version **v.26.11.21.153026**.
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>Version: <code>v.26.11.21.153026</code></li>
+        <li>Version: <code>v.26.11.21.154004</code></li>
         <li>Platform: Windows 10 20348+ / Windows 11</li>
         <li>Host: DeepSeek Harness desktop</li>
         <li>License: <a href="LICENSE">Apache-2.0</a></li>

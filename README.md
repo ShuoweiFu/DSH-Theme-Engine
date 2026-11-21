@@ -27,7 +27,7 @@
 
 插件不向 agent 注册工具、不注入提示文本，**不增加模型 token 开销**。
 
-当前版本 **v.26.11.21.171400**。
+当前版本 **v.26.11.21.173500**。
 
 ## 目录
 
@@ -43,7 +43,7 @@
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>授时版本：<code>v.26.11.21.171400</code></li>
+        <li>授时版本：<code>v.26.11.21.173500</code></li>
         <li>平台：Windows 10 20348+ / Windows 11</li>
         <li>宿主：DeepSeek Harness 桌面版</li>
         <li>许可：<a href="LICENSE">Apache-2.0</a></li>

@@ -4,58 +4,111 @@
 				const parsed = typeof value === "number" ? value : Number.parseFloat(value);
 				return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 			};
+			const pickColorMode = (value) => (["light", "dark", "custom", "intelligent"].includes(value) ? value : "auto");
+			const pickInk = (value) => (value === "dark" || value === "light" ? value : "auto");
+			const pickColor = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(value) ? value : fallback);
+			const readBucket = (bucket, fallback) => ({
+				tint: num(bucket.tint, fallback.tint, 0, 1),
+				veil: num(bucket.veil, fallback.veil, 0, 1),
+				dim: num(bucket.dim, fallback.dim, 0, 0.6),
+				ink: pickInk(bucket.ink === undefined ? fallback.ink : bucket.ink),
+				customColor: pickColor(bucket.customColor, fallback.customColor),
+				autoInvert: bucket.autoInvert === undefined ? fallback.autoInvert : bucket.autoInvert !== false
+			});
 			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
 				: [];
-			const colorMode = ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto";
+			// Legacy top-level appearance. The first profile that grows moduleValues
+			// is seeded from these values, so upgrading never repaints the look the
+			// user already signed off on.
 			const legacyTint = num(source.tint, DEFAULT_SETTINGS.tint, 0, 1);
 			const legacyVeil = num(source.veil, DEFAULT_SETTINGS.veil, 0, 1);
 			const legacyDim = num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6);
-			const legacyInk = source.ink === "dark" || source.ink === "light" ? source.ink : "auto";
-			const legacyColor = /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor;
-			// Each colour mode keeps its own appearance values. The top-level keys
-			// stay the render truth and always mirror the active bucket; switching
-			// modes loads the target bucket back into them (12-apply.js setSettings).
-			//
-			// Upgrade path: the first load after this shape grew has no modeValues,
-			// so every bucket is seeded from the active values. Upgrading must never
-			// repaint a look the user already signed off on.
-			const rawBuckets = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
-			const modeValues = {};
+			const legacyInk = pickInk(source.ink);
+			const legacyColor = pickColor(source.customColor, DEFAULT_SETTINGS.customColor);
+			const legacyMode = pickColorMode(source.colorMode);
+			const legacyBlur = Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48));
+			const legacySaturation = num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4);
+			const legacyFlow = num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5);
+			const rawLegacyModes = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
+			const legacyModes = {};
 			for (const mode of MODE_IDS) {
-				const rawBucket = rawBuckets && rawBuckets[mode] && typeof rawBuckets[mode] === "object" ? rawBuckets[mode] : null;
-				const bucket = rawBucket || (rawBuckets ? DEFAULT_SETTINGS.modeValues[mode] : source);
-				modeValues[mode] = {
-					tint: num(bucket.tint, legacyTint, 0, 1),
-					veil: num(bucket.veil, legacyVeil, 0, 1),
-					dim: num(bucket.dim, legacyDim, 0, 0.6),
-					ink: bucket.ink === "dark" || bucket.ink === "light" ? bucket.ink : legacyInk,
-					customColor: /^#[0-9a-f]{6}$/i.test(bucket.customColor) ? bucket.customColor : legacyColor,
-					autoInvert: bucket.autoInvert !== false
+				const rawBucket = rawLegacyModes && rawLegacyModes[mode] && typeof rawLegacyModes[mode] === "object" ? rawLegacyModes[mode] : null;
+				if (rawBucket) {
+					legacyModes[mode] = readBucket(rawBucket, { tint: legacyTint, veil: legacyVeil, dim: legacyDim, ink: legacyInk, customColor: legacyColor, autoInvert: source.autoInvert !== false });
+				} else if (rawLegacyModes) {
+					legacyModes[mode] = { ...DEFAULT_SETTINGS.modeValues[mode] };
+				} else {
+					legacyModes[mode] = {
+						tint: legacyTint,
+						veil: legacyVeil,
+						dim: legacyDim,
+						ink: legacyInk,
+						customColor: legacyColor,
+						autoInvert: source.autoInvert !== false
+					};
+				}
+			}
+			// Every background module owns its own appearance copy: sliders, colour
+			// mode and the five per-mode buckets. The top-level keys stay the render
+			// truth and mirror the active module (12-apply.js setSettings loads the
+			// target module's copy back into them).
+			const rawModules = source.moduleValues && typeof source.moduleValues === "object" ? source.moduleValues : null;
+			const moduleValues = {};
+			for (const moduleId of MODULE_IDS) {
+				const rawModule = rawModules && rawModules[moduleId] && typeof rawModules[moduleId] === "object" ? rawModules[moduleId] : null;
+				const colorMode = pickColorMode(rawModule ? rawModule.colorMode : legacyMode);
+				const activeFallback = legacyModes[colorMode];
+				const rawModuleModes = rawModule && rawModule.modeValues && typeof rawModule.modeValues === "object" ? rawModule.modeValues : null;
+				const modeValues = {};
+				for (const mode of MODE_IDS) {
+					const rawBucket = rawModuleModes && rawModuleModes[mode] && typeof rawModuleModes[mode] === "object" ? rawModuleModes[mode] : null;
+					if (rawBucket) {
+						modeValues[mode] = readBucket(rawBucket, activeFallback);
+					} else if (rawModuleModes) {
+						modeValues[mode] = { ...DEFAULT_SETTINGS.modeValues[mode] };
+					} else if (rawModule) {
+						modeValues[mode] = readBucket(rawModule, activeFallback);
+					} else {
+						modeValues[mode] = { ...legacyModes[mode] };
+					}
+				}
+				moduleValues[moduleId] = {
+					blur: Math.round(num(rawModule ? rawModule.blur : undefined, legacyBlur, 0, 48)),
+					saturation: num(rawModule ? rawModule.saturation : undefined, legacySaturation, 1, 2.4),
+					flow: num(rawModule ? rawModule.flow : undefined, legacyFlow, 0, 1.5),
+					colorMode,
+					customColor: pickColor(rawModule && rawModule.customColor, activeFallback.customColor),
+					autoInvert: rawModule ? rawModule.autoInvert !== false : activeFallback.autoInvert,
+					ink: pickInk(rawModule ? rawModule.ink : activeFallback.ink),
+					modeValues
 				};
 			}
-			const active = modeValues[colorMode];
+			const module = MODULE_IDS.includes(source.module) ? source.module : "glass";
+			const activeModule = moduleValues[module];
+			const activeMode = activeModule.modeValues[activeModule.colorMode];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
-				blur: Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48)),
-				saturation: num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4),
-				tint: active.tint,
-				veil: active.veil,
-				dim: active.dim,
+				blur: activeModule.blur,
+				saturation: activeModule.saturation,
+				tint: activeMode.tint,
+				veil: activeMode.veil,
+				dim: activeMode.dim,
 				refreshSec: Math.round(num(source.refreshSec, DEFAULT_SETTINGS.refreshSec, 1, 60)),
-				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
+				flow: activeModule.flow,
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
-				source: ["wallpaper", "we", "file"].includes(source.source) ? source.source : "desktop",
+				source: ["wallpaper", "we", "file", "desktop"].includes(source.source) ? source.source : "desktop",
 				wePath: typeof source.wePath === "string" ? source.wePath : "",
 				weId: typeof source.weId === "string" ? source.weId : "",
 				filePath: typeof source.filePath === "string" ? source.filePath : "",
-				colorMode,
-				customColor: active.customColor,
-				autoInvert: active.autoInvert,
-				modeValues,
+				colorMode: activeModule.colorMode,
+				customColor: activeMode.customColor,
+				autoInvert: activeMode.autoInvert,
+				modeValues: activeModule.modeValues,
+				moduleValues,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,
@@ -65,14 +118,15 @@
 				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
-				ink: active.ink,
+				ink: activeMode.ink,
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
-				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
-				island: source.island === true
+				module,
+				island: source.island === true,
+				weGlass: source.weGlass !== false
 			};
 		}
 
-		/**
+				/**
 		 * One-off settings repair. The 0.11 build let the hardware preset overwrite
 		 * the user's own values (blur 3, saturation 1, flow 0.6, refreshSec 60,
 		 * behind off) and persisted that mess into BOTH storage keys, so reading v2

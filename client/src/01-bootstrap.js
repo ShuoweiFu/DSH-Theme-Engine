@@ -6,7 +6,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.171400";
+		const CLIENT_BUILD = "v.26.11.21.173500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -16,6 +16,14 @@
 		const MODE_IDS = Object.freeze(["auto", "light", "dark", "custom", "intelligent"]);
 		const MODE_KEYS = Object.freeze(["tint", "veil", "dim", "ink", "customColor", "autoInvert"]);
 		const MODE_DEFAULTS = Object.freeze({ tint: 0.55, veil: 0.34, dim: 0.08, ink: "auto", customColor: "#8ab4ff", autoInvert: true });
+
+		/**
+		 * The theme engine hosts independent background modules; each one keeps
+		 * its own copy of the appearance knobs below so switching modules never
+		 * inherits the other module's look.
+		 */
+		const MODULE_IDS = Object.freeze(["glass", "wallpaper", "elysia"]);
+		const APPEARANCE_SCALARS = Object.freeze(["blur", "saturation", "flow", "colorMode", "customColor", "autoInvert", "ink"]);
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
 			wallpaper: true,
@@ -42,7 +50,23 @@
 			preset: "auto",
 			module: "glass",
 			island: false,
-			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }]))
+			weGlass: true,
+			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }])),
+			moduleValues: Object.fromEntries(
+				MODULE_IDS.map((id) => [
+					id,
+					{
+						blur: 10,
+						saturation: 1.4,
+						flow: 0.9,
+						colorMode: "auto",
+						customColor: "#8ab4ff",
+						autoInvert: true,
+						ink: "auto",
+						modeValues: Object.fromEntries(MODE_IDS.map((mode) => [mode, { ...MODE_DEFAULTS }]))
+					}
+				])
+			)
 		});
 
 		/**

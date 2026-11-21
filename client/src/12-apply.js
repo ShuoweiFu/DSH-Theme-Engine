@@ -43,26 +43,57 @@
 			const getSettings = () => settings;
 			const setSettings = (patch) => {
 				const prev = settings;
-				const modeValues = { ...prev.modeValues };
-				// 1) Write this patch's appearance keys into the *active* mode's bucket.
-				const touched = MODE_KEYS.filter((key) => key in patch);
-				if (touched.length) {
-					const bucket = { ...modeValues[prev.colorMode] };
-					for (const key of touched) bucket[key] = patch[key];
-					modeValues[prev.colorMode] = bucket;
+				// Each module keeps its own appearance copy; clone before editing so a
+				// rejected normalize can never leave two modules sharing a bucket.
+				const moduleValues = {};
+				for (const moduleId of MODULE_IDS) {
+					const bucket = prev.moduleValues[moduleId];
+					moduleValues[moduleId] = { ...bucket, modeValues: { ...bucket.modeValues } };
 				}
-				// 2) A mode switch loads the target bucket back into the top-level
-				//    keys; keys explicitly present in the patch still win.
+				const current = moduleValues[prev.module];
+				// The top-level keys are the render truth: write them back first.
+				current.blur = prev.blur;
+				current.saturation = prev.saturation;
+				current.flow = prev.flow;
+				current.colorMode = prev.colorMode;
+				current.customColor = prev.customColor;
+				current.autoInvert = prev.autoInvert;
+				current.ink = prev.ink;
+				current.modeValues = { ...prev.modeValues };
+				// 1) A patch touching an appearance slider lands in the active module
+				//    (and, for per-mode keys, in the active colour bucket).
+				const touchedModes = MODE_KEYS.filter((key) => key in patch);
+				if (touchedModes.length) {
+					const bucket = { ...current.modeValues[prev.colorMode] };
+					for (const key of touchedModes) bucket[key] = patch[key];
+					current.modeValues[prev.colorMode] = bucket;
+				}
+				for (const key of APPEARANCE_SCALARS) {
+					if (key in patch && !MODE_KEYS.includes(key)) current[key] = patch[key];
+				}
 				const next = { ...patch };
+				// 2) Colour-mode switch inside a module: load that module's bucket.
 				if (patch.colorMode && patch.colorMode !== prev.colorMode) {
-					const target = modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
+					const target = current.modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
 					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target[key];
+					current.colorMode = patch.colorMode;
 				}
-				settings = normalize({ ...prev, ...next, modeValues });
+				// 3) Module switch: save the current copy, then load the target copy;
+				//    keys explicitly present in the patch still win.
+				const module = patch.module && MODULE_IDS.includes(patch.module) ? patch.module : prev.module;
+				if (module !== prev.module) {
+					const target = moduleValues[module];
+					for (const key of APPEARANCE_SCALARS) if (!(key in patch)) next[key] = target[key];
+					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target.modeValues[target.colorMode][key];
+					if (!("source" in patch)) {
+						next.source = module === "wallpaper" ? "we" : module === "glass" ? "desktop" : prev.source;
+					}
+				}
+				settings = normalize({ ...prev, ...next, module, moduleValues });
 				persistSettings(settings);
 				for (const listener of settingsListeners) listener();
-			};
-			const subscribeSettings = (listener) => {
+			};
+						const subscribeSettings = (listener) => {
 				settingsListeners.add(listener);
 				return () => settingsListeners.delete(listener);
 			};
@@ -422,6 +453,13 @@
 					return () => clearInterval(timer);
 				}, [value.enabled, value.fps, value.autoScale, translate]);
 
+				// When the wallpaper module runs with the liquid glass layer switched
+				// off, the renderer still paints the wallpaper but with neutral glass
+				// parameters (no extra blur, no saturation push, no flow).
+				const glassParams = () => {
+					const off = value.module === "wallpaper" && value.weGlass === false;
+					return { sat: off ? 1 : value.saturation, dim: value.dim, flow: off ? 0 : value.flow, blur: off ? 0 : value.blur };
+				};
 				useEffect(() => {
 					const root = document.documentElement;
 					if (!value.enabled) return;
@@ -462,7 +500,7 @@
 					liquidRef.current = liquid;
 					activeRenderer = liquid;
 					root.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
-					liquid.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
+					liquid.setParams(glassParams());
 					liquid.setTargetFps(value.fps);
 					liquid.setAutoScale(value.autoScale);
 					liquid.start();
@@ -532,8 +570,8 @@
 				// dependency list: the prepass radius is computed inside setParams, so
 				// without it the blur slider only takes effect on the next reload.
 				useEffect(() => {
-					liquidRef.current?.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
-				}, [value.saturation, value.dim, value.flow, value.blur]);
+					liquidRef.current?.setParams(glassParams());
+				}, [value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass]);
 
 				// (Re)load the wallpaper texture whenever the fingerprint advances.
 				useEffect(() => {
@@ -969,6 +1007,82 @@
 						setSettings(patchValue);
 					}
 				};
+
+				// Both background modules expose the same appearance controls, but each
+				// module owns its own stored copy (settings.moduleValues), so editing a
+				// slider here never changes the other module's look.
+				const renderAppearance = () => [
+					h(
+						"section",
+						{ className: "lg-group", key: "appearance" },
+						h("h2", { className: "lg-group-title" }, t("look")),
+						h("p", { className: "lg-group-hint" }, t("appearanceSharedHint")),
+						h(
+							Row,
+							{ label: t("wallpaper"), hint: t("wallpaperHint") },
+							h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
+						),
+						h(Slider, {
+							label: t("blur"),
+							value: value.blur,
+							min: 0,
+							max: 48,
+							step: 1,
+							display: value.blur + " px",
+							onChange: (next) => setSettings({ blur: next })
+						}),
+						h(Slider, {
+							label: t("saturation"),
+							value: value.saturation,
+							min: 1,
+							max: 2.4,
+							step: 0.05,
+							display: value.saturation.toFixed(2),
+							onChange: (next) => setSettings({ saturation: next })
+						}),
+						h(Slider, {
+							label: t("tint"),
+							value: value.tint,
+							min: 0,
+							max: 1,
+							step: 0.01,
+							display: Math.round(value.tint * 100) + "%",
+							onChange: (next) => setSettings({ tint: next })
+						}),
+						h(Slider, {
+							label: t("veil"),
+							value: value.veil,
+							min: 0,
+							max: 1,
+							step: 0.01,
+							display: Math.round(value.veil * 100) + "%",
+							onChange: (next) => setSettings({ veil: next })
+						}),
+						h("p", { className: "lg-group-hint" }, t("veilHint")),
+						h(Slider, {
+							label: t("dim"),
+							value: value.dim,
+							min: 0,
+							max: 0.6,
+							step: 0.01,
+							display: Math.round(value.dim * 100) + "%",
+							onChange: (next) => setSettings({ dim: next })
+						}),
+						h(Slider, {
+							label: t("flow"),
+							value: value.flow,
+							min: 0,
+							max: 1.5,
+							step: 0.05,
+							display: value.flow.toFixed(2),
+							onChange: (next) => setSettings({ flow: next })
+						}),
+						h("p", { className: "lg-group-hint" }, t("flowHint")),
+						h("p", { className: "lg-group-hint" }, t("moveHint"))
+					),
+					h(AppearanceModes, { key: "modes" })
+				];
+
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -1035,74 +1149,7 @@
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-									h(
-										"section",
-										{ className: "lg-group" },
-										h("h2", { className: "lg-group-title" }, t("look")),
-										h(
-											Row,
-											{ label: t("wallpaper"), hint: t("wallpaperHint") },
-											h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
-										),
-										h(Slider, {
-											label: t("blur"),
-											value: value.blur,
-											min: 0,
-											max: 48,
-											step: 1,
-											display: `${value.blur} px`,
-											onChange: (next) => setSettings({ blur: next })
-										}),
-										h(Slider, {
-											label: t("saturation"),
-											value: value.saturation,
-											min: 1,
-											max: 2.4,
-											step: 0.05,
-											display: value.saturation.toFixed(2),
-											onChange: (next) => setSettings({ saturation: next })
-										}),
-										h(Slider, {
-											label: t("tint"),
-											value: value.tint,
-											min: 0,
-											max: 1,
-											step: 0.01,
-											display: `${Math.round(value.tint * 100)}%`,
-											onChange: (next) => setSettings({ tint: next })
-										}),
-										h(Slider, {
-											label: t("veil"),
-											value: value.veil,
-											min: 0,
-											max: 1,
-											step: 0.01,
-											display: `${Math.round(value.veil * 100)}%`,
-											onChange: (next) => setSettings({ veil: next })
-										}),
-										h("p", { className: "lg-group-hint" }, t("veilHint")),
-										h(Slider, {
-											label: t("dim"),
-											value: value.dim,
-											min: 0,
-											max: 0.6,
-											step: 0.01,
-											display: `${Math.round(value.dim * 100)}%`,
-											onChange: (next) => setSettings({ dim: next })
-										}),
-										h(Slider, {
-											label: t("flow"),
-											value: value.flow,
-											min: 0,
-											max: 1.5,
-											step: 0.05,
-											display: value.flow.toFixed(2),
-											onChange: (next) => setSettings({ flow: next })
-										}),
-										h("p", { className: "lg-group-hint" }, t("flowHint")),
-										h("p", { className: "lg-group-hint" }, t("moveHint"))
-									),
-									h(AppearanceModes, null),
+renderAppearance(),
 									h(
 										"section",
 										{ className: "lg-group" },
@@ -1211,18 +1258,17 @@
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-									h(
-										"section",
-										{ className: "lg-group" },
-										h("h2", { className: "lg-group-title" }, t("look")),
-										h("p", { className: "lg-group-hint" }, t("wallpaperGlassHint")),
-										h(
-											"div",
-											{ className: "lg-actions" },
-											h("button", { type: "button", className: "lg-button", onClick: () => chooseTab("glass") }, t("wallpaperGlassJump"))
-										)
-									),
-									h(WallpaperCenter, { key: "we" }),
+h(
+	"section",
+	{ className: "lg-group" },
+	h("h2", { className: "lg-group-title" }, t("look")),
+	h(
+		Row,
+		{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
+		h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
+	)
+),
+renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,

@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.171400";
+		const CLIENT_BUILD = "v.26.11.21.173500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -19,6 +19,14 @@
 		const MODE_IDS = Object.freeze(["auto", "light", "dark", "custom", "intelligent"]);
 		const MODE_KEYS = Object.freeze(["tint", "veil", "dim", "ink", "customColor", "autoInvert"]);
 		const MODE_DEFAULTS = Object.freeze({ tint: 0.55, veil: 0.34, dim: 0.08, ink: "auto", customColor: "#8ab4ff", autoInvert: true });
+
+		/**
+		 * The theme engine hosts independent background modules; each one keeps
+		 * its own copy of the appearance knobs below so switching modules never
+		 * inherits the other module's look.
+		 */
+		const MODULE_IDS = Object.freeze(["glass", "wallpaper", "elysia"]);
+		const APPEARANCE_SCALARS = Object.freeze(["blur", "saturation", "flow", "colorMode", "customColor", "autoInvert", "ink"]);
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
 			wallpaper: true,
@@ -45,7 +53,23 @@
 			preset: "auto",
 			module: "glass",
 			island: false,
-			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }]))
+			weGlass: true,
+			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }])),
+			moduleValues: Object.fromEntries(
+				MODULE_IDS.map((id) => [
+					id,
+					{
+						blur: 10,
+						saturation: 1.4,
+						flow: 0.9,
+						colorMode: "auto",
+						customColor: "#8ab4ff",
+						autoInvert: true,
+						ink: "auto",
+						modeValues: Object.fromEntries(MODE_IDS.map((mode) => [mode, { ...MODE_DEFAULTS }]))
+					}
+				])
+			)
 		});
 
 		/**
@@ -192,6 +216,9 @@
 			moduleIslandHint: "独立模块，可与其他模块同时开启",
 			wallpaperGlassHint: "背景模糊、饱和度、玻璃着色、霜面浓度、压暗与液态流动属于玻璃层参数，壁纸引擎与液态玻璃共用同一层玻璃，统一在「液态玻璃背景」里调整。",
 			wallpaperGlassJump: "去调整玻璃外观",
+			appearanceSharedHint: "外观参数按模块各存一份：这里调整的是当前模块（液态玻璃或壁纸引擎）自己的外观，切换模块不会互相影响。",
+			moduleWeGlass: "启用液态玻璃",
+			moduleWeGlassHint: "关闭后壁纸引擎只显示原始壁纸，不再叠加液态玻璃效果。",
 			moduleIslandNote: "灵动岛是叠加层，功能施工中；开启后不会替换当前背景模块。",
 			modulePlugin: "插件管理",
 			modulePluginHint: "本插件的版本、更新与运行状态。",
@@ -416,6 +443,9 @@
 			moduleIslandHint: "Independent module, runs with any other module",
 			wallpaperGlassHint: "Blur, saturation, tint, frost, dim and flow belong to the glass layer. Wallpaper Engine and Liquid Glass share the same layer, so they are tuned under \"Liquid Glass\".",
 			wallpaperGlassJump: "Tune glass appearance",
+			appearanceSharedHint: "Appearance is stored per module: these knobs edit the current module's own copy, so switching modules never inherits the other look.",
+			moduleWeGlass: "Enable liquid glass",
+			moduleWeGlassHint: "Turn off to show the raw wallpaper without the liquid glass layer.",
 			moduleIslandNote: "Dynamic Island is an overlay and still under construction; it never replaces the active background module.",
 			modulePlugin: "Plugin manager",
 			modulePluginHint: "Version, updates and runtime status for this plugin.",
@@ -593,58 +623,111 @@
 				const parsed = typeof value === "number" ? value : Number.parseFloat(value);
 				return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 			};
+			const pickColorMode = (value) => (["light", "dark", "custom", "intelligent"].includes(value) ? value : "auto");
+			const pickInk = (value) => (value === "dark" || value === "light" ? value : "auto");
+			const pickColor = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(value) ? value : fallback);
+			const readBucket = (bucket, fallback) => ({
+				tint: num(bucket.tint, fallback.tint, 0, 1),
+				veil: num(bucket.veil, fallback.veil, 0, 1),
+				dim: num(bucket.dim, fallback.dim, 0, 0.6),
+				ink: pickInk(bucket.ink === undefined ? fallback.ink : bucket.ink),
+				customColor: pickColor(bucket.customColor, fallback.customColor),
+				autoInvert: bucket.autoInvert === undefined ? fallback.autoInvert : bucket.autoInvert !== false
+			});
 			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
 				: [];
-			const colorMode = ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto";
+			// Legacy top-level appearance. The first profile that grows moduleValues
+			// is seeded from these values, so upgrading never repaints the look the
+			// user already signed off on.
 			const legacyTint = num(source.tint, DEFAULT_SETTINGS.tint, 0, 1);
 			const legacyVeil = num(source.veil, DEFAULT_SETTINGS.veil, 0, 1);
 			const legacyDim = num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6);
-			const legacyInk = source.ink === "dark" || source.ink === "light" ? source.ink : "auto";
-			const legacyColor = /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor;
-			// Each colour mode keeps its own appearance values. The top-level keys
-			// stay the render truth and always mirror the active bucket; switching
-			// modes loads the target bucket back into them (12-apply.js setSettings).
-			//
-			// Upgrade path: the first load after this shape grew has no modeValues,
-			// so every bucket is seeded from the active values. Upgrading must never
-			// repaint a look the user already signed off on.
-			const rawBuckets = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
-			const modeValues = {};
+			const legacyInk = pickInk(source.ink);
+			const legacyColor = pickColor(source.customColor, DEFAULT_SETTINGS.customColor);
+			const legacyMode = pickColorMode(source.colorMode);
+			const legacyBlur = Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48));
+			const legacySaturation = num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4);
+			const legacyFlow = num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5);
+			const rawLegacyModes = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
+			const legacyModes = {};
 			for (const mode of MODE_IDS) {
-				const rawBucket = rawBuckets && rawBuckets[mode] && typeof rawBuckets[mode] === "object" ? rawBuckets[mode] : null;
-				const bucket = rawBucket || (rawBuckets ? DEFAULT_SETTINGS.modeValues[mode] : source);
-				modeValues[mode] = {
-					tint: num(bucket.tint, legacyTint, 0, 1),
-					veil: num(bucket.veil, legacyVeil, 0, 1),
-					dim: num(bucket.dim, legacyDim, 0, 0.6),
-					ink: bucket.ink === "dark" || bucket.ink === "light" ? bucket.ink : legacyInk,
-					customColor: /^#[0-9a-f]{6}$/i.test(bucket.customColor) ? bucket.customColor : legacyColor,
-					autoInvert: bucket.autoInvert !== false
+				const rawBucket = rawLegacyModes && rawLegacyModes[mode] && typeof rawLegacyModes[mode] === "object" ? rawLegacyModes[mode] : null;
+				if (rawBucket) {
+					legacyModes[mode] = readBucket(rawBucket, { tint: legacyTint, veil: legacyVeil, dim: legacyDim, ink: legacyInk, customColor: legacyColor, autoInvert: source.autoInvert !== false });
+				} else if (rawLegacyModes) {
+					legacyModes[mode] = { ...DEFAULT_SETTINGS.modeValues[mode] };
+				} else {
+					legacyModes[mode] = {
+						tint: legacyTint,
+						veil: legacyVeil,
+						dim: legacyDim,
+						ink: legacyInk,
+						customColor: legacyColor,
+						autoInvert: source.autoInvert !== false
+					};
+				}
+			}
+			// Every background module owns its own appearance copy: sliders, colour
+			// mode and the five per-mode buckets. The top-level keys stay the render
+			// truth and mirror the active module (12-apply.js setSettings loads the
+			// target module's copy back into them).
+			const rawModules = source.moduleValues && typeof source.moduleValues === "object" ? source.moduleValues : null;
+			const moduleValues = {};
+			for (const moduleId of MODULE_IDS) {
+				const rawModule = rawModules && rawModules[moduleId] && typeof rawModules[moduleId] === "object" ? rawModules[moduleId] : null;
+				const colorMode = pickColorMode(rawModule ? rawModule.colorMode : legacyMode);
+				const activeFallback = legacyModes[colorMode];
+				const rawModuleModes = rawModule && rawModule.modeValues && typeof rawModule.modeValues === "object" ? rawModule.modeValues : null;
+				const modeValues = {};
+				for (const mode of MODE_IDS) {
+					const rawBucket = rawModuleModes && rawModuleModes[mode] && typeof rawModuleModes[mode] === "object" ? rawModuleModes[mode] : null;
+					if (rawBucket) {
+						modeValues[mode] = readBucket(rawBucket, activeFallback);
+					} else if (rawModuleModes) {
+						modeValues[mode] = { ...DEFAULT_SETTINGS.modeValues[mode] };
+					} else if (rawModule) {
+						modeValues[mode] = readBucket(rawModule, activeFallback);
+					} else {
+						modeValues[mode] = { ...legacyModes[mode] };
+					}
+				}
+				moduleValues[moduleId] = {
+					blur: Math.round(num(rawModule ? rawModule.blur : undefined, legacyBlur, 0, 48)),
+					saturation: num(rawModule ? rawModule.saturation : undefined, legacySaturation, 1, 2.4),
+					flow: num(rawModule ? rawModule.flow : undefined, legacyFlow, 0, 1.5),
+					colorMode,
+					customColor: pickColor(rawModule && rawModule.customColor, activeFallback.customColor),
+					autoInvert: rawModule ? rawModule.autoInvert !== false : activeFallback.autoInvert,
+					ink: pickInk(rawModule ? rawModule.ink : activeFallback.ink),
+					modeValues
 				};
 			}
-			const active = modeValues[colorMode];
+			const module = MODULE_IDS.includes(source.module) ? source.module : "glass";
+			const activeModule = moduleValues[module];
+			const activeMode = activeModule.modeValues[activeModule.colorMode];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
-				blur: Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48)),
-				saturation: num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4),
-				tint: active.tint,
-				veil: active.veil,
-				dim: active.dim,
+				blur: activeModule.blur,
+				saturation: activeModule.saturation,
+				tint: activeMode.tint,
+				veil: activeMode.veil,
+				dim: activeMode.dim,
 				refreshSec: Math.round(num(source.refreshSec, DEFAULT_SETTINGS.refreshSec, 1, 60)),
-				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
+				flow: activeModule.flow,
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
-				source: ["wallpaper", "we", "file"].includes(source.source) ? source.source : "desktop",
+				source: ["wallpaper", "we", "file", "desktop"].includes(source.source) ? source.source : "desktop",
 				wePath: typeof source.wePath === "string" ? source.wePath : "",
 				weId: typeof source.weId === "string" ? source.weId : "",
 				filePath: typeof source.filePath === "string" ? source.filePath : "",
-				colorMode,
-				customColor: active.customColor,
-				autoInvert: active.autoInvert,
-				modeValues,
+				colorMode: activeModule.colorMode,
+				customColor: activeMode.customColor,
+				autoInvert: activeMode.autoInvert,
+				modeValues: activeModule.modeValues,
+				moduleValues,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,
@@ -654,14 +737,15 @@
 				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
-				ink: active.ink,
+				ink: activeMode.ink,
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
-				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
-				island: source.island === true
+				module,
+				island: source.island === true,
+				weGlass: source.weGlass !== false
 			};
 		}
 
-		/**
+				/**
 		 * One-off settings repair. The 0.11 build let the hardware preset overwrite
 		 * the user's own values (blur 3, saturation 1, flow 0.6, refreshSec 60,
 		 * behind off) and persisted that mess into BOTH storage keys, so reading v2
@@ -4669,26 +4753,57 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const getSettings = () => settings;
 			const setSettings = (patch) => {
 				const prev = settings;
-				const modeValues = { ...prev.modeValues };
-				// 1) Write this patch's appearance keys into the *active* mode's bucket.
-				const touched = MODE_KEYS.filter((key) => key in patch);
-				if (touched.length) {
-					const bucket = { ...modeValues[prev.colorMode] };
-					for (const key of touched) bucket[key] = patch[key];
-					modeValues[prev.colorMode] = bucket;
+				// Each module keeps its own appearance copy; clone before editing so a
+				// rejected normalize can never leave two modules sharing a bucket.
+				const moduleValues = {};
+				for (const moduleId of MODULE_IDS) {
+					const bucket = prev.moduleValues[moduleId];
+					moduleValues[moduleId] = { ...bucket, modeValues: { ...bucket.modeValues } };
 				}
-				// 2) A mode switch loads the target bucket back into the top-level
-				//    keys; keys explicitly present in the patch still win.
+				const current = moduleValues[prev.module];
+				// The top-level keys are the render truth: write them back first.
+				current.blur = prev.blur;
+				current.saturation = prev.saturation;
+				current.flow = prev.flow;
+				current.colorMode = prev.colorMode;
+				current.customColor = prev.customColor;
+				current.autoInvert = prev.autoInvert;
+				current.ink = prev.ink;
+				current.modeValues = { ...prev.modeValues };
+				// 1) A patch touching an appearance slider lands in the active module
+				//    (and, for per-mode keys, in the active colour bucket).
+				const touchedModes = MODE_KEYS.filter((key) => key in patch);
+				if (touchedModes.length) {
+					const bucket = { ...current.modeValues[prev.colorMode] };
+					for (const key of touchedModes) bucket[key] = patch[key];
+					current.modeValues[prev.colorMode] = bucket;
+				}
+				for (const key of APPEARANCE_SCALARS) {
+					if (key in patch && !MODE_KEYS.includes(key)) current[key] = patch[key];
+				}
 				const next = { ...patch };
+				// 2) Colour-mode switch inside a module: load that module's bucket.
 				if (patch.colorMode && patch.colorMode !== prev.colorMode) {
-					const target = modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
+					const target = current.modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
 					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target[key];
+					current.colorMode = patch.colorMode;
 				}
-				settings = normalize({ ...prev, ...next, modeValues });
+				// 3) Module switch: save the current copy, then load the target copy;
+				//    keys explicitly present in the patch still win.
+				const module = patch.module && MODULE_IDS.includes(patch.module) ? patch.module : prev.module;
+				if (module !== prev.module) {
+					const target = moduleValues[module];
+					for (const key of APPEARANCE_SCALARS) if (!(key in patch)) next[key] = target[key];
+					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target.modeValues[target.colorMode][key];
+					if (!("source" in patch)) {
+						next.source = module === "wallpaper" ? "we" : module === "glass" ? "desktop" : prev.source;
+					}
+				}
+				settings = normalize({ ...prev, ...next, module, moduleValues });
 				persistSettings(settings);
 				for (const listener of settingsListeners) listener();
-			};
-			const subscribeSettings = (listener) => {
+			};
+						const subscribeSettings = (listener) => {
 				settingsListeners.add(listener);
 				return () => settingsListeners.delete(listener);
 			};
@@ -5048,6 +5163,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					return () => clearInterval(timer);
 				}, [value.enabled, value.fps, value.autoScale, translate]);
 
+				// When the wallpaper module runs with the liquid glass layer switched
+				// off, the renderer still paints the wallpaper but with neutral glass
+				// parameters (no extra blur, no saturation push, no flow).
+				const glassParams = () => {
+					const off = value.module === "wallpaper" && value.weGlass === false;
+					return { sat: off ? 1 : value.saturation, dim: value.dim, flow: off ? 0 : value.flow, blur: off ? 0 : value.blur };
+				};
 				useEffect(() => {
 					const root = document.documentElement;
 					if (!value.enabled) return;
@@ -5088,7 +5210,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					liquidRef.current = liquid;
 					activeRenderer = liquid;
 					root.dataset.lgWebgl = mode === "webgpu" ? "gpu" : "on";
-					liquid.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
+					liquid.setParams(glassParams());
 					liquid.setTargetFps(value.fps);
 					liquid.setAutoScale(value.autoScale);
 					liquid.start();
@@ -5158,8 +5280,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// dependency list: the prepass radius is computed inside setParams, so
 				// without it the blur slider only takes effect on the next reload.
 				useEffect(() => {
-					liquidRef.current?.setParams({ sat: value.saturation, dim: value.dim, flow: value.flow, blur: value.blur });
-				}, [value.saturation, value.dim, value.flow, value.blur]);
+					liquidRef.current?.setParams(glassParams());
+				}, [value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass]);
 
 				// (Re)load the wallpaper texture whenever the fingerprint advances.
 				useEffect(() => {
@@ -5595,6 +5717,82 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						setSettings(patchValue);
 					}
 				};
+
+				// Both background modules expose the same appearance controls, but each
+				// module owns its own stored copy (settings.moduleValues), so editing a
+				// slider here never changes the other module's look.
+				const renderAppearance = () => [
+					h(
+						"section",
+						{ className: "lg-group", key: "appearance" },
+						h("h2", { className: "lg-group-title" }, t("look")),
+						h("p", { className: "lg-group-hint" }, t("appearanceSharedHint")),
+						h(
+							Row,
+							{ label: t("wallpaper"), hint: t("wallpaperHint") },
+							h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
+						),
+						h(Slider, {
+							label: t("blur"),
+							value: value.blur,
+							min: 0,
+							max: 48,
+							step: 1,
+							display: value.blur + " px",
+							onChange: (next) => setSettings({ blur: next })
+						}),
+						h(Slider, {
+							label: t("saturation"),
+							value: value.saturation,
+							min: 1,
+							max: 2.4,
+							step: 0.05,
+							display: value.saturation.toFixed(2),
+							onChange: (next) => setSettings({ saturation: next })
+						}),
+						h(Slider, {
+							label: t("tint"),
+							value: value.tint,
+							min: 0,
+							max: 1,
+							step: 0.01,
+							display: Math.round(value.tint * 100) + "%",
+							onChange: (next) => setSettings({ tint: next })
+						}),
+						h(Slider, {
+							label: t("veil"),
+							value: value.veil,
+							min: 0,
+							max: 1,
+							step: 0.01,
+							display: Math.round(value.veil * 100) + "%",
+							onChange: (next) => setSettings({ veil: next })
+						}),
+						h("p", { className: "lg-group-hint" }, t("veilHint")),
+						h(Slider, {
+							label: t("dim"),
+							value: value.dim,
+							min: 0,
+							max: 0.6,
+							step: 0.01,
+							display: Math.round(value.dim * 100) + "%",
+							onChange: (next) => setSettings({ dim: next })
+						}),
+						h(Slider, {
+							label: t("flow"),
+							value: value.flow,
+							min: 0,
+							max: 1.5,
+							step: 0.05,
+							display: value.flow.toFixed(2),
+							onChange: (next) => setSettings({ flow: next })
+						}),
+						h("p", { className: "lg-group-hint" }, t("flowHint")),
+						h("p", { className: "lg-group-hint" }, t("moveHint"))
+					),
+					h(AppearanceModes, { key: "modes" })
+				];
+
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -5661,74 +5859,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-									h(
-										"section",
-										{ className: "lg-group" },
-										h("h2", { className: "lg-group-title" }, t("look")),
-										h(
-											Row,
-											{ label: t("wallpaper"), hint: t("wallpaperHint") },
-											h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
-										),
-										h(Slider, {
-											label: t("blur"),
-											value: value.blur,
-											min: 0,
-											max: 48,
-											step: 1,
-											display: `${value.blur} px`,
-											onChange: (next) => setSettings({ blur: next })
-										}),
-										h(Slider, {
-											label: t("saturation"),
-											value: value.saturation,
-											min: 1,
-											max: 2.4,
-											step: 0.05,
-											display: value.saturation.toFixed(2),
-											onChange: (next) => setSettings({ saturation: next })
-										}),
-										h(Slider, {
-											label: t("tint"),
-											value: value.tint,
-											min: 0,
-											max: 1,
-											step: 0.01,
-											display: `${Math.round(value.tint * 100)}%`,
-											onChange: (next) => setSettings({ tint: next })
-										}),
-										h(Slider, {
-											label: t("veil"),
-											value: value.veil,
-											min: 0,
-											max: 1,
-											step: 0.01,
-											display: `${Math.round(value.veil * 100)}%`,
-											onChange: (next) => setSettings({ veil: next })
-										}),
-										h("p", { className: "lg-group-hint" }, t("veilHint")),
-										h(Slider, {
-											label: t("dim"),
-											value: value.dim,
-											min: 0,
-											max: 0.6,
-											step: 0.01,
-											display: `${Math.round(value.dim * 100)}%`,
-											onChange: (next) => setSettings({ dim: next })
-										}),
-										h(Slider, {
-											label: t("flow"),
-											value: value.flow,
-											min: 0,
-											max: 1.5,
-											step: 0.05,
-											display: value.flow.toFixed(2),
-											onChange: (next) => setSettings({ flow: next })
-										}),
-										h("p", { className: "lg-group-hint" }, t("flowHint")),
-										h("p", { className: "lg-group-hint" }, t("moveHint"))
-									),
-									h(AppearanceModes, null),
+renderAppearance(),
 									h(
 										"section",
 										{ className: "lg-group" },
@@ -5837,18 +5968,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-									h(
-										"section",
-										{ className: "lg-group" },
-										h("h2", { className: "lg-group-title" }, t("look")),
-										h("p", { className: "lg-group-hint" }, t("wallpaperGlassHint")),
-										h(
-											"div",
-											{ className: "lg-actions" },
-											h("button", { type: "button", className: "lg-button", onClick: () => chooseTab("glass") }, t("wallpaperGlassJump"))
-										)
-									),
-									h(WallpaperCenter, { key: "we" }),
+h(
+	"section",
+	{ className: "lg-group" },
+	h("h2", { className: "lg-group-title" }, t("look")),
+	h(
+		Row,
+		{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
+		h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
+	)
+),
+renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,

@@ -1277,20 +1277,12 @@ renderAppearance(),
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-h(
-	"section",
-	{ className: "lg-group" },
-	h("h2", { className: "lg-group-title" }, t("look")),
-	h(
-		Row,
-		{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
-		h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
-	)
-),
-renderAppearance(),
+									h(WallpaperCenter, { key: "we" }),
+									renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,
+
 						tabValue === "elysia"
 							? h(
 									"div",

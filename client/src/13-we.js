@@ -344,6 +344,11 @@
 					current && current.title ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
 				),
 				installed ? null : h("p", { className: "lg-group-hint" }, t("weNoEngine")),
+				h(
+					Row,
+					{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
+					h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
+				),
 				installed
 					? h(
 							"div",

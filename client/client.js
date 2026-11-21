@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.174500";
+		const CLIENT_BUILD = "v.26.11.21.175000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -6188,20 +6188,12 @@ renderAppearance(),
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
-h(
-	"section",
-	{ className: "lg-group" },
-	h("h2", { className: "lg-group-title" }, t("look")),
-	h(
-		Row,
-		{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
-		h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
-	)
-),
-renderAppearance(),
+									h(WallpaperCenter, { key: "we" }),
+									renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,
+
 						tabValue === "elysia"
 							? h(
 									"div",
@@ -6747,6 +6739,11 @@ h(
 					current && current.title ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
 				),
 				installed ? null : h("p", { className: "lg-group-hint" }, t("weNoEngine")),
+				h(
+					Row,
+					{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
+					h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
+				),
 				installed
 					? h(
 							"div",

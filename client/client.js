@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.151500";
+		const CLIENT_BUILD = "v.26.11.21.152253";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -257,6 +257,26 @@
 			browserRoots: "磁盘",
 			browserUp: "上一级",
 			browserEmpty: "这里没有可用的媒体文件。",
+			audioGroup: "声音（声临其境）",
+			audioHint: "给玻璃背后配音：可以用 Wallpaper Engine 自带的声音（由它自己播放），也可以在这里放本地音乐播放列表，并让玻璃随节拍律动。",
+			audioEnable: "播放本地音频",
+			audioPlaylist: "播放列表",
+			audioPlaylistHint: "支持 mp3 / flac / wav / ogg / m4a / aac / opus；按顺序循环播放。",
+			audioAdd: "添加音频",
+			audioEmpty: "还没有音频文件。",
+			audioRate: "播放倍速",
+			audioVolume: "音量",
+			audioReactive: "音频律动",
+			audioReactiveHint: "把音频能量传给 Shader，让液面随节拍起伏（低音更明显）。",
+			audioSystem: "系统音频",
+			audioSystemHint: "捕获本机正在播放的声音用于律动（需要浏览器授权共享），不会二次播放。",
+			audioSystemOn: "开启系统音频",
+			audioSystemOff: "关闭系统音频",
+			audioTest: "试听",
+			audioBlocked: "浏览器拦截了自动播放，点「试听」开始播放。",
+			audioSystemDenied: "已取消系统音频授权。",
+			audioFailed: "音频加载失败。"
+
 		};
 		const en = {
 			section: "Liquid Glass",
@@ -396,6 +416,26 @@
 			browserRoots: "Drives",
 			browserUp: "Up",
 			browserEmpty: "No usable media file here.",
+			audioGroup: "Sound",
+			audioHint: "Give the glass a voice: Wallpaper Engine can play its own audio, or add a local playlist here and let the liquid react to the beat.",
+			audioEnable: "Play local audio",
+			audioPlaylist: "Playlist",
+			audioPlaylistHint: "mp3 / flac / wav / ogg / m4a / aac / opus, played in order and looped.",
+			audioAdd: "Add audio",
+			audioEmpty: "No audio file yet.",
+			audioRate: "Playback rate",
+			audioVolume: "Volume",
+			audioReactive: "Audio reactive",
+			audioReactiveHint: "Feeds audio energy to the shader so the liquid pulses with the beat (bass is stronger).",
+			audioSystem: "System audio",
+			audioSystemHint: "Captures what the machine is playing for the reactive effect (needs browser permission); never played twice.",
+			audioSystemOn: "Enable system audio",
+			audioSystemOff: "Disable system audio",
+			audioTest: "Preview",
+			audioBlocked: "The browser blocked autoplay; press Preview to start.",
+			audioSystemDenied: "System audio permission was cancelled.",
+			audioFailed: "Audio failed to load."
+
 		};
 
 		function dictFor(lang) {
@@ -860,6 +900,9 @@
 	--lg-mx: 50%;
 	--lg-my: 30%;
 	--lg-fallback: #0b0e14;
+	/* The caret rides the adaptive ink, so it is black on a bright glass and
+	   white on a dark one without either side being hard-coded here. */
+	--lg-caret: var(--dsw-alias-label-primary, currentColor);
 }
 
 html[data-lg-enabled="on"],
@@ -1040,6 +1083,47 @@ html[data-lg-mode="dark"] div[data-composer-card] {
 		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
 		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
+/*
+ * The insertion caret is the one thing the frosted composer still breaks.
+ * DSH paints no caret-color, so it stays currentColor, and the ink the
+ * token layer picks is already inverted against the wallpaper (05-ink.js
+ * decides "dark" or "light" ink from the sampled luminance).  Reusing that
+ * same token is what makes the caret black on a white wallpaper and white on
+ * a black one: there is nothing to hard-code and nothing to keep in sync.
+ * caret-color is the only caret property CSS exposes, so the width stays
+ * 1px and the rest of the contrast comes from the sheet -- :focus-within
+ * lifts the ring and the top highlight while you type.
+ */
+div[data-composer-card] textarea,
+div[data-composer-card] [contenteditable]:not([contenteditable="false"]) {
+	caret-color: var(--lg-caret);
+}
+
+div[data-composer-card]:focus-within {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 0 0 1px color-mix(in srgb, var(--lg-caret) 55%, transparent),
+		0 12px 32px rgba(8, 12, 20, 0.16);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card]:focus-within {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.14),
+		inset 0 0 0 1px color-mix(in srgb, var(--lg-caret) 55%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.46);
+}
+
+div[data-composer-card] textarea::selection,
+div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
+	background: color-mix(in srgb, var(--lg-caret) 34%, transparent);
+	color: var(--dsw-alias-label-primary);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card] textarea::selection,
+html[data-lg-mode="dark"] div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
+	background: color-mix(in srgb, var(--lg-caret) 46%, transparent);
 }
 
 /*
@@ -1830,6 +1914,58 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.lg-audio-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 4px 0 8px;
+}
+
+.lg-audio-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 10px;
+	border: 0.5px solid var(--dsw-alias-border-l1);
+	border-radius: 8px;
+	background: var(--dsw-alias-bg-layer-1);
+}
+
+.lg-audio-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-audio-remove {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--dsw-alias-label-secondary);
+	font-size: 15px;
+	line-height: 22px;
+	cursor: pointer;
+}
+
+.lg-audio-remove:hover {
+	background: var(--dsw-alias-interactive-bg-hover);
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-warn-inline {
+	margin: 6px 0 0;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-state-warn-primary);
+}
+
 .lg-modes {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1911,6 +2047,7 @@ uniform float uTime;
 uniform float uSat;
 uniform float uDim;
 uniform float uFlow;
+uniform float uBeat;
 uniform float uRipple;
 uniform vec2 uMouse;
 
@@ -1962,7 +2099,7 @@ void main() {
 	// designed around. The sharper 1.2% variant read as flat glass.
 	float n = fbm(p + vec2(t * 0.03, -t * 0.02));
 	float n2 = fbm(p * 1.3 + vec2(-t * 0.025, t * 0.03) + n);
-	vec2 warp = vec2(n - 0.5, n2 - 0.5) * 0.05 * uFlow;
+	vec2 warp = vec2(n - 0.5, n2 - 0.5) * 0.05 * uFlow * (1.0 + uBeat * 0.75);
 
 	// Ripple around the pointer. uRipple is 0 whenever the cursor is parked, so
 	// the sin/exp pair is skipped entirely (branch coherency: whole-screen skip).
@@ -1970,7 +2107,7 @@ void main() {
 	if (uRipple > 0.001) {
 		vec2 delta = uv - uMouse;
 		float dist = length(delta) + 1e-4;
-		float ripple = sin(dist * 26.0 - t * 2.2) * exp(-dist * 5.0) * 0.012 * uFlow * uRipple;
+		float ripple = sin(dist * 26.0 - t * 2.2) * exp(-dist * 5.0) * 0.012 * uFlow * uRipple * (1.0 + uBeat);
 		rippled += (delta / dist) * ripple;
 	}
 
@@ -1995,11 +2132,11 @@ void main() {
 	// 0.11 form the user asked for by name; the *strength* stays at the 0.8 value
 	// (0.22) because 0.11's 0.055 multiplied the water away.
 	float caustic = 0.5 + 0.5 * sin(p.x * 1.7 + t * 0.9) * sin(p.y * 1.3 - t * 0.7);
-	color *= 0.9 + caustic * 0.22 * uFlow + (1.0 - uFlow) * 0.05;
+	color *= 0.9 + caustic * 0.22 * uFlow * (1.0 + uBeat * 0.8) + (1.0 - uFlow) * 0.05;
 
 	// A slow specular band sweeping diagonally.
 	float band = smoothstep(0.36, 0.56, abs(sin((uv.x + uv.y * 0.6) * 3.2 - t * 0.35)));
-	color += band * 0.03 * uFlow;
+	color += band * 0.03 * uFlow * (1.0 + uBeat * 0.5);
 
 	float luma = dot(color, vec3(0.299, 0.587, 0.114));
 	color = mix(vec3(luma), color, uSat);
@@ -2063,6 +2200,7 @@ void main() {
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			const onBeat = typeof options.onBeat === "function" ? options.onBeat : null;
 			// Per preset: the caller passes high-performance for the high-end
 			// profile and low-power for integrated/unknown hardware. Hard-coding
 			// low-power made a discrete GPU run the glass on the iGPU.
@@ -2113,13 +2251,14 @@ void main() {
 			let mouse = { x: 0.5, y: 0.5 };
 			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(16);
+			const uniforms = new Float32Array(20);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
   tint: f32, dpr: f32, vpW: f32, vpH: f32,
+  beat: f32, pad0: f32, pad1: f32, pad2: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -2160,10 +2299,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let t = u.time;
   let w1 = noise(uv * 3.1 + vec2<f32>(t * 0.05, t * 0.04));
   let w2 = noise(uv * 5.7 - vec2<f32>(t * 0.07, t * 0.03));
-  let warp = (vec2<f32>(w1, w2) - vec2<f32>(0.5)) * 0.05 * u.flow;
+  let warp = (vec2<f32>(w1, w2) - vec2<f32>(0.5)) * 0.05 * u.flow * (1.0 + u.beat * 0.75);
   let m = vec2<f32>(u.mx - uv.x, u.my - uv.y);
   let d = length(m) + 0.0001;
-  let ripple = sin(d * 34.0 - t * 2.4) * exp(-d * 9.0) * 0.012 * u.flow;
+  let ripple = sin(d * 34.0 - t * 2.4) * exp(-d * 9.0) * 0.012 * u.flow * (1.0 + u.beat);
   uv += warp + (m / d) * ripple;
   let ca = (uv - vec2<f32>(0.5)) * 0.004;
   var col = vec3<f32>(
@@ -2173,9 +2312,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   );
   let p = uv * vec2<f32>(u.texW / u.texH, 1.0) * 2.0;
   let caustic = 0.5 + 0.5 * sin(p.x * 1.7 + t * 0.9) * sin(p.y * 1.3 - t * 0.7);
-  col *= 0.9 + caustic * 0.22 * u.flow + (1.0 - u.flow) * 0.05;
+  col *= 0.9 + caustic * 0.22 * u.flow * (1.0 + u.beat * 0.8) + (1.0 - u.flow) * 0.05;
   let band = smoothstep(0.36, 0.56, abs(sin((uv.x + uv.y * 0.6) * 3.2 - t * 0.35)));
-  col += vec3<f32>(band * 0.03 * u.flow);
+  col += vec3<f32>(band * 0.03 * u.flow * (1.0 + u.beat * 0.5));
   col = mix(col, vec3<f32>(0.98, 0.98, 1.0), u.tint * 0.06);
   col = (col - vec3<f32>(0.5)) * u.sat + vec3<f32>(0.5);
   col *= 1.0 - u.dim;
@@ -2363,6 +2502,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
 				uniforms[12] = params.tint; uniforms[13] = g.dpr;
 				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
+				uniforms[16] = onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {
@@ -2599,6 +2739,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 		function createLiquidCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			const onBeat = typeof options.onBeat === "function" ? options.onBeat : null;
 			const canvas = document.createElement("canvas");
 			canvas.setAttribute("aria-hidden", "true");
 			canvas.dataset.liquidGlass = "canvas";
@@ -2692,6 +2833,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				sat: gl.getUniformLocation(program, "uSat"),
 				dim: gl.getUniformLocation(program, "uDim"),
 				flow: gl.getUniformLocation(program, "uFlow"),
+				beat: gl.getUniformLocation(program, "uBeat"),
 				ripple: gl.getUniformLocation(program, "uRipple"),
 				mouse: gl.getUniformLocation(program, "uMouse")
 			};
@@ -2931,6 +3073,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				gl.uniform1f(uniforms.sat, params.sat);
 				gl.uniform1f(uniforms.dim, params.dim);
 				gl.uniform1f(uniforms.flow, params.flow);
+				gl.uniform1f(uniforms.beat, onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0);
 				// Ripple only while the pointer is actually moving: a parked cursor
 				// skips the sin/exp pair for the whole screen.
 				gl.uniform1f(uniforms.ripple, performance.now() - lastMouseAt < 2500 ? 1 : 0);
@@ -3652,7 +3795,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					// GPU; everything else hints low-power so laptops stay on the iGPU.
 					const powerPreference = preferredPower(value.preset, hw.tier);
 					let cancelled = false;
-					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, powerPreference }) : createLiquidCanvas({ onFault, onInk, powerPreference });
+					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, onBeat: audioBeat, powerPreference }) : createLiquidCanvas({ onFault, onInk, onBeat: audioBeat, powerPreference });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
 						if (mode === "webgpu") {
@@ -3895,6 +4038,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					window.removeEventListener("focus", onFocus);
 				};
 			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
+
+				// The playlist lives in settings; the audio bus owns the <audio> element
+				// so it keeps playing while the settings page is closed.
+				useEffect(() => {
+					audioSync(value.audio);
+				}, [value.audio]);
 
 				// Report guard-state transitions (mode/scale/fps/pause set) so the
 				// host's lastClientError doubles as a live perf log during testing.
@@ -4302,6 +4451,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
 						h(WallpaperCenter, null),
+						h(AudioPanel, null),
 						h(
 							"section",
 							{ className: "lg-group" },
@@ -4793,6 +4943,370 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				)
 			);
 		}
+
+		function AudioPanel() {
+			const value = useSettings();
+			const lang = useLang();
+			const t = makeTranslate(lang);
+			const audio = value.audio || {};
+			const list = Array.isArray(audio.list) ? audio.list : [];
+			const [browser, setBrowser] = useState(false);
+			const [system, setSystem] = useState(audioBus.system);
+			const [error, setError] = useState(audioBus.error);
+			const update = (patch) => setSettings({ audio: { ...audio, ...patch } });
+			const addFile = (file) => {
+				update({ list: list.concat(file.path).slice(0, 200) });
+				setBrowser(false);
+			};
+			const removeAt = (index) => update({ list: list.filter((_, i) => i !== index) });
+			const toggleSystem = () => {
+				if (audioBus.system) {
+					audioStopSystem();
+					setSystem(false);
+					return;
+				}
+				audioStartSystem().then((ok) => {
+					setSystem(ok);
+					setError(audioBus.error);
+				});
+			};
+			return h(
+				"section",
+				{ className: "lg-group" },
+				h("h2", { className: "lg-group-title" }, t("audioGroup")),
+				h("p", { className: "lg-group-hint" }, t("audioHint")),
+				h(
+					Row,
+					{ label: t("audioEnable") },
+					h(Switch, {
+						on: audio.enabled === true,
+						label: t("audioEnable"),
+						onChange: (next) => {
+							update({ enabled: next });
+							if (next) setTimeout(audioKick, 80);
+						}
+					})
+				),
+				h(
+					Row,
+					{ label: t("audioPlaylist"), hint: t("audioPlaylistHint") },
+					h("button", { type: "button", className: "lg-button", onClick: () => setBrowser(true) }, t("audioAdd"))
+				),
+				h(
+					"div",
+					{ className: "lg-audio-list" },
+					list.length === 0
+						? h("p", { className: "lg-group-hint" }, t("audioEmpty"))
+						: list.map((file, index) =>
+								h(
+									"div",
+									{ className: "lg-audio-row", key: file + "|" + index },
+									h("span", { className: "lg-audio-name" }, audioName(file)),
+									h("button", { type: "button", className: "lg-audio-remove", onClick: () => removeAt(index) }, "×")
+								)
+							)
+				),
+				h(Slider, {
+					label: t("audioRate"),
+					value: Number(audio.rate) || 1,
+					min: 1,
+					max: 2,
+					step: 0.05,
+					display: (Number(audio.rate) || 1).toFixed(2) + "×",
+					onChange: (next) => update({ rate: next })
+				}),
+				h(Slider, {
+					label: t("audioVolume"),
+					value: Number(audio.volume) || 0,
+					min: 0,
+					max: 1,
+					step: 0.02,
+					display: Math.round((Number(audio.volume) || 0) * 100) + "%",
+					onChange: (next) => update({ volume: next })
+				}),
+				h(
+					Row,
+					{ label: t("audioReactive"), hint: t("audioReactiveHint") },
+					h(Switch, {
+						on: audio.reactive === true,
+						label: t("audioReactive"),
+						onChange: (next) => update({ reactive: next })
+					})
+				),
+				h(
+					Row,
+					{ label: t("audioSystem"), hint: t("audioSystemHint") },
+					h("button", { type: "button", className: "lg-button", onClick: toggleSystem }, system ? t("audioSystemOff") : t("audioSystemOn"))
+				),
+				h(
+					Row,
+					{ label: t("audioTest") },
+					h(
+						"button",
+						{
+							type: "button",
+							className: "lg-button",
+							onClick: () => {
+								audioKick();
+								setError(audioBus.error);
+							}
+						},
+						t("audioTest")
+					)
+				),
+				error ? h("p", { className: "lg-warn-inline" }, error) : null,
+				browser ? h(WeFileBrowser, { path: "", kind: "audio", onPick: addFile, onClose: () => setBrowser(false) }) : null
+			);
+		}
+/**
+ * Audio bus.
+ *
+ * One shared <audio> element plays the user playlist (path served by
+ * /liquid-glass/media, so Range and every local codec work), and an
+ * AnalyserNode turns the signal into a single 0..1 "beat" value that the
+ * renderer polls through options.onBeat. Two sources are supported:
+ *
+ * - the playlist itself (audible), routed element -> analyser -> destination;
+ * - a system loopback capture (getDisplayMedia), routed stream -> analyser only
+ *   so the desktop audio is measured but never played a second time.
+ *
+ * The element lives outside React on purpose: closing the settings page must
+ * not stop the music, and the renderer keeps its beat callback.
+ */
+
+const audioBus = {
+	level: 0,
+	smooth: 0,
+	lastAt: 0,
+	el: null,
+	ctx: null,
+	analyser: null,
+	elementSource: null,
+	systemStream: null,
+	systemSource: null,
+	systemAnalyser: null,
+	system: false,
+	list: [],
+	index: 0,
+	loaded: "",
+	enabled: false,
+	reactive: false,
+	rate: 1,
+	volume: 0.6,
+	error: "",
+	freq: null
+};
+
+function audioSetError(message) {
+	audioBus.error = message ? String(message) : "";
+}
+
+function audioName(file) {
+	const path = typeof file === "string" ? file : "";
+	return path.split(/[\\/]/).pop() || path;
+}
+
+function audioContext() {
+	if (audioBus.ctx) return audioBus.ctx;
+	const Ctor = window.AudioContext || window.webkitAudioContext;
+	if (!Ctor) {
+		audioSetError("当前环境不支持 Web Audio");
+		return null;
+	}
+	try {
+		audioBus.ctx = new Ctor();
+	} catch (error) {
+		audioSetError(error?.message);
+		return null;
+	}
+	return audioBus.ctx;
+}
+
+function audioElement() {
+	if (audioBus.el) return audioBus.el;
+	const el = document.createElement("audio");
+	el.preload = "auto";
+	el.addEventListener("ended", () => audioNext());
+	el.addEventListener("error", () => {
+		if (audioBus.enabled) audioSetError("音频加载失败");
+	});
+	audioBus.el = el;
+	return el;
+}
+
+function audioAnalyserElement() {
+	if (audioBus.analyser) return audioBus.analyser;
+	const ctx = audioContext();
+	if (!ctx) return null;
+	const analyser = ctx.createAnalyser();
+	analyser.fftSize = 512;
+	analyser.smoothingTimeConstant = 0.75;
+	audioBus.analyser = analyser;
+	return analyser;
+}
+
+function audioRouteElement() {
+	const el = audioElement();
+	const ctx = audioContext();
+	if (!ctx) return;
+	if (audioBus.elementSource) return;
+	try {
+		const analyser = audioAnalyserElement();
+		audioBus.elementSource = ctx.createMediaElementSource(el);
+		audioBus.elementSource.connect(analyser);
+		analyser.connect(ctx.destination);
+	} catch (error) {
+		// createMediaElementSource throws if the element was already routed.
+		audioSetError(error?.message);
+	}
+}
+
+/** Load/refresh the playlist element from the current bus state. */
+function audioApply() {
+	const el = audioElement();
+	if (!audioBus.enabled || audioBus.list.length === 0) {
+		if (!el.paused) el.pause();
+		return;
+	}
+	if (audioBus.index >= audioBus.list.length) audioBus.index = 0;
+	const src = `${API}/media?path=${encodeURIComponent(audioBus.list[audioBus.index])}`;
+	if (audioBus.loaded !== src) {
+		audioBus.loaded = src;
+		el.src = src;
+	}
+	el.playbackRate = audioBus.rate;
+	el.volume = audioBus.volume;
+	audioRouteElement();
+	if (audioBus.ctx?.state === "suspended") audioBus.ctx.resume().catch(() => {});
+	const playing = el.play();
+	if (playing && typeof playing.catch === "function") {
+		playing.catch(() => {
+			audioSetError("浏览器拦截了自动播放，点「试听」开始播放");
+		});
+	}
+}
+
+function audioSync(audio) {
+	const next = audio && typeof audio === "object" ? audio : {};
+	const list = Array.isArray(next.list) ? next.list.filter((file) => typeof file === "string" && file) : [];
+	const changed = list.join("\n") !== audioBus.list.join("\n");
+	audioBus.list = list;
+	audioBus.enabled = next.enabled === true;
+	audioBus.reactive = next.reactive === true;
+	audioBus.rate = Number.isFinite(next.rate) ? Math.min(2, Math.max(0.5, next.rate)) : 1;
+	audioBus.volume = Number.isFinite(next.volume) ? Math.min(1, Math.max(0, next.volume)) : 0.6;
+	if (changed) {
+		audioBus.index = 0;
+		audioBus.loaded = "";
+	}
+	audioApply();
+}
+
+/** User gesture hook: resume the context and start the current track. */
+function audioKick() {
+	const ctx = audioContext();
+	if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+	audioApply();
+}
+
+function audioNext() {
+	if (audioBus.list.length === 0) return;
+	audioBus.index = (audioBus.index + 1) % audioBus.list.length;
+	audioBus.loaded = "";
+	audioApply();
+}
+
+function audioStartSystem() {
+	const media = navigator.mediaDevices;
+	if (!media?.getDisplayMedia) {
+		audioSetError("当前环境不支持系统音频采集");
+		return Promise.resolve(false);
+	}
+	return media
+		.getDisplayMedia({ audio: true, video: true })
+		.then((stream) => {
+			const audioTracks = stream.getAudioTracks();
+			if (audioTracks.length === 0) {
+				for (const track of stream.getTracks()) track.stop();
+				audioSetError("没有捕获到音频轨道，请勾选「分享系统音频」");
+				return false;
+			}
+			for (const track of stream.getVideoTracks()) track.stop();
+			const ctx = audioContext();
+			if (!ctx) {
+				for (const track of stream.getTracks()) track.stop();
+				return false;
+			}
+			audioStopSystem();
+			const analyser = ctx.createAnalyser();
+			analyser.fftSize = 1024;
+			analyser.smoothingTimeConstant = 0.78;
+			const source = ctx.createMediaStreamSource(new MediaStream(audioTracks));
+			source.connect(analyser);
+			audioBus.systemStream = stream;
+			audioBus.systemSource = source;
+			audioBus.systemAnalyser = analyser;
+			audioBus.system = true;
+			audioSetError("");
+			return true;
+		})
+		.catch((error) => {
+			audioSetError(error?.name === "NotAllowedError" ? "已取消系统音频授权" : String(error?.message ?? error));
+			return false;
+		});
+}
+
+function audioStopSystem() {
+	const stream = audioBus.systemStream;
+	audioBus.systemStream = null;
+	audioBus.system = false;
+	if (stream) {
+		for (const track of stream.getTracks()) {
+			try {
+				track.stop();
+			} catch {
+				/* already stopped */
+			}
+		}
+	}
+	if (audioBus.systemSource) {
+		try {
+			audioBus.systemSource.disconnect();
+		} catch {
+			/* already disconnected */
+		}
+		audioBus.systemSource = null;
+	}
+	audioBus.systemAnalyser = null;
+}
+
+/** Energy of the active source, 0..1, with fast attack / slow release. */
+function audioBeat() {
+	const analyser = audioBus.systemStream ? audioBus.systemAnalyser : audioBus.analyser;
+	if (!audioBus.reactive || !analyser) {
+		audioBus.smooth *= 0.85;
+		return 0;
+	}
+	const now = performance.now();
+	const dt = Math.min(0.2, Math.max(0.001, (now - (audioBus.lastAt || now)) / 1000));
+	audioBus.lastAt = now;
+	if (!audioBus.freq || audioBus.freq.length !== analyser.frequencyBinCount) {
+		audioBus.freq = new Uint8Array(analyser.frequencyBinCount);
+	}
+	analyser.getByteFrequencyData(audioBus.freq);
+	const data = audioBus.freq;
+	let sum = 0;
+	for (let i = 0; i < data.length; i += 1) sum += data[i] * data[i];
+	const rms = Math.sqrt(sum / data.length) / 255;
+	const edge = Math.max(1, Math.floor(data.length / 8));
+	let low = 0;
+	for (let i = 0; i < edge; i += 1) low += data[i];
+	low /= edge * 255;
+	const target = Math.min(1, rms * 2.1 + low * 0.95);
+	const k = target > audioBus.smooth ? 1 - Math.exp(-dt / 0.02) : 1 - Math.exp(-dt / 0.3);
+	audioBus.smooth += (target - audioBus.smooth) * k;
+	return audioBus.smooth;
+}
 		return { name: "liquid-glass", inject: ["slots", "theme", "locale"], apply };
 	}
 });

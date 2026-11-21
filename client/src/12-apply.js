@@ -287,7 +287,7 @@
 					// GPU; everything else hints low-power so laptops stay on the iGPU.
 					const powerPreference = preferredPower(value.preset, hw.tier);
 					let cancelled = false;
-					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, powerPreference }) : createLiquidCanvas({ onFault, onInk, powerPreference });
+					const liquid = mode === "webgpu" ? createWebGpuCanvas({ onFault, onInk, onBeat: audioBeat, powerPreference }) : createLiquidCanvas({ onFault, onInk, onBeat: audioBeat, powerPreference });
 					if (!liquid) {
 						reportClientError(`renderMode ${mode}: unavailable`, true);
 						if (mode === "webgpu") {
@@ -415,6 +415,7 @@
 						if (!value.enabled) {
 							appliedRef.current?.dispose?.();
 							appliedRef.current = null;
+							delete document.documentElement.dataset.lgInk;
 							return;
 						}
 						// Manual override wins, always: picking white text on a bright
@@ -429,6 +430,10 @@
 						}
 						// The composer is its own surface: the frosted card reads the overlay
 						// token, which glassTokens() already tints toward the ink in use.
+						// The caret must land on the far side of the ink, and the ink is a
+						// token itself, so stamp the decision on <html> and let 07-styles.js
+						// map it: dark ink -> light caret, light ink -> dark caret.
+						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
 						const next = glassTokens(value.tint, veil, ink);
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
@@ -530,6 +535,12 @@
 					window.removeEventListener("focus", onFocus);
 				};
 			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
+
+				// The playlist lives in settings; the audio bus owns the <audio> element
+				// so it keeps playing while the settings page is closed.
+				useEffect(() => {
+					audioSync(value.audio);
+				}, [value.audio]);
 
 				// Report guard-state transitions (mode/scale/fps/pause set) so the
 				// host's lastClientError doubles as a live perf log during testing.
@@ -937,6 +948,7 @@
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
 						h(WallpaperCenter, null),
+						h(AudioPanel, null),
 						h(
 							"section",
 							{ className: "lg-group" },

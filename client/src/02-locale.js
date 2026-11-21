@@ -136,6 +136,26 @@
 			browserRoots: "磁盘",
 			browserUp: "上一级",
 			browserEmpty: "这里没有可用的媒体文件。",
+			audioGroup: "声音（声临其境）",
+			audioHint: "给玻璃背后配音：可以用 Wallpaper Engine 自带的声音（由它自己播放），也可以在这里放本地音乐播放列表，并让玻璃随节拍律动。",
+			audioEnable: "播放本地音频",
+			audioPlaylist: "播放列表",
+			audioPlaylistHint: "支持 mp3 / flac / wav / ogg / m4a / aac / opus；按顺序循环播放。",
+			audioAdd: "添加音频",
+			audioEmpty: "还没有音频文件。",
+			audioRate: "播放倍速",
+			audioVolume: "音量",
+			audioReactive: "音频律动",
+			audioReactiveHint: "把音频能量传给 Shader，让液面随节拍起伏（低音更明显）。",
+			audioSystem: "系统音频",
+			audioSystemHint: "捕获本机正在播放的声音用于律动（需要浏览器授权共享），不会二次播放。",
+			audioSystemOn: "开启系统音频",
+			audioSystemOff: "关闭系统音频",
+			audioTest: "试听",
+			audioBlocked: "浏览器拦截了自动播放，点「试听」开始播放。",
+			audioSystemDenied: "已取消系统音频授权。",
+			audioFailed: "音频加载失败。"
+
 		};
 		const en = {
 			section: "Liquid Glass",
@@ -275,6 +295,26 @@
 			browserRoots: "Drives",
 			browserUp: "Up",
 			browserEmpty: "No usable media file here.",
+			audioGroup: "Sound",
+			audioHint: "Give the glass a voice: Wallpaper Engine can play its own audio, or add a local playlist here and let the liquid react to the beat.",
+			audioEnable: "Play local audio",
+			audioPlaylist: "Playlist",
+			audioPlaylistHint: "mp3 / flac / wav / ogg / m4a / aac / opus, played in order and looped.",
+			audioAdd: "Add audio",
+			audioEmpty: "No audio file yet.",
+			audioRate: "Playback rate",
+			audioVolume: "Volume",
+			audioReactive: "Audio reactive",
+			audioReactiveHint: "Feeds audio energy to the shader so the liquid pulses with the beat (bass is stronger).",
+			audioSystem: "System audio",
+			audioSystemHint: "Captures what the machine is playing for the reactive effect (needs browser permission); never played twice.",
+			audioSystemOn: "Enable system audio",
+			audioSystemOff: "Disable system audio",
+			audioTest: "Preview",
+			audioBlocked: "The browser blocked autoplay; press Preview to start.",
+			audioSystemDenied: "System audio permission was cancelled.",
+			audioFailed: "Audio failed to load."
+
 		};
 
 		function dictFor(lang) {

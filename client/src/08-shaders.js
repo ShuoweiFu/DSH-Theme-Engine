@@ -15,6 +15,7 @@ uniform float uTime;
 uniform float uSat;
 uniform float uDim;
 uniform float uFlow;
+uniform float uBeat;
 uniform float uRipple;
 uniform vec2 uMouse;
 
@@ -66,7 +67,7 @@ void main() {
 	// designed around. The sharper 1.2% variant read as flat glass.
 	float n = fbm(p + vec2(t * 0.03, -t * 0.02));
 	float n2 = fbm(p * 1.3 + vec2(-t * 0.025, t * 0.03) + n);
-	vec2 warp = vec2(n - 0.5, n2 - 0.5) * 0.05 * uFlow;
+	vec2 warp = vec2(n - 0.5, n2 - 0.5) * 0.05 * uFlow * (1.0 + uBeat * 0.75);
 
 	// Ripple around the pointer. uRipple is 0 whenever the cursor is parked, so
 	// the sin/exp pair is skipped entirely (branch coherency: whole-screen skip).
@@ -74,7 +75,7 @@ void main() {
 	if (uRipple > 0.001) {
 		vec2 delta = uv - uMouse;
 		float dist = length(delta) + 1e-4;
-		float ripple = sin(dist * 26.0 - t * 2.2) * exp(-dist * 5.0) * 0.012 * uFlow * uRipple;
+		float ripple = sin(dist * 26.0 - t * 2.2) * exp(-dist * 5.0) * 0.012 * uFlow * uRipple * (1.0 + uBeat);
 		rippled += (delta / dist) * ripple;
 	}
 
@@ -99,11 +100,11 @@ void main() {
 	// 0.11 form the user asked for by name; the *strength* stays at the 0.8 value
 	// (0.22) because 0.11's 0.055 multiplied the water away.
 	float caustic = 0.5 + 0.5 * sin(p.x * 1.7 + t * 0.9) * sin(p.y * 1.3 - t * 0.7);
-	color *= 0.9 + caustic * 0.22 * uFlow + (1.0 - uFlow) * 0.05;
+	color *= 0.9 + caustic * 0.22 * uFlow * (1.0 + uBeat * 0.8) + (1.0 - uFlow) * 0.05;
 
 	// A slow specular band sweeping diagonally.
 	float band = smoothstep(0.36, 0.56, abs(sin((uv.x + uv.y * 0.6) * 3.2 - t * 0.35)));
-	color += band * 0.03 * uFlow;
+	color += band * 0.03 * uFlow * (1.0 + uBeat * 0.5);
 
 	float luma = dot(color, vec3(0.299, 0.587, 0.114));
 	color = mix(vec3(luma), color, uSat);

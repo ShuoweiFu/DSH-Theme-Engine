@@ -4,6 +4,22 @@
 	--lg-mx: 50%;
 	--lg-my: 30%;
 	--lg-fallback: #0b0e14;
+	/* Fallback until the first ink decision lands: follow the text colour. */
+	--lg-caret: currentColor;
+}
+
+/*
+ * The caret is the INVERSE of the ink, not the ink itself: dark glyphs get a
+ * light caret, light glyphs get a dark one, so the insertion point never
+ * vanishes inside a run of text. 12-apply.js stamps data-lg-ink from the ink
+ * it just decided; these two rules are the whole mapping.
+ */
+html[data-lg-ink="dark"] {
+	--lg-caret: #f6f8fc;
+}
+
+html[data-lg-ink="light"] {
+	--lg-caret: #0c0e14;
 }
 
 html[data-lg-enabled="on"],
@@ -184,6 +200,48 @@ html[data-lg-mode="dark"] div[data-composer-card] {
 		inset 0 1px 0 rgba(255, 255, 255, 0.08),
 		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 80%, transparent),
 		0 14px 36px rgba(0, 0, 0, 0.42);
+}
+
+/*
+ * The insertion caret is the one thing the frosted composer still breaks.
+ * DSH paints no caret-color, so it stays currentColor, and the ink the
+ * token layer picks is already inverted against the wallpaper (05-ink.js
+ * decides "dark" or "light" ink from the sampled luminance).  Reusing that
+ * same token alone would paint the caret IN the ink colour, which is exactly
+ * where it hides; the caret reads data-lg-ink instead and lands on the far
+ * side of the ink, while the ring below keeps the ink tint.
+ * caret-color is the only caret property CSS exposes, so the width stays
+ * 1px and the rest of the contrast comes from the sheet -- :focus-within
+ * lifts the ring and the top highlight while you type.
+ */
+div[data-composer-card] textarea,
+div[data-composer-card] [contenteditable]:not([contenteditable="false"]) {
+	caret-color: var(--lg-caret);
+}
+
+div[data-composer-card]:focus-within {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-label-primary) 45%, transparent),
+		0 12px 32px rgba(8, 12, 20, 0.16);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card]:focus-within {
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.14),
+		inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-label-primary) 45%, transparent),
+		0 14px 36px rgba(0, 0, 0, 0.46);
+}
+
+div[data-composer-card] textarea::selection,
+div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
+	background: color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
+	color: var(--dsw-alias-label-primary);
+}
+
+html[data-lg-mode="dark"] div[data-composer-card] textarea::selection,
+html[data-lg-mode="dark"] div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
+	background: color-mix(in srgb, var(--dsw-alias-label-primary) 32%, transparent);
 }
 
 /*
@@ -972,6 +1030,58 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 
 .lg-browser-row:hover {
 	background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.lg-audio-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 4px 0 8px;
+}
+
+.lg-audio-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 10px;
+	border: 0.5px solid var(--dsw-alias-border-l1);
+	border-radius: 8px;
+	background: var(--dsw-alias-bg-layer-1);
+}
+
+.lg-audio-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-audio-remove {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--dsw-alias-label-secondary);
+	font-size: 15px;
+	line-height: 22px;
+	cursor: pointer;
+}
+
+.lg-audio-remove:hover {
+	background: var(--dsw-alias-interactive-bg-hover);
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-warn-inline {
+	margin: 6px 0 0;
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-state-warn-primary);
 }
 
 .lg-modes {

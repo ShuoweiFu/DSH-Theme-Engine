@@ -160,7 +160,7 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 
 ## 设置入口（左侧边栏 → 主工作区）
 
-设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.151500` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
+设置不再占用 DSH 的系统设置页，也不再内联进侧边栏。`v.26.11.21.152253` 起，左侧边栏只多出一行极简的全局导航项（水滴图标 + 「液态玻璃」），它走 DSH 原生的全局面板机制：`sidebar.panellist` 注册同 id 的导航行（`order: 20`，label 走 locale thunk），`main` keyed 槽注册同 `key` 的页面组件；点击时 sidebar 调 `layout.selectPanel("liquid-glass")`，AppFrame 用 `renderSlot("main", {}, { entryKey })` 把设置页**整页**渲染到右侧主工作区 —— 与原生「插件」「自动化任务」页同一套骨架、同一套设置行样式（0.5px 分隔线、原生开关、34px 输入控件）。刷新后 `activePanelId` 不持久化，自动回到会话。
 
 `shell.overlay` 只保留玻璃背景层：`<style>`、壁纸 canvas 与自适应 ink 采样都由它承载。旧的 `nav.panelList` portal / 800ms `place()` / 内联折叠表单已彻底删除，不再有「把大表单塞进窄边栏」这条路。
 
@@ -170,7 +170,7 @@ WebGL / WebGPU 模式下 `#root` 的 `backdrop-filter` 被强制置为 `none`：
 
 ## 版本号
 
-版本号按 `v.<年>.<月>.<日>.<时><分><秒>`（西安授时，UTC+8）递增，写进 UI、本文档与 GitHub Release；`package.json` 的 `version` 必须是合法 semver，所以用同一天的日期加时间作预发布号（例如 `26.11.21-151500`），展示时再加 `v.` 前缀与点号。
+版本号按 `v.<年>.<月>.<日>.<时><分><秒>`（西安授时，UTC+8）递增，写进 UI、本文档与 GitHub Release；`package.json` 的 `version` 必须是合法 semver，所以用同一天的日期加时间作预发布号（例如 `26.11.21-152253`），展示时再加 `v.` 前缀与点号。
 
 ## 性能保护（核显保命）
 
@@ -205,7 +205,7 @@ iOS 26 的 Liquid Glass 是 RenderServer 的 GPU 着色器：SDF（`CASDFLayer` 
 - 合成结果只在画面变化时更新：把窗口拖到 DSH 下面约 0.25–0.4 s 后玻璃里出现它；桌面完全静止时引擎不编码（客户端仍每 0.22 s 比对一次 digest）。
 - 壁纸接口监听本机地址但**未做额外鉴权**：同一台机器上能访问该端口的人也能取到壁纸。介意请只在可信环境启用。
 - 非 Wallpaper Engine 且桌面图标可见时，若走到截图兜底，图里会带图标（前三档来源不会）。
-- WebGL 不可用（驱动 / 远程桌面）时退回 CSS 壁纸 + 磨砂玻璃，没有流动与色散。
+- WebGL 不可用（驱动 / 远程桌面）时不再有 CSS 壁纸回退：直接进入第五层静态半透明遮罩（不黑屏），并允许 10 分钟内从提示条重试。
 - 面板内部若有硬编码的不透明色，仍会挡住背景；需要 DSH 把该处改成主题 token。
 - 截图先写到 `wallpaper.stage.jpg`，成功后再 `rename()` 覆盖 `wallpaper.jpg`：客户端要么读到上一张完整 JPEG，要么读到新的一张，不会读到写了一半的文件（半写 JPEG 会解码成黑带，看起来就是壁纸闪一下黑）。
 - 桌面捕获依赖 `Windows.Graphics.Capture`（Windows 10 1903+）：更老的系统上助手退到 `PrintWindow`，那时仍可能偶发丢壁纸层，建议把「背景来源」切成壁纸本体。0.17 的无边框（`IGraphicsCaptureSession3`）同样要 Windows 11 / 10 20348+，更老的系统上黄色捕获边框会回来（功能不受影响）。
@@ -214,7 +214,7 @@ iOS 26 的 Liquid Glass 是 RenderServer 的 GPU 着色器：SDF（`CASDFLayer` 
 
 ## 壁纸中枢（Wallpaper Engine 桥）
 
-v.26.11.21.151500 起，设置页的「壁纸中枢」直接读本机 Wallpaper Engine 的壁纸库，不复制其代码、不修改其配置：
+v.26.11.21.152253 起，设置页的「壁纸中枢」直接读本机 Wallpaper Engine 的壁纸库，不复制其代码、不修改其配置：
 
 - 路径发现：注册表 HKCU\Software\Valve\Steam 的 SteamPath，加上每个 Steam 库根目录下 steamapps\libraryfolders.vdf 的 path 列表；路径统一清洗（反斜杠、盘符大小写）。
 - 库扫描：<root>\steamapps\workshop\content\431960\<id>\project.json，取 title / type / file / preview / tags；场景缺 file 时回落到 scene.pkg，网页回落到 index.html。
@@ -222,3 +222,12 @@ v.26.11.21.151500 起，设置页的「壁纸中枢」直接读本机 Wallpaper 
 - 应用：视频项目直接把文件路径作为壁纸来源（source=we&path=…），由 Range 流式读取；场景 / 网页项目无法直接读帧，自动切回实时桌面捕获（source=desktop），由 WE 继续播放画面。
 - 自定义文件：source=file&path=…，图片 / 视频皆可，图片一次性读取、视频 Range 流式读取。
 - 拉起入口：/liquid-glass/launch?target=steam|we 用 steam:// 协议打开 Steam 或 Wallpaper Engine；商店入口给出微软商店搜索链接，不硬编码包 ID。
+
+## 声临其境（音频矩阵）
+
+v.26.11.21.152253 起，设置页新增「声音」分组：
+
+- 本地播放列表：客户端 `<audio>` 元素按顺序循环，源走 `/liquid-glass/media?path=…`（Range 流式，不整段读入）；支持 mp3 / flac / wav / ogg / m4a / aac / opus，倍速 1.0–2.0、音量 0–1。
+- 系统音频：`getDisplayMedia({ audio: true })` 取音轨后只接 `AnalyserNode`，不接扬声器，避免二次播放；授权失败时按钮回落并给出中文提示。
+- 律动：`audioBeat()` 用 RMS×2.1 + 低频能量×0.95 做快攻慢放包络，返回值经 `onBeat` 回调写进两个后端的 `uBeat` uniform；片元着色器把 warp / ripple / caustic / band 四项乘以 `(1 + uBeat × 系数)`，低音落下时液面起伏、高光呼吸。
+- 播放被浏览器自动播放策略拦截时提示「点试听开始播放」，用户点按钮即恢复。

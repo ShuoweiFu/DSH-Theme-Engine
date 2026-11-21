@@ -27,7 +27,7 @@ Blur runs on the GPU: both backends (WebGL / WebGPU) share the same **13-tap Poi
 
 The plugin registers no agent tools and injects no prompt text, so it adds **zero model token cost**.
 
-Current version **v.26.11.21.151500**.
+Current version **v.26.11.21.152253**.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ Current version **v.26.11.21.151500**.
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>Version: <code>v.26.11.21.151500</code></li>
+        <li>Version: <code>v.26.11.21.152253</code></li>
         <li>Platform: Windows 10 20348+ / Windows 11</li>
         <li>Host: DeepSeek Harness desktop</li>
         <li>License: <a href="LICENSE">Apache-2.0</a></li>
@@ -60,6 +60,8 @@ Current version **v.26.11.21.151500**.
 - **Adaptive ink**: switches between black and white text based on background luminance (WCAG 7:1 target); manual choices are never overridden.
 - **Dual backends**: WebGL (best compatibility) / WebGPU (experimental). If WebGPU is unavailable it falls back to WebGL automatically — no error toast, no black screen.
 - **Performance guard**: three presets (iGPU-safe / discrete-balanced / overkill); frame budget exceeded → lower resolution → disable occlusion compositing → static translucent scrim → auto-disable. Five layers, each one safer than the last.
+- **Wallpaper centre**: reads the local Steam / Wallpaper Engine library (video, scene and web projects), applies a video wallpaper as the glass backdrop in one click, or picks a local image / video. Scene and web wallpapers are played by WE and captured live from the desktop.
+- **Sound**: a local audio playlist (mp3 / flac / wav / ogg / m4a / aac / opus, 1.0–2.0× rate), or capture what the system is playing. Audio energy drives the shader so the liquid breathes with the beat.
 - **Native main view**: the sidebar gains a single row, **Liquid Glass**. Clicking it renders the settings page full-page in the right main workspace, exactly like the native Plugins page. Reloading returns to the conversation.
 
 ## Hardware tiers

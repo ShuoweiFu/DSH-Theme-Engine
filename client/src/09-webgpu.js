@@ -11,6 +11,7 @@
 		function createWebGpuCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			const onBeat = typeof options.onBeat === "function" ? options.onBeat : null;
 			// Per preset: the caller passes high-performance for the high-end
 			// profile and low-power for integrated/unknown hardware. Hard-coding
 			// low-power made a discrete GPU run the glass on the iGPU.
@@ -61,13 +62,14 @@
 			let mouse = { x: 0.5, y: 0.5 };
 			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(16);
+			const uniforms = new Float32Array(20);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
   tint: f32, dpr: f32, vpW: f32, vpH: f32,
+  beat: f32, pad0: f32, pad1: f32, pad2: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -108,10 +110,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let t = u.time;
   let w1 = noise(uv * 3.1 + vec2<f32>(t * 0.05, t * 0.04));
   let w2 = noise(uv * 5.7 - vec2<f32>(t * 0.07, t * 0.03));
-  let warp = (vec2<f32>(w1, w2) - vec2<f32>(0.5)) * 0.05 * u.flow;
+  let warp = (vec2<f32>(w1, w2) - vec2<f32>(0.5)) * 0.05 * u.flow * (1.0 + u.beat * 0.75);
   let m = vec2<f32>(u.mx - uv.x, u.my - uv.y);
   let d = length(m) + 0.0001;
-  let ripple = sin(d * 34.0 - t * 2.4) * exp(-d * 9.0) * 0.012 * u.flow;
+  let ripple = sin(d * 34.0 - t * 2.4) * exp(-d * 9.0) * 0.012 * u.flow * (1.0 + u.beat);
   uv += warp + (m / d) * ripple;
   let ca = (uv - vec2<f32>(0.5)) * 0.004;
   var col = vec3<f32>(
@@ -121,9 +123,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   );
   let p = uv * vec2<f32>(u.texW / u.texH, 1.0) * 2.0;
   let caustic = 0.5 + 0.5 * sin(p.x * 1.7 + t * 0.9) * sin(p.y * 1.3 - t * 0.7);
-  col *= 0.9 + caustic * 0.22 * u.flow + (1.0 - u.flow) * 0.05;
+  col *= 0.9 + caustic * 0.22 * u.flow * (1.0 + u.beat * 0.8) + (1.0 - u.flow) * 0.05;
   let band = smoothstep(0.36, 0.56, abs(sin((uv.x + uv.y * 0.6) * 3.2 - t * 0.35)));
-  col += vec3<f32>(band * 0.03 * u.flow);
+  col += vec3<f32>(band * 0.03 * u.flow * (1.0 + u.beat * 0.5));
   col = mix(col, vec3<f32>(0.98, 0.98, 1.0), u.tint * 0.06);
   col = (col - vec3<f32>(0.5)) * u.sat + vec3<f32>(0.5);
   col *= 1.0 - u.dim;
@@ -311,6 +313,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[9] = params.flow; uniforms[10] = params.sat; uniforms[11] = params.dim;
 				uniforms[12] = params.tint; uniforms[13] = g.dpr;
 				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
+				uniforms[16] = onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0;
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {

@@ -36,6 +36,7 @@ const PARTS = [
   "11-ui.js",
   "12-apply.js",
   "13-we.js",
+	"14-audio.js",
   "_epilogue.js",
 ];
 

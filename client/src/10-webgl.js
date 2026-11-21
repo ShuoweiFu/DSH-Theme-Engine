@@ -1,6 +1,7 @@
 		function createLiquidCanvas(options = {}) {
 			const onFault = typeof options.onFault === "function" ? options.onFault : () => {};
 			const onInk = typeof options.onInk === "function" ? options.onInk : null;
+			const onBeat = typeof options.onBeat === "function" ? options.onBeat : null;
 			const canvas = document.createElement("canvas");
 			canvas.setAttribute("aria-hidden", "true");
 			canvas.dataset.liquidGlass = "canvas";
@@ -94,6 +95,7 @@
 				sat: gl.getUniformLocation(program, "uSat"),
 				dim: gl.getUniformLocation(program, "uDim"),
 				flow: gl.getUniformLocation(program, "uFlow"),
+				beat: gl.getUniformLocation(program, "uBeat"),
 				ripple: gl.getUniformLocation(program, "uRipple"),
 				mouse: gl.getUniformLocation(program, "uMouse")
 			};
@@ -333,6 +335,7 @@
 				gl.uniform1f(uniforms.sat, params.sat);
 				gl.uniform1f(uniforms.dim, params.dim);
 				gl.uniform1f(uniforms.flow, params.flow);
+				gl.uniform1f(uniforms.beat, onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0);
 				// Ripple only while the pointer is actually moving: a parked cursor
 				// skips the sin/exp pair for the whole screen.
 				gl.uniform1f(uniforms.ripple, performance.now() - lastMouseAt < 2500 ? 1 : 0);

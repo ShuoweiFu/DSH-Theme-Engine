@@ -46,6 +46,11 @@ export function mimeOf(data, file) {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif';
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WAVE') return 'audio/wav';
+  if (bytes.length >= 4 && bytes.toString('ascii', 0, 4) === 'OggS') return 'audio/ogg';
+  if (bytes.length >= 4 && bytes.toString('ascii', 0, 4) === 'fLaC') return 'audio/flac';
+  if (bytes.length >= 3 && bytes.toString('ascii', 0, 3) === 'ID3') return 'audio/mpeg';
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return 'audio/mpeg';
   if (bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp') {
     const brand = bytes.toString('ascii', 8, 12);
     // HEIC/HEIF stills are common Wallpaper Engine poster frames; without this
@@ -60,8 +65,15 @@ export function mimeOf(data, file) {
   if (lower.endsWith('.gif')) return 'image/gif';
   if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heic';
   if (lower.endsWith('.avif')) return 'image/avif';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.flac')) return 'audio/flac';
+  if (lower.endsWith('.ogg') || lower.endsWith('.oga') || lower.endsWith('.opus')) return 'audio/ogg';
+  if (lower.endsWith('.m4a') || lower.endsWith('.aac')) return 'audio/mp4';
   if (lower.endsWith('.mp4')) return 'video/mp4';
   if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.mkv')) return 'video/x-matroska';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
   return 'image/jpeg';
 }
 

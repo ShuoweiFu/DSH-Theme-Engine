@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.170813";
+		const CLIENT_BUILD = "v.26.11.21.171400";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -190,6 +190,8 @@
 			moduleElysiaHint: "已检测到，可接管其设置",
 			moduleIsland: "灵动岛",
 			moduleIslandHint: "独立模块，可与其他模块同时开启",
+			wallpaperGlassHint: "背景模糊、饱和度、玻璃着色、霜面浓度、压暗与液态流动属于玻璃层参数，壁纸引擎与液态玻璃共用同一层玻璃，统一在「液态玻璃背景」里调整。",
+			wallpaperGlassJump: "去调整玻璃外观",
 			moduleIslandNote: "灵动岛是叠加层，功能施工中；开启后不会替换当前背景模块。",
 			modulePlugin: "插件管理",
 			modulePluginHint: "本插件的版本、更新与运行状态。",
@@ -412,6 +414,8 @@
 			moduleElysiaHint: "Detected here; can take over its settings",
 			moduleIsland: "Dynamic Island",
 			moduleIslandHint: "Independent module, runs with any other module",
+			wallpaperGlassHint: "Blur, saturation, tint, frost, dim and flow belong to the glass layer. Wallpaper Engine and Liquid Glass share the same layer, so they are tuned under \"Liquid Glass\".",
+			wallpaperGlassJump: "Tune glass appearance",
 			moduleIslandNote: "Dynamic Island is an overlay and still under construction; it never replaces the active background module.",
 			modulePlugin: "Plugin manager",
 			modulePluginHint: "Version, updates and runtime status for this plugin.",
@@ -5829,7 +5833,25 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									)
 								)
 							: null,
-						tabValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
+						tabValue === "wallpaper"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("look")),
+										h("p", { className: "lg-group-hint" }, t("wallpaperGlassHint")),
+										h(
+											"div",
+											{ className: "lg-actions" },
+											h("button", { type: "button", className: "lg-button", onClick: () => chooseTab("glass") }, t("wallpaperGlassJump"))
+										)
+									),
+									h(WallpaperCenter, { key: "we" }),
+									h(AudioPanel, { key: "audio" })
+								)
+							: null,
 						tabValue === "elysia"
 							? h(
 									"div",

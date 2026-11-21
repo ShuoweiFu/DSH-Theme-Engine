@@ -1207,7 +1207,25 @@
 									)
 								)
 							: null,
-						tabValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
+						tabValue === "wallpaper"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("look")),
+										h("p", { className: "lg-group-hint" }, t("wallpaperGlassHint")),
+										h(
+											"div",
+											{ className: "lg-actions" },
+											h("button", { type: "button", className: "lg-button", onClick: () => chooseTab("glass") }, t("wallpaperGlassJump"))
+										)
+									),
+									h(WallpaperCenter, { key: "we" }),
+									h(AudioPanel, { key: "audio" })
+								)
+							: null,
 						tabValue === "elysia"
 							? h(
 									"div",

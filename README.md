@@ -4,227 +4,198 @@
 
 # DSH Theme Engine
 
-**一个总插件，三种背景模块：液态玻璃、壁纸引擎、elysia395 兼容。**
+**桌面在玻璃后面，壁纸归你管。**
 
 [![version](https://img.shields.io/github/v/tag/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=version&color=8fd6a0)](https://github.com/ShuoweiFu/DSH-Theme-Engine/tags)
 [![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-5a544a?style=flat-square)](#兼容与限制)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](#已知边界)
 [![stars](https://img.shields.io/github/stars/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=stars&color=ffd84a)](https://github.com/ShuoweiFu/DSH-Theme-Engine/stargazers)
+
+当前版本 **v.26.11.21.175000** · Apache-2.0 · 只跑在 Windows 上的 DSH 桌面版
 
 </div>
 
-![DSH Theme Engine 界面效果](docs/screenshot.png)
-
-<p align="center"><sub>真实界面截图：壁纸、液态玻璃、设置页与输入框磨砂同步生效。</sub></p>
+![界面](docs/screenshot.png)
 
 ---
 
-## 简介
+## 它解决什么问题
 
-DSH Theme Engine 是 DeepSeek Harness 的主题引擎。它把本机桌面（或 Wallpaper Engine 正在播放的壁纸）实时同步到 DSH 窗口背后，再让面板、侧边栏、输入框和文字像悬空在玻璃上。
+DSH 的界面是方的、不透明的、和桌面无关。这个插件做三件事：
 
-总插件下挂三种可切换的背景模块：**液态玻璃背景**（内置）、**壁纸引擎**（读取本机 Steam / Wallpaper Engine 壁纸库，属性面板对齐 WE 本体）和 **elysia395 壁纸引擎兼容**（检测到 elysia395 插件后才出现）。三者互斥，同一时间只有一个在提供背景；**灵动岛**是独立叠加层，可以和任意背景模块同时开启。
+1. **把背景换掉** —— 桌面实时捕获，或者你指定的图片 / 视频 / gif，或者 Wallpaper Engine 正在播的那张。
+2. **让界面浮起来** —— 面板、侧边栏、输入框都变成同一块玻璃：GPU shader 做的大半径模糊、按背景亮度自动定文字黑白、光标取文字的反色。
+3. **让你能管壁纸** —— 一个对着 Wallpaper Engine 属性栏做的中枢：库、搜索、类型筛选、对齐方式、位置、翻转、倍速、音量、预设导入导出。
 
-模糊由 GPU **Shader** 完成：WebGL / WebGPU 双后端共用同一套 **13-tap 泊松核高斯**，多次 ping-pong 覆盖大半径。没有纯 CSS 渲染模式，也不会用 CSS `filter` 冒充磨砂。
+插件不注册 agent 工具、不往提示里塞字，**不花你一个 token**。
 
-插件不向 agent 注册工具、不注入提示文本，**不增加模型 token 开销**。
+## 三种背景，同一时间只开一种
 
-当前版本 **v.26.11.21.175000**。
+| 模块 | 背景从哪来 | 什么时候出现 |
+| --- | --- | --- |
+| 液态玻璃背景 | 本机桌面捕获，或你指的文件 / URL | 一直有（内置） |
+| 壁纸引擎 | 你本机 Steam 里的 Wallpaper Engine 库；场景 / 网页交给 WE 播放后捕获 | 一直有；没装 WE 时是简化形态 |
+| elysia395 兼容 | [elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine) | 检测到那个插件才出现 |
 
-## 生态兼容
+三者互斥——同一时刻只有一块玻璃在供背景。**灵动岛**不属于它们，是独立叠加层，开哪个背景都能开。
 
-- **Wallpaper Engine**（Steam AppID `431960`）：读取 `libraryfolders.vdf`、`workshop/431960/*/project.json` 与 WE 的 `config.json`，识别视频 / 场景 / 网页三类项目；场景与网页壁纸通过 `wallpaper64.exe -control openWallpaper` 让 WE 本体真正切换，再走实时桌面捕获进玻璃。
-- **elysia395 / dsh-wallpaper-engine**：本插件的第三种背景模块就是为它预留的兼容位，项目地址 **[https://github.com/elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**。装了它就会在设置页多出「elysia395 兼容」分支，两者可以共存，但同一时间只有一个模块在提供背景。
+## 三十秒上手
 
-> **本机有没有 Wallpaper Engine，是两套完全不同的界面。** 检测不到 WE 时，壁纸中枢不渲染库网格、搜索、类型筛选和「打开 WE / Steam」按钮，只留状态说明、Steam 商店入口、属性面板与本地文件选择——不会给你一堆点了没反应的按钮。
-
-## 主要能力
-
-- **壁纸中枢（类 Wallpaper Engine）**：库网格（视频 / 场景 / 网页，缩略图、搜索、类型筛选）+ 属性面板 + 预设。属性面板与 WE 本体一一对应：**对齐方式**（覆盖 / 适应 / 拉伸 / 逐像素）、**位置 X/Y**、**翻转 X/Y**、**播放速度**（0.25–2.00×）、**音量**、**静音**、恢复默认；预设支持命名保存、加载、删除、导出 JSON 与粘贴导入（最多 24 条）。视频壁纸直接作背景，场景 / 网页壁纸交给 WE 播放后再捕获。
-- **循环黑帧守卫**：视频循环回到 0:00 时常会解出一帧近黑，直接在 110 ms 定时器里上传就是"黑屏卡一下"。插件复用墨色检测里的 `isBlackSwap`——亮帧之后紧跟近黑才拒帧，最多连拒 2 帧就放行，暗色壁纸与真正的淡出不受影响。
-- **壁纸与捕获**：`Windows.Graphics.Capture` 常驻流，默认 8 fps，只在画面真的变化时编码推帧；桌面静止时零编码、零重绘。支持 WE 的 Scene / Video 壁纸、静态图片、本机视频与 gif / apng 动态图。
-- **遮挡窗口合成**：DSH 下面压着的浏览器、编辑器、播放器按屏幕坐标裁剪后贴回玻璃背后，不用把窗口挪开；圆角与透明区按预乘 alpha 合成，不贴黑边。
-- **Shader 模糊**：WebGL 端 1–4 次 ping-pong 的 13-tap 高斯；WebGPU 端独立 WGSL 模糊前置通道。`背景模糊` 拉满时是大半径平滑过渡，不是截断的 CSS blur。
-- **活体动态壁纸**：本机视频与 gif / apng 按 ~9 fps 逐帧上传纹理（`texSubImage2D` / `copyExternalImageToTexture`），玻璃后的画面一直在动；页面隐藏或暂停时立即停帧，不空耗 GPU。
-- **外观按模块分开**：每个背景模块各存一份外观参数（模糊、饱和度、液态流动、颜色模式、自定义颜色、自动深浅、墨色）与各自的四象模式桶，切换模块不会互相覆盖；壁纸引擎还可以单独关闭「启用液态玻璃」，只显示原始壁纸。
-- **四象外观模式**：自动 / 浅色 / 深色 / 自定义颜色 / 智能取色。智能取色从后方壁纸（图片、视频或实时桌面捕获）取主色给玻璃上色，并按亮度阈值自动切浅/深；切模式带 240 ms 过渡，手动调参时动画立即让位。
-- **声临其境**：本地音频播放列表（mp3 / flac / wav / ogg / m4a / aac / opus，0.25–2.0 倍速，音量可调）；也可捕获系统正在播放的声音（只做分析，不二次播放）。音频能量实时喂给 Shader，低音落下时液面起伏、高光呼吸。
-- **自适应文字**：按背景亮度在黑白字之间切换（WCAG 7:1 目标）；手动指定后不再被自动改写。输入光标取墨色的**反色**，深色字配白光标，浅色字配黑光标。
-- **双后端**：WebGL（兼容最好）/ WebGPU（实验）；WebGPU 不可用时自动回落 WebGL，不弹错、不黑屏。
-- **性能保护**：核显保命 / 独显均衡 / 火神狂暴三档预设；帧时间超预算 → 降分辨率 → 关遮挡合成 → 静态半透明遮罩 → 自动关闭，五层逐级保命。
-- **原生主视图**：侧边栏只多一行「主题引擎」，点开后设置页像原生「插件」页一样整页铺在右侧主工作区；刷新后回到会话。
-
-## 设置页与背景模块
-
-点侧边栏的「主题引擎」进入主工作区整页设置。顶部是五个选项框：
-
-| 选项框 | 内容 |
-| --- | --- |
-| 液态玻璃背景 | 外观参数（壁纸开关、模糊、饱和度、着色、霜面、压暗、流动）+ 四象外观模式 + 渲染与状态 |
-| 壁纸引擎 | 启用液态玻璃开关、同一套外观参数（存在壁纸模块自己的那一份里）、壁纸中枢（库 + 属性面板 + 预设）、声临其境 |
-| elysia395 兼容 | 仅在检测到 [elysia395 壁纸引擎](https://github.com/elysia395/dsh-wallpaper-engine) 后出现；后续会把它的设置接管到这里 |
-| 灵动岛 | 独立叠加层开关，不影响当前背景模块 |
-| 插件管理 | 版本号、GitHub / npm 直达、检查更新（npm / git / GitHub 三渠道）与壁纸状态 |
-
-前三个背景模块互斥：切到壁纸引擎时液态玻璃模块不再提供背景，反之亦然；灵动岛可以单独开。
-
-## 硬件档位
-
-启动时静默读取显卡型号（`WEBGL_debug_renderer_info`，本地读取、不上传），自动套用下表档位。**先看表再开高帧率。**
-
-| 显卡 | 检测特征 | 默认预设 | 引擎 | 帧率 | 动态降分辨率 | 遮挡合成 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Intel Iris Xe / UHD / HD，AMD Radeon / Vega APU，Apple M 系列 | `Intel`, `Iris`, `UHD`, `Radeon Graphics`, `Vega`, `Apple M*` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
-| 未知 / 虚拟机 / 软件渲染 | `SwiftShader`, `llvmpipe`, `Microsoft Basic Render` | 🛡 核显保命档 | WebGL | 30 FPS | ✅ | ✅ |
-| GTX 10 / 16 系、RTX 20 / 30 系、RX 5000–7000、Arc A 系 | `GTX`, `RTX 20/30`, `RX 5xxx–7xxx` | ⚖ 独显均衡档 | WebGL | 60 FPS | ✅ | ✅ |
-| RTX 40 / 50 系、RX 9000 系、Arc B 系、RTX A 系 | `RTX 40xx/50xx`, `RX 9xxx` | 🔥 火神狂暴档 | WebGPU（不可用回落 WebGL） | 144 FPS | ❌ | ✅ |
-
-> 核显强开高帧率的真实结局：i7-12700H + Iris Xe + 10 GB LPDDR5，手动解除帧率限制并关闭动态分辨率，连续渲染 10 分钟后 GPU 96 °C，随后蓝屏。核显没有独立显存，超过 40 FPS 的每一帧只是在发热。插件因此做了三件事：首次启动按显卡套档；手动超上限显示 ⚠；连续 5 秒超预算或 `webglcontextlost` 自动回落安全配置。
-
-## 快速开始
-
-前置：**Windows 10 20348+ / Windows 11**、**DSH 桌面版**。构建客户端只需要 Node.js（无第三方依赖），编译原生助手需要 MSYS2 UCRT64 的 `clang++`。
-
-**安装（GitHub Release 包）**
-
-从 [Releases](https://github.com/ShuoweiFu/DSH-Theme-Engine/releases) 下载最新的 `.tgz`，在 DSH 里安装：
-
-```
-plugin_manager install_bundle target="<下载的 tgz 路径>"
-```
-
-**安装（源码）**
+前提：Windows 10 20348+ / Windows 11、DSH 桌面版。
 
 ```powershell
+# 装：Release 包
+plugin_manager install_bundle target="<下载的 .tgz>"
+
+# 装：源码
 git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
-```
-
-在 DSH 里把 clone 出来的目录装成 bundle：
-
-```
 plugin_manager install_bundle target="<clone 出来的绝对路径>"
 ```
 
-刷新页面，侧边栏会出现一行 **主题引擎**。点它，设置页进入右侧主工作区。
+刷新页面 → 侧边栏多一行 **主题引擎** → 点开，设置页整页铺在右侧主工作区。
 
-**构建**
+改 `client/` 只需 Ctrl+R；改 `index.js` 或 `host/` 必须重启 DSH，否则新路由不存在。
 
-```powershell
-pnpm build:client    # client/src/*.js → client/client.js
-pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅维护者需要）
+## 壁纸中枢：照着 Wallpaper Engine 做的
+
+壁纸引擎分支从上到下就是一条流水线：**开关 → 库 → 属性 → 预设 → 本地文件**。
+
+### 库
+
+扫描 Steam 的 `libraryfolders.vdf`，再读 `steamapps/workshop/431960/*/project.json` 与 WE 自己的 `config.json`，把视频 / 场景 / 网页三类项目列成缩略图网格，带搜索框和类型筛选。每条都标了类型；场景与网页项目多一枚金色 `WE` 角标，因为它们的画面只能由 WE 本体渲染。
+
+### 属性
+
+和 WE 右侧属性栏一一对应，改完立刻作用到当前壁纸：
+
+| 项 | 取值 | 作用 |
+| --- | --- | --- |
+| 对齐方式 | 覆盖 / 适应 / 拉伸 / 逐像素 | 壁纸铺满屏幕的方式；逐像素只放大不插值，适合像素画 |
+| 位置 X / Y | 0–100 | 任意对齐方式下都能平移，50/50 为居中 |
+| 翻转 X / Y | 开 / 关 | 水平、垂直镜像 |
+| 播放速度 | 0.25–2.00× | 视频壁纸与动态图的播放倍率 |
+| 音量 | 0–1 | 壁纸自带音轨 |
+| 静音 | 开 / 关 | 只切 `muted`，不重新加载视频，所以不会闪一下 |
+| 恢复默认 | — | 一次把上面全部拉回初始值 |
+
+对齐、位置、翻转由片元着色器里的 `uFit` / `uPan` / `uFlip` 直接算 UV，不经过 CSS，所以和玻璃模糊是同一趟采样，不额外开一条渲染链路。
+
+### 预设
+
+命名保存当前这一组参数，支持加载、删除、导出成 JSON、把 JSON 粘回来导入，最多 24 条。预设只存壁纸参数，不存壁纸本身——换机器照样能用，只要把参数带上。
+
+### 没装 Wallpaper Engine 的样子
+
+这是刻意的：**检测不到 WE 就换一套界面**。库网格、搜索、类型筛选、「打开 WE」「Steam 商店」按钮全部不渲染，只留
+
+- 一行状态说明（未检测到 WE）
+- Steam 商店入口（想装的时候点）
+- 完整的属性面板（本地视频和图片同样吃对齐、位置、翻转、倍速）
+- 本地文件选择器
+
+不会出现一排点了没反应的按钮。
+
+### 场景 / 网页壁纸怎么切
+
+这两类自己渲染不了，插件会调
+
+```
+wallpaper64.exe -control openWallpaper -file <project.json>
 ```
 
-- `build:client` 只需要 Node.js；产物已随仓库提交，改 UI 后跑它即可。
-- `build:capture` 需要 `clang++`，可用环境变量 `LG_CLANG` 指定；普通用户无需编译，`bin/lg-capture.exe` 已随仓库打包。
+让 WE 本体换壁纸，`invalidate()` 清缓存后等 1200 ms 再复核一次 WE 状态，然后照常从桌面捕获进玻璃。返回 `{ ok, switched, id, title, type, file }`，界面按结果给提示。
 
-## 使用
+## 「循环播放黑一下」是怎么没的
 
-1. 点击侧边栏 **主题引擎**，设置页整页渲染在右侧主工作区。
-2. 顶部选背景模块：液态玻璃背景 / 壁纸引擎（检测到 elysia395 时还会多一个兼容分支）。
-3. 在当前分支调外观参数与四象模式；两个背景模块各存一份，切回来还在。
-4. 壁纸引擎分支里：上方是库（搜索、类型筛选、缩略图），下方是属性面板与预设；点视频卡片立刻生效，点场景 / 网页卡片会请 WE 本体切换壁纸。
-5. 关闭「启用液态玻璃」则只显示原始壁纸。
-6. 所有修改即时生效并保存；刷新或重启后回到会话页面，设置不丢。
+视频循环回到 0:00 时，解码器常会先吐一帧近黑再继续。插件用 110 ms 的定时器把当前帧 `texSubImage2D` 上传纹理——只要那一帧是黑的，玻璃后面就会黑一下。
 
-> 改完宿主侧代码（`index.js`、`host/`）需要重启 DSH 才能加载新路由；只改 `client/` 时按 Ctrl+R 刷新客户端即可。
+修法不是"见到黑就丢"（那会把夜景壁纸和真正的淡出一起吃掉），而是复用墨色检测里已有的 `isBlackSwap`：
 
-## 设置项
+- 只有在**上一帧是亮的**、这一帧突然低于黑度阈值时才拒
+- 最多连拒 2 帧，第 3 帧无论多黑都放行，避免卡死在黑帧上
+- 暗色壁纸本来就一直暗，永远不会命中这条规则
 
-| 分组 | 项 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| 背景模块 | 背景模块 | 液态玻璃背景 | 液态玻璃背景 / 壁纸引擎 / elysia395 兼容；互斥 |
-| 背景模块 | 灵动岛 | 关 | 独立叠加层，不参与互斥 |
-| 外观（按模块各存一份） | 背景模糊 | 10 px | 0 px = 像素级清晰；半径由 shader 的 13-tap 多 pass 完成 |
-| 外观（按模块各存一份） | 饱和度 | 1.4 | 玻璃层的色彩浓度 |
-| 外观（按模块各存一份） | 玻璃着色 | 55% | 只调色温与霜白偏向，不决定厚度 |
-| 外观（按模块各存一份） | 霜面浓度 | 34% | 唯一控制面板厚度的滑条：0% = 裸玻璃，100% = 最厚白霜 |
-| 外观（按模块各存一份） | 文字颜色 | 自动 | 按背景亮度在黑白字间切换（WCAG 7:1）；手动选择后不再改写 |
-| 外观（按模块各存一份） | 颜色模式 | 自动 | 浅色 / 深色 / 自定义 / 智能取色 / 自动；五种模式各存一份参数 |
-| 外观（按模块各存一份） | 自定义颜色 | #8ab4ff | 「自定义」档的玻璃基色 |
-| 外观（按模块各存一份） | 按壁纸自动深浅 | 开 | 「自动」与「智能取色」下按背景亮度切浅/深 |
-| 外观（按模块各存一份） | 壁纸压暗 | 8% | 只在壁纸很亮时压一点，避免文字发飘 |
-| 外观（按模块各存一份） | 液态流动 | 0.9 | 0 时进入按需渲染，鼠标静止即挂起 |
-| 壁纸引擎 | 启用液态玻璃 | 开 | 关掉后只显示原始壁纸，不叠加玻璃层 |
-| 壁纸引擎 | WE 壁纸库 | 自动读取 | 扫描 Steam `libraryfolders.vdf` 与 `workshop/431960/*/project.json`；视频壁纸直接作背景 |
-| 壁纸引擎 | 对齐方式 | 覆盖 | 覆盖 / 适应 / 拉伸 / 逐像素（与 WE 属性栏一致） |
-| 壁纸引擎 | 位置 X/Y | 50 / 50 | 0–100，配合任意对齐方式做偏移 |
-| 壁纸引擎 | 翻转 X/Y | 关 | 水平 / 垂直镜像 |
-| 壁纸引擎 | 播放速度 | 1.00× | 0.25–2.00×，立即作用于当前视频 |
-| 壁纸引擎 | 音量 / 静音 | 0 / 开 | 壁纸自带音轨；静音不重新加载视频 |
-| 壁纸引擎 | 预设 | — | 命名保存 / 加载 / 删除 / 导出 JSON / 粘贴导入，最多 24 条 |
-| 壁纸引擎 | 本机文件 | — | 图片 / 视频 / gif / apng；视频与动态图走 Range 流式读取，并按 110 ms 拷帧保持流动 |
-| 声临其境 | 播放列表 | — | 本机音频文件顺序循环；支持 0.25–2.0 倍速与音量 |
-| 声临其境 | 系统音频 | — | 需浏览器授权共享音频；只做律动分析，不二次播放 |
-| 性能 | 智能预设 | 自动（跟随显卡） | 核显保命 / 独显均衡 / 火神狂暴 |
-| 性能 | 渲染引擎 | WebGL | WebGL（推荐）/ WebGPU（实验） |
-| 性能 | 最大帧率 | 按档位 30 / 60 / 144 | 无限制只在高端独显上可选 |
-| 性能 | 自动降分辨率 | 开 | 帧时间超预算 → 1.0 → 0.8 → 0.65 → 0.5 |
-| 性能 | 合成被遮挡的窗口 | 按档位 | 关掉可省每次截图 0.02–0.06 s |
-| 性能 | 壁纸刷新 | 自动 | 常驻捕获流（默认 8 fps）：变化才编码；页面 0.22 s 一次 digest 检查；换图交叉淡入 420 ms |
+WebGL 与 WebGPU 两条上传路径都加了这道闸。
 
-## 性能基线
+## 玻璃本身
 
-| 项目 | 数值（i7-12700H / Iris Xe / 2520×1680@150%） |
+- **模糊**：13-tap 泊松核高斯。WebGL 端 1–4 次 ping-pong 把半径堆到最大；WebGPU 端是独立 WGSL 前置通道。`背景模糊` 拉满时是平滑的大半径过渡，不是被截断的 CSS blur。
+- **遮挡窗口**：DSH 下面压着的浏览器、编辑器、播放器按屏幕坐标裁出来贴回玻璃背后，圆角与透明区按预乘 alpha 合成，不贴黑边。截图一次 0.02–0.06 s，可关。
+- **文字**：按背景亮度在黑白之间切换，目标对比度 WCAG 7:1。手动选了颜色之后就不再自动改写。
+- **光标**：取墨色的**反色**——深色字配白光标，浅色字配黑光标。CSS 只有 `caret-color` 可调，所以这是能做到的最稳妥方案。
+- **五种颜色模式**：自动 / 浅色 / 深色 / 自定义 / 智能取色。智能取色从后方画面取主色染玻璃，按亮度阈值切深浅；切模式有 240 ms 过渡，你一拖滑块动画立刻让位。
+- **按模块分开存**：每个背景模块各有自己的一份外观参数，每种颜色模式再各存一份，切来切去谁也不覆盖谁。
+
+## 性能：先看档位，再开帧率
+
+启动时静默读一次显卡字符串（`WEBGL_debug_renderer_info`，本地读、不上传），套用下表。
+
+| 显卡 | 默认档 | 后端 | 帧率 | 动态降分辨率 |
+| --- | --- | --- | --- | --- |
+| Intel Iris Xe / UHD / HD、AMD Radeon / Vega APU、Apple M 系 | 🛡 核显保命 | WebGL | 30 | ✅ |
+| 未知 / 虚拟机 / 软件渲染（SwiftShader、llvmpipe） | 🛡 核显保命 | WebGL | 30 | ✅ |
+| GTX 10 / 16、RTX 20 / 30、RX 5000–7000、Arc A | ⚖ 独显均衡 | WebGL | 60 | ✅ |
+| RTX 40 / 50、RX 9000、Arc B、RTX A | 🔥 火神狂暴 | WebGPU（回落 WebGL） | 144 | ❌ |
+
+> 实测过的反面教材：i7-12700H + Iris Xe + 10 GB LPDDR5，解除帧率限制并关掉动态分辨率，连续 10 分钟后 GPU 96 °C，蓝屏。核显没有独立显存，超过 40 FPS 的每一帧只是在发热。
+
+所以有五层保命：帧时间超预算 → 降分辨率（1.0 → 0.8 → 0.65 → 0.5）→ 关遮挡合成 → 静态半透明遮罩 → 自动关闭；连续 5 秒超预算或 `webglcontextlost` 直接回落安全档。
+
+| 基线（i7-12700H / Iris Xe / 2520×1680@150%） | 数值 |
 | --- | --- |
-| 单帧渲染（1680×1119，scale 1.0） | **16.9 ms** |
-| 单帧渲染（1344×895，scale 0.8，默认档） | **≈10–11 ms** |
-| 插件显存增量 | **20–25 MB**（纹理 6.8 MB + 模糊缓冲 1.7 MB + 后备缓冲） |
-| 常驻 GPU 显存（A/B 对比） | 开 286 MB / 关 275 MB |
-| 捕获流一帧（WGC 读回 + 合成 + JPEG） | **≈32 ms 均值**（15–60 ms），8 fps 上限 |
-| 桌面合成一次（冷路径 / 一次性进程） | 78–125 ms；关掉遮挡合成 60–75 ms |
-| 端到端响应（窗口在 DSH 下变化 → 玻璃更新） | **≈0.25–0.4 s**（流式）；桌面静止时零编码、零重绘 |
+| 单帧渲染 1680×1119（scale 1.0） | 16.9 ms |
+| 单帧渲染 1344×895（scale 0.8，默认） | ≈10–11 ms |
+| 插件显存增量 | 20–25 MB |
+| 捕获一帧（WGC + 合成 + JPEG） | ≈32 ms 均值（8 fps 上限） |
+| 桌面静止时 | 零编码、零重绘 |
 
-## 兼容与限制
+## 设置项速查
 
-- 只支持主显示器；多屏时其它屏幕不会被映射。
-- 被遮挡的 UWP / DRM / 已最小化窗口可能抓到空表面：跳过不贴黑，`apps` 里仍列出。
-- 显卡彻底崩溃时只剩一层静态半透明遮罩（没有折射与流动）；10 分钟内第二次崩溃会自动关闭插件。
-- 非 Windows 平台暂不支持「被遮挡窗口合成」，只能同步静态壁纸文件。
-- 无边框捕获（`IGraphicsCaptureSession3`）需要 Windows 11 / 10 20348+；更老系统上系统黄框会回来，背景照常刷新。
-- 窗口最小化 / 完全不可见时 Chromium 会停掉渲染循环，这是浏览器行为，也是省电设计。
-- WE 的场景 / 网页壁纸切换依赖 WE 本体（`wallpaper64.exe -control openWallpaper`），WE 未安装或未运行时这两个类型只做提示；未装 WE 时属性面板与本地文件仍然可用。
-- 播放速度 / 音量只作用于 HTML `<video>` 类型的壁纸与动态图；场景壁纸的播放参数请在 WE 本体里调。
-- elysia395 兼容分支目前是占位：检测到 elysia395 插件后才会出现，设置接管与迁移仍在施工。
+**外观**（每个模块各一份）：背景模糊 10 px、饱和度 1.4、玻璃着色 55%、霜面浓度 34%（唯一控制厚度的滑条）、壁纸压暗 8%、液态流动 0.9（0 = 按需渲染）、文字颜色自动、颜色模式自动、自定义颜色 `#8ab4ff`、按壁纸自动深浅开。
 
-## 开发与贡献
+**壁纸**：启用液态玻璃开、WE 库自动读取、对齐覆盖、位置 50/50、翻转关、速度 1.00×、音量 0、静音开、预设最多 24 条、本地文件支持图片 / 视频 / gif / apng。
 
-欢迎提交 Bug 复现、兼容反馈、文档修正和功能 PR。反馈时请附宿主 / 插件版本、操作系统、显卡型号、复现步骤与脱敏日志。
+**声音**：本机播放列表（mp3 / flac / wav / ogg / m4a / aac / opus，0.25–2.0×，音量可调），或系统音频（需授权，**只做分析，不二次播放**）。能量实时喂给 shader，低音落下时液面起伏。
 
-- [实现细节](docs/DETAIL.md)：合成原理、屏幕空间映射、五层保护、着色器参数、模块数据形状。
-- 构建：`node scripts/build-client.mjs`、`node scripts/build-capture.mjs`。
+**性能**：智能预设跟随显卡、后端 WebGL / WebGPU、最大帧率按档 30 / 60 / 144、自动降分辨率开、遮挡合成按档、壁纸刷新自动（8 fps 流 + 0.22 s digest + 420 ms 交叉淡入）。
 
-## 致谢
+## 已知边界
 
-- **Wallpaper Engine**（Steam AppID `431960`）：属性面板的交互与参数语义参照 WE 本体。
-- **[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**：第三种背景模块的兼容目标。
-- 以及所有提交过 issue / PR 的贡献者 ❤️
+- 只映射主显示器。
+- 被遮挡的 UWP / DRM / 最小化窗口可能是空表面：跳过不贴黑，但 `apps` 里仍会列出。
+- 无边框捕获要 Windows 11 / 10 20348+；更老系统上系统黄框会回来，背景照常刷新。
+- 窗口最小化时 Chromium 会停渲染循环，这是浏览器行为，也顺带省电。
+- 场景 / 网页壁纸的切换依赖 WE 本体；WE 没装或没运行时这两类只给提示。
+- 倍速 / 音量只作用于 `<video>` 类壁纸与动态图；场景壁纸的播放参数得进 WE 调。
+- 非 Windows 平台没有遮挡合成，只能同步静态壁纸文件。
+- elysia395 分支目前是占位：检测到就出现，接管与迁移还在做。
 
-<a href="https://github.com/ShuoweiFu/DSH-Theme-Engine/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ShuoweiFu/DSH-Theme-Engine" alt="Contributors">
-</a>
+## 生态
 
-<a href="https://star-history.com/#ShuoweiFu/DSH-Theme-Engine&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date" alt="Star History" width="720">
-  </picture>
-</a>
+- **Wallpaper Engine**（Steam AppID `431960`）：库扫描、项目类型判断、属性语义都照它来；场景 / 网页靠它播放。
+- **[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**：第三种背景模块的兼容目标。装了两个可以共存，但同一时间只有一个在供背景。
 
-## 仓库结构
+## 开发
+
+```powershell
+pnpm build:client    # client/src/*.js → client/client.js（只要 Node.js，无第三方依赖）
+pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（要 clang++，可用 LG_CLANG 指定）
+```
 
 | 路径 | 作用 |
 | --- | --- |
-| `index.js` | 宿主插件入口：`/liquid-glass/*` 本地路由（含 `/we/open`）、捕获调度、模块状态与更新检查 |
-| `host/` | 宿主能力：壁纸识别、WE 桥（扫描 / 预览 / 切换）、常驻捕获助手、PowerShell 回退、运行封装、更新检查 |
-| `client/src/` | 前端源码，`01` → `14` 按序拼接（13 = 壁纸中枢/外观模式，14 = 音频矩阵） |
+| `index.js` | 宿主入口：`/liquid-glass/*` 路由（含 `/we/open`）、捕获调度、模块状态、更新检查 |
+| `host/` | 壁纸识别、WE 桥（扫描 / 预览 / 切换）、常驻捕获助手、PowerShell 回退、更新检查 |
+| `client/src/` | 前端源码，`01` → `14` 顺序拼接（13 = 壁纸中枢与颜色模式，14 = 音频矩阵） |
 | `client/client.js` | 构建产物，DSH 通过 `exports["./client"]` 加载 |
-| `tools/capture/lg-capture.cpp` | 原生捕获/合成助手（WGC + GDI+） |
+| `tools/capture/lg-capture.cpp` | 原生捕获 / 合成助手（WGC + GDI+） |
 | `bin/lg-capture.exe` | 预编译助手，随插件分发 |
-| `docs/` | 实现细节与截图 |
-| `scripts/` | 两个构建脚本 |
+| `docs/DETAIL.md` | 合成原理、屏幕空间映射、五层保命、着色器参数、模块数据形状 |
 
-## License
+提 issue 请带上宿主 / 插件版本、系统、显卡、复现步骤和脱敏日志。
+
+## 许可
 
 [Apache License 2.0](LICENSE) © DSH Theme Engine contributors
 
-本项目基于 Apache License 2.0 发布：允许商用、修改、再分发，需保留版权与许可声明；详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+允许商用、修改、再分发，需保留版权与许可声明；详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。

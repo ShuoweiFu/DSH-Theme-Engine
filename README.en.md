@@ -4,227 +4,198 @@
 
 # DSH Theme Engine
 
-**One plugin, three background modules: liquid glass, Wallpaper Engine, elysia395 compatible.**
+**Your desktop sits behind glass. Your wallpapers obey you.**
 
 [![version](https://img.shields.io/github/v/tag/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=version&color=8fd6a0)](https://github.com/ShuoweiFu/DSH-Theme-Engine/tags)
 [![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-5a544a?style=flat-square)](#compatibility-and-limitations)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](#known-edges)
 [![stars](https://img.shields.io/github/stars/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=stars&color=ffd84a)](https://github.com/ShuoweiFu/DSH-Theme-Engine/stargazers)
+
+Version **v.26.11.21.175000** · Apache-2.0 · DSH Desktop on Windows only
 
 </div>
 
-![DSH Theme Engine](docs/screenshot.png)
-
-<p align="center"><sub>A real screenshot: wallpaper, liquid glass, settings page and frost all live at once.</sub></p>
+![Interface](docs/screenshot.png)
 
 ---
 
-## What it is
+## What problem this solves
 
-DSH Theme Engine is the theme engine for DeepSeek Harness. It mirrors your desktop — or whatever Wallpaper Engine is currently playing — behind the DSH window, then makes panels, the sidebar, the composer and text float on glass.
+DSH is square, opaque and unrelated to your desktop. This plugin does three things:
 
-Three switchable background modules ship in one plugin: **liquid glass** (built in), **wallpaper engine** (reads your local Steam / Wallpaper Engine library, with a property sheet modelled on WE itself), and **elysia395 compatible** (appears only when the elysia395 plugin is detected). They are mutually exclusive: exactly one provides the background. The **island** is a separate overlay and can stay on with any of them.
+1. **Replaces the background** — a live desktop capture, a picture / video / gif you point at, or whatever Wallpaper Engine is playing right now.
+2. **Lifts the interface off it** — panels, sidebar and composer all become the same sheet of glass: wide-radius blur on the GPU, text that picks black or white from the background luminance, and a caret that takes the inverse of that ink.
+3. **Hands you the wallpaper controls** — a centre built against Wallpaper Engine's own property panel: library, search, type filters, alignment, position, flip, speed, volume, preset import/export.
 
-Blur is done on the GPU: both WebGL and WebGPU backends share the same **13-tap Poisson-kernel Gaussian**, ping-ponged to reach large radii. There is no CSS-only mode and no `filter` pretending to be frosted glass.
+The plugin registers no agent tools and injects no prompt text, so it **costs you zero tokens**.
 
-The plugin registers no agent tools and injects no prompt text, so it **adds no model token cost**.
+## Three backgrounds, one at a time
 
-Current version **v.26.11.21.175000**.
+| Module | Where the background comes from | When it exists |
+| --- | --- | --- |
+| Liquid glass | Live desktop capture, or a file / URL you pick | Always (built in) |
+| Wallpaper engine | Your local Steam / Wallpaper Engine library; scene and web projects are played by WE, then captured | Always; a reduced shape when WE is missing |
+| elysia395 compatible | [elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine) | Only when that plugin is detected |
 
-## Ecosystem
+They are mutually exclusive: one sheet of glass supplies the background at any moment. The **island** is not one of them — it is an independent overlay and can be on with any module.
 
-- **Wallpaper Engine** (Steam AppID `431960`): reads `libraryfolders.vdf`, `workshop/431960/*/project.json` and WE's own `config.json`, and understands video / scene / web projects. Scene and web wallpapers are switched by asking WE itself (`wallpaper64.exe -control openWallpaper`), then captured back from the live desktop.
-- **elysia395 / dsh-wallpaper-engine**: the third background module exists for compatibility with it — **[https://github.com/elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**. When that plugin is detected, an "elysia395 compatible" branch appears in settings. Both can be installed; only one module supplies the background at a time.
+## Thirty seconds to running
 
-> **Machines with and without Wallpaper Engine get two different UIs.** When WE is missing, the wallpaper centre renders no library grid, no search, no type filters and no "open WE / Steam" buttons — only a status line, the Steam store link, the property sheet and local-file picking. No dead buttons.
-
-## Highlights
-
-- **Wallpaper centre (Wallpaper-Engine style)**: library grid (video / scene / web, previews, search, type filters), property sheet and presets. The sheet maps one-to-one onto WE's own property panel: **alignment** (cover / contain / stretch / pixel), **position X/Y**, **flip X/Y**, **playback speed** (0.25–2.00×), **volume**, **mute**, and reset to defaults. Presets can be named, saved, loaded, deleted, exported as JSON and pasted back in (up to 24). Video wallpapers are pinned directly; scene and web wallpapers are handed to WE and then captured.
-- **Loop black-frame guard**: when a video loops back to 0:00 it often decodes a near-black frame, and uploading it on the 110 ms timer is exactly the "black flash" you see. The plugin reuses `isBlackSwap` from the ink detector: a near-black frame is rejected only right after a bright one, and never more than twice in a row — so dark wallpapers and genuine fades are untouched.
-- **Wallpaper & capture**: a persistent `Windows.Graphics.Capture` stream at 8 fps that only encodes when the screen actually changes — zero encoding, zero repaint when the desktop is still. Supports WE scene / video wallpapers, static images, local videos and gif / apng animations.
-- **Occluded-window compositing**: browsers, editors and players sitting under DSH are cropped by screen coordinates and pasted back behind the glass, so you never have to move a window. Rounded corners and transparent regions use premultiplied alpha — no black edges.
-- **Shader blur**: 1–4 ping-pong passes of the 13-tap Gaussian on WebGL; a separate WGSL premultiplied blur pass on WebGPU. At maximum `blur` it is a wide, smooth falloff, not a truncated CSS blur.
-- **Live wallpapers**: local video and gif / apng are uploaded frame by frame at ~9 fps (`texSubImage2D` / `copyExternalImageToTexture`), so the scene behind the glass keeps moving. Frame upload stops the moment the page is hidden or paused.
-- **Per-module appearance**: each background module stores its own blur, saturation, flow, colour mode, custom colour, auto light/dark and ink values — plus its own bucket per colour mode — so switching modules never overwrites the other. The wallpaper module can also disable liquid glass and show the raw wallpaper.
-- **Five colour modes**: auto / light / dark / custom / intelligent. Intelligent samples the dominant colour from whatever is behind the glass (image, video or live desktop capture) and flips light/dark by luminance thresholds, with a 240 ms transition that yields immediately to manual edits.
-- **Sound-reactive**: local playlists (mp3 / flac / wav / ogg / m4a / aac / opus, 0.25–2.0× speed, volume) or system audio capture (analysis only, never replayed). Audio energy drives the shader: the surface rises on bass, highlights breathe.
-- **Adaptive ink**: switches between black and white text by background luminance (WCAG 7:1 target), and stops overriding once you pick a colour yourself. The text caret takes the **inverse** of the ink — white caret on dark text, black caret on light text.
-- **Two backends**: WebGL (best compatibility) / WebGPU (experimental), falling back to WebGL silently when WebGPU is unavailable.
-- **Performance guard**: iGPU / balanced / beast presets; frame-time over budget → lower resolution → drop occluded compositing → static translucent mask → disable, five escalating levels.
-- **Native main view**: the sidebar gains one row, "Theme Engine". Clicking it renders the settings page as a full page in the main work area, like the built-in Plugins page.
-
-## Settings page and modules
-
-Click **Theme Engine** in the sidebar. Five tabs sit at the top:
-
-| Tab | Contents |
-| --- | --- |
-| Liquid glass | Appearance (wallpaper toggle, blur, saturation, tint, frost, dim, flow) + colour modes + render/status |
-| Wallpaper engine | Glass toggle, the same appearance block (stored in the wallpaper module's own copy), the wallpaper centre (library + property sheet + presets) and the audio panel |
-| elysia395 compatible | Appears only when [the elysia395 wallpaper engine](https://github.com/elysia395/dsh-wallpaper-engine) is detected; its settings will be absorbed here |
-| Island | Independent overlay switch; never affects the active background module |
-| Plugin manager | Version, GitHub / npm links, update check (npm / git / GitHub) and wallpaper status |
-
-The first three are mutually exclusive; the island can be enabled alongside any of them.
-
-## Hardware tiers
-
-The plugin reads the GPU string silently at startup (`WEBGL_debug_renderer_info`, local only, never uploaded) and applies the tier below. **Read the table before forcing a high frame rate.**
-
-| GPU | Detect hints | Default preset | Backend | FPS | Dynamic resolution | Occlusion compositing |
-| --- | --- | --- | --- | --- | --- | --- |
-| Intel Iris Xe / UHD / HD, AMD Radeon / Vega APU, Apple M series | `Intel`, `Iris`, `UHD`, `Radeon Graphics`, `Vega`, `Apple M*` | 🛡 iGPU safe | WebGL | 30 FPS | ✅ | ✅ |
-| Unknown / VM / software rendering | `SwiftShader`, `llvmpipe`, `Microsoft Basic Render` | 🛡 iGPU safe | WebGL | 30 FPS | ✅ | ✅ |
-| GTX 10 / 16, RTX 20 / 30, RX 5000–7000, Arc A | `GTX`, `RTX 20/30`, `RX 5xxx–7xxx` | ⚖ Balanced | WebGL | 60 FPS | ✅ | ✅ |
-| RTX 40 / 50, RX 9000, Arc B, RTX A | `RTX 40xx/50xx`, `RX 9xxx` | 🔥 Beast | WebGPU (WebGL fallback) | 144 FPS | ❌ | ✅ |
-
-> What forcing high frame rates on an iGPU really does: i7-12700H + Iris Xe + 10 GB LPDDR5, frame cap removed and dynamic resolution disabled, 10 minutes of continuous rendering → GPU at 96 °C, then a blue screen. An iGPU has no dedicated VRAM; every frame above 40 FPS just makes heat. Hence three safeguards: pick a tier from the GPU on first run; warn when you exceed the cap manually; fall back to a safe profile after 5 s over budget or on `webglcontextlost`.
-
-## Quick start
-
-Requires **Windows 10 20348+ / Windows 11** and **DSH Desktop**. Building the client needs only Node.js (no third-party deps); rebuilding the native helper needs `clang++` from MSYS2 UCRT64.
-
-**Install (release bundle)**
-
-Grab the latest `.tgz` from [Releases](https://github.com/ShuoweiFu/DSH-Theme-Engine/releases) and install it inside DSH:
-
-```
-plugin_manager install_bundle target="<path to the downloaded tgz>"
-```
-
-**Install (from source)**
+Requirements: Windows 10 20348+ / Windows 11, DSH Desktop.
 
 ```powershell
+# from a release bundle
+plugin_manager install_bundle target="<downloaded .tgz>"
+
+# from source
 git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
-```
-
-Then install the cloned folder as a bundle:
-
-```
 plugin_manager install_bundle target="<absolute path to the clone>"
 ```
 
-Reload the page: a **Theme Engine** row appears in the sidebar, and its settings page opens in the main work area.
+Reload the page: a **Theme Engine** row appears in the sidebar. Click it and the settings page fills the main work area.
 
-**Build**
+Client-only changes need a Ctrl+R. Changes to `index.js` or `host/` need a DSH restart, otherwise the new routes simply do not exist.
 
-```powershell
-pnpm build:client    # client/src/*.js → client/client.js
-pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe (maintainers only)
+## The wallpaper centre, modelled on Wallpaper Engine
+
+The wallpaper branch is one top-to-bottom pipeline: **switch → library → property sheet → presets → local file**.
+
+### Library
+
+It reads Steam's `libraryfolders.vdf`, then `steamapps/workshop/431960/*/project.json` plus WE's own `config.json`, and lists video / scene / web projects as a preview grid with search and type filters. Type is labelled on every card; scene and web projects also carry a gold `WE` badge, because only WE itself can render them.
+
+### Property sheet
+
+One-to-one with WE's right-hand panel; edits apply to the wallpaper already on screen:
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Alignment | cover / contain / stretch / pixel | How the wallpaper fills the screen; pixel scales without interpolation, for pixel art |
+| Position X / Y | 0–100 | Pans under any alignment; 50/50 is centred |
+| Flip X / Y | on / off | Horizontal and vertical mirror |
+| Playback speed | 0.25–2.00× | Rate for video wallpapers and animations |
+| Volume | 0–1 | The wallpaper's own audio track |
+| Mute | on / off | Toggles `muted` only, so the video is never reloaded and never flashes |
+| Reset | — | Returns every control above to its default in one click |
+
+Alignment, position and flip are computed as UVs inside the fragment shader (`uFit`, `uPan`, `uFlip`), not in CSS — they ride the same sampling pass as the glass blur instead of opening a second render path.
+
+### Presets
+
+Name and save the current parameter set, load, delete, export it as JSON, or paste JSON back in — up to 24. A preset stores numbers, not the wallpaper, so it travels between machines.
+
+### What it looks like without Wallpaper Engine
+
+Deliberately different: **no WE, different UI**. The grid, search, type filters, "open WE" and "Steam store" buttons are not rendered at all. What remains is
+
+- a status line saying WE was not detected
+- the Steam store link, if you want to install it
+- the full property sheet (local video and images honour alignment, position, flip and speed too)
+- the local file picker
+
+Nothing that looks clickable but does nothing.
+
+### How scene and web wallpapers switch
+
+Those two cannot be rendered by the client, so the plugin runs
+
+```
+wallpaper64.exe -control openWallpaper -file <project.json>
 ```
 
-- `build:client` needs only Node.js; the built file is committed, so run it after UI changes.
-- `build:capture` needs `clang++` (override with `LG_CLANG`). Users never need it — `bin/lg-capture.exe` ships prebuilt.
+asks WE to switch, calls `invalidate()` on its cache, waits 1200 ms and re-reads WE state before capturing the desktop again. It returns `{ ok, switched, id, title, type, file }`, and the UI reports the outcome.
 
-## Usage
+## Where the "black flash on loop" went
 
-1. Click **Theme Engine** in the sidebar; settings render as a full page.
-2. Pick a background module at the top (an extra elysia395 branch appears when that plugin is installed).
-3. Tune appearance and colour mode in the active branch; each module keeps its own copy.
-4. In the wallpaper branch: the library sits on top (search, type filters, previews), the property sheet and presets below. Video cards apply instantly; scene / web cards ask WE to switch.
-5. Turn off "liquid glass" to show the raw wallpaper.
-6. Everything applies and saves immediately; reloading or restarting returns you to the session with settings intact.
+When a video loops back to 0:00, the decoder often emits a near-black frame first. The plugin uploads the current frame with `texSubImage2D` on a 110 ms timer — so that one frame blacks out the glass for a moment.
 
-> Host-side changes (`index.js`, `host/`) need a DSH restart to register new routes; client-only changes just need Ctrl+R.
+The fix is not "drop every dark frame" (that would eat night-time wallpapers and genuine fades). It reuses `isBlackSwap` from the ink detector:
 
-## Settings reference
+- reject only when the **previous frame was bright** and this one drops under the black threshold
+- never reject more than two frames in a row; the third uploads no matter how dark, so playback can never get stuck
+- a dark wallpaper is dark throughout and never trips the rule
 
-| Group | Setting | Default | Notes |
-| --- | --- | --- | --- |
-| Modules | Background module | Liquid glass | Liquid glass / Wallpaper engine / elysia395 compatible; mutually exclusive |
-| Modules | Island | Off | Independent overlay, not part of the exclusivity |
-| Appearance (per module) | Blur | 10 px | 0 px = pixel sharp; radius comes from the 13-tap multipass shader |
-| Appearance (per module) | Saturation | 1.4 | Colour density of the glass layer |
-| Appearance (per module) | Tint | 55% | Colour temperature / frost bias only, not thickness |
-| Appearance (per module) | Frost | 34% | The only thickness control: 0% bare glass, 100% thick frost |
-| Appearance (per module) | Ink | Auto | Black/white by luminance (WCAG 7:1); manual choice is never overridden |
-| Appearance (per module) | Colour mode | Auto | Auto / light / dark / custom / intelligent; each keeps its own values |
-| Appearance (per module) | Custom colour | #8ab4ff | Base colour for the custom mode |
-| Appearance (per module) | Auto light/dark | On | Flips light/dark by luminance in auto and intelligent modes |
-| Appearance (per module) | Wallpaper dim | 8% | Slight dim on bright wallpapers only |
-| Appearance (per module) | Flow | 0.9 | 0 switches to render-on-demand, suspended when the mouse rests |
-| Wallpaper | Liquid glass | On | Off shows the raw wallpaper with no glass layer |
-| Wallpaper | WE library | Auto | Scans Steam `libraryfolders.vdf` and `workshop/431960/*/project.json`; video wallpapers apply directly |
-| Wallpaper | Alignment | Cover | Cover / contain / stretch / pixel (matches WE's property panel) |
-| Wallpaper | Position X/Y | 50 / 50 | 0–100 offset for any alignment |
-| Wallpaper | Flip X/Y | Off | Horizontal / vertical mirror |
-| Wallpaper | Playback speed | 1.00× | 0.25–2.00×, applied to the running video immediately |
-| Wallpaper | Volume / mute | 0 / on | Wallpaper audio track; muting does not reload the video |
-| Wallpaper | Presets | — | Name / save / load / delete / export JSON / paste import, up to 24 |
-| Wallpaper | Local file | — | Image / video / gif / apng; video and animation stream over Range and are copied every 110 ms |
-| Sound | Playlist | — | Sequential local audio with 0.25–2.0× speed and volume |
-| Sound | System audio | — | Needs browser capture permission; analysis only, never replayed |
-| Performance | Smart preset | Auto (per GPU) | iGPU safe / balanced / beast |
-| Performance | Backend | WebGL | WebGL (recommended) / WebGPU (experimental) |
-| Performance | Max FPS | 30 / 60 / 144 by tier | Unlimited only on high-end discrete GPUs |
-| Performance | Dynamic resolution | On | Over budget → 1.0 → 0.8 → 0.65 → 0.5 |
-| Performance | Occluded compositing | By tier | Disabling saves 0.02–0.06 s per capture |
-| Performance | Wallpaper refresh | Auto | Persistent stream (8 fps): encode on change; 0.22 s digest check; 420 ms cross-fade |
+Both upload paths — WebGL and WebGPU — have the guard.
 
-## Performance baseline
+## The glass itself
 
-| Item | Value (i7-12700H / Iris Xe / 2520×1680@150%) |
+- **Blur**: 13-tap Poisson-kernel Gaussian. WebGL ping-pongs it 1–4 times to build radius; WebGPU runs a dedicated WGSL pre-pass. At maximum `blur` you get a wide, smooth falloff, not a truncated CSS blur.
+- **Occluded windows**: browsers, editors and players sitting under DSH are cropped by screen coordinates and pasted back behind the glass; rounded corners and transparent regions use premultiplied alpha, so no black edges. One capture costs 0.02–0.06 s and can be switched off.
+- **Text**: flips between black and white by background luminance, targeting WCAG 7:1. Once you pick a colour by hand, nothing overrides it.
+- **Caret**: the **inverse** of the ink — white on dark text, black on light text. CSS only exposes `caret-color`, so this is the most reliable form of it.
+- **Five colour modes**: auto / light / dark / custom / intelligent. Intelligent samples the dominant colour from whatever is behind the glass and flips light/dark by luminance; switching animates over 240 ms and yields the moment you drag a slider.
+- **Stored per module**: every background module keeps its own appearance values, and every colour mode keeps its own bucket inside that, so switching never overwrites the other.
+
+## Performance: read the tier before forcing FPS
+
+The GPU string is read once at startup (`WEBGL_debug_renderer_info`, locally, never uploaded) and mapped to a tier.
+
+| GPU | Default tier | Backend | FPS | Dynamic resolution |
+| --- | --- | --- | --- | --- |
+| Intel Iris Xe / UHD / HD, AMD Radeon / Vega APU, Apple M | 🛡 iGPU safe | WebGL | 30 | ✅ |
+| Unknown / VM / software (SwiftShader, llvmpipe) | 🛡 iGPU safe | WebGL | 30 | ✅ |
+| GTX 10 / 16, RTX 20 / 30, RX 5000–7000, Arc A | ⚖ Balanced | WebGL | 60 | ✅ |
+| RTX 40 / 50, RX 9000, Arc B, RTX A | 🔥 Beast | WebGPU (falls back to WebGL) | 144 | ❌ |
+
+> A measured counter-example: i7-12700H + Iris Xe + 10 GB LPDDR5, frame cap lifted and dynamic resolution off — 10 minutes later the GPU sat at 96 °C and the machine blue-screened. An iGPU has no dedicated VRAM; every frame above 40 FPS is just heat.
+
+Hence five layers of protection: over-budget frame time → lower resolution (1.0 → 0.8 → 0.65 → 0.5) → drop occlusion compositing → static translucent mask → disable; five seconds over budget or a `webglcontextlost` drops straight to the safe profile.
+
+| Baseline (i7-12700H / Iris Xe / 2520×1680@150%) | Value |
 | --- | --- |
-| Frame render (1680×1119, scale 1.0) | **16.9 ms** |
-| Frame render (1344×895, scale 0.8, default) | **≈10–11 ms** |
-| Plugin VRAM delta | **20–25 MB** (textures 6.8 MB + blur buffers 1.7 MB + back buffers) |
-| Resident GPU memory (A/B) | on 286 MB / off 275 MB |
-| One capture frame (WGC readback + compose + JPEG) | **≈32 ms mean** (15–60 ms), capped at 8 fps |
-| One desktop composite (cold / one-shot) | 78–125 ms; 60–75 ms with occluded compositing off |
-| End-to-end (window changes under DSH → glass updates) | **≈0.25–0.4 s** streaming; zero work when the desktop is still |
+| Frame render 1680×1119 (scale 1.0) | 16.9 ms |
+| Frame render 1344×895 (scale 0.8, default) | ≈10–11 ms |
+| Plugin VRAM delta | 20–25 MB |
+| One capture frame (WGC + compose + JPEG) | ≈32 ms mean (8 fps cap) |
+| Desktop at rest | no encoding, no repaint |
 
-## Compatibility and limitations
+## Settings at a glance
 
-- Primary monitor only; other screens are not mapped.
-- Occluded UWP / DRM / minimised windows may yield empty surfaces: they are skipped rather than pasted black, but still listed in `apps`.
-- If the GPU crashes outright only a static translucent mask remains (no refraction, no flow); a second crash within 10 minutes disables the plugin.
-- Occluded-window compositing is Windows-only; elsewhere only static wallpaper files sync.
-- Borderless capture (`IGraphicsCaptureSession3`) needs Windows 11 / 10 20348+; older systems get the yellow capture border back, and the background still refreshes.
-- Minimised or fully hidden windows stop the render loop — Chromium behaviour, and a power saving one.
-- Switching WE scene / web wallpapers relies on WE itself (`wallpaper64.exe -control openWallpaper`); without WE installed or running, those two types only show a hint. The property sheet and local files keep working.
-- Playback speed / volume apply to HTML `<video>` wallpapers and animations; scene wallpapers are tuned inside WE.
-- The elysia395 branch is still a placeholder: it appears once the plugin is detected, and settings takeover/migration is in progress.
+**Appearance** (one copy per module): blur 10 px, saturation 1.4, tint 55%, frost 34% (the only thickness slider), wallpaper dim 8%, flow 0.9 (0 = render on demand), ink auto, colour mode auto, custom colour `#8ab4ff`, auto light/dark on.
+
+**Wallpaper**: liquid glass on, WE library auto, alignment cover, position 50/50, flip off, speed 1.00×, volume 0, mute on, up to 24 presets, local files in image / video / gif / apng.
+
+**Sound**: local playlists (mp3 / flac / wav / ogg / m4a / aac / opus, 0.25–2.0×, volume) or system audio (permission required, **analysis only, never replayed**). Energy feeds the shader live — the surface rises on bass.
+
+**Performance**: smart preset follows the GPU, backend WebGL / WebGPU, max FPS 30 / 60 / 144 by tier, dynamic resolution on, occlusion compositing by tier, wallpaper refresh auto (8 fps stream + 0.22 s digest + 420 ms cross-fade).
+
+## Known edges
+
+- Maps the primary monitor only.
+- Occluded UWP / DRM / minimised windows may be empty surfaces: skipped rather than pasted black, still listed in `apps`.
+- Borderless capture needs Windows 11 / 10 20348+; older systems get the yellow capture border back, and the background keeps refreshing.
+- Minimised windows stop the render loop — Chromium behaviour, and a power saving one.
+- Switching scene / web wallpapers depends on WE itself; without WE installed or running those two types only show a hint.
+- Speed and volume apply to `<video>` wallpapers and animations; scene wallpapers are tuned inside WE.
+- Non-Windows platforms get no occlusion compositing — static wallpaper files only.
+- The elysia395 branch is a placeholder: it appears when detected, and settings takeover/migration is still in progress.
+
+## Ecosystem
+
+- **Wallpaper Engine** (Steam AppID `431960`): library scanning, project typing and property semantics all follow it; scene and web wallpapers are played by it.
+- **[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**: the compatibility target of the third module. Both can be installed; only one supplies the background at a time.
 
 ## Development
 
-Bug reports, compatibility notes, doc fixes and PRs are welcome. Please include host/plugin versions, OS, GPU, reproduction steps and redacted logs.
-
-- [Implementation notes](docs/DETAIL.md): compositing, screen-space mapping, the five-layer guard, shader parameters, module data shapes.
-- Builds: `node scripts/build-client.mjs`, `node scripts/build-capture.mjs`.
-
-## Credits
-
-- **Wallpaper Engine** (Steam AppID `431960`): the property sheet follows its interaction model and parameter semantics.
-- **[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine)**: the compatibility target of the third background module.
-- Everyone who filed issues and sent PRs ❤️
-
-<a href="https://github.com/ShuoweiFu/DSH-Theme-Engine/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ShuoweiFu/DSH-Theme-Engine" alt="Contributors">
-</a>
-
-<a href="https://star-history.com/#ShuoweiFu/DSH-Theme-Engine&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=ShuoweiFu/DSH-Theme-Engine&type=Date" alt="Star History" width="720">
-  </picture>
-</a>
-
-## Repository layout
+```powershell
+pnpm build:client    # client/src/*.js → client/client.js (Node.js only, no third-party deps)
+pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe (needs clang++, override with LG_CLANG)
+```
 
 | Path | Role |
 | --- | --- |
 | `index.js` | Host entry: `/liquid-glass/*` routes (including `/we/open`), capture scheduling, module state, update check |
-| `host/` | Host capabilities: wallpaper detection, WE bridge (scan / preview / switch), persistent capture helper, PowerShell fallback, run wrapper, update check |
-| `client/src/` | Front-end sources, concatenated `01` → `14` (13 = wallpaper centre / colour modes, 14 = audio matrix) |
-| `client/client.js` | Build output, loaded by DSH via `exports["./client"]` |
-| `tools/capture/lg-capture.cpp` | Native capture/compositing helper (WGC + GDI+) |
+| `host/` | Wallpaper detection, WE bridge (scan / preview / switch), persistent capture helper, PowerShell fallback, update check |
+| `client/src/` | Front-end sources concatenated `01` → `14` (13 = wallpaper centre and colour modes, 14 = audio matrix) |
+| `client/client.js` | Build output, loaded by DSH through `exports["./client"]` |
+| `tools/capture/lg-capture.cpp` | Native capture / compositing helper (WGC + GDI+) |
 | `bin/lg-capture.exe` | Prebuilt helper shipped with the plugin |
-| `docs/` | Implementation notes and screenshots |
-| `scripts/` | The two build scripts |
+| `docs/DETAIL.md` | Compositing, screen-space mapping, the five-layer guard, shader parameters, module data shapes |
+
+Please include host/plugin versions, OS, GPU, reproduction steps and redacted logs in issues.
 
 ## License
 
 [Apache License 2.0](LICENSE) © DSH Theme Engine contributors
 
-Released under Apache-2.0: commercial use, modification and redistribution are allowed with copyright and licence notices retained. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Commercial use, modification and redistribution are allowed with copyright and licence notices retained. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

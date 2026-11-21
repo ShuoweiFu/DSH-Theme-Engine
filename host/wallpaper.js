@@ -77,6 +77,14 @@ export function mimeOf(data, file) {
   return 'image/jpeg';
 }
 
+/** Classify a wallpaper file for the renderer (video / animation / image). */
+export function kindOf(file) {
+  const lower = String(file).toLowerCase();
+  if (/\.(mp4|webm|mkv|mov|m4v)$/.test(lower)) return 'video';
+  if (/\.(gif|apng)$/.test(lower)) return 'animation';
+  return 'image';
+}
+
 export function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

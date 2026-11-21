@@ -45,7 +45,7 @@ import {
   helperAlive,
   setStreamFps,
 } from './host/helper.js';
-import { detectWallpaper, jsonResponse, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
+import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
 import { launchUri, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
 import { runPowerShellFile } from './host/run.js';
@@ -260,11 +260,11 @@ export function apply(ctx, config) {
         bytes: pinned.size,
         digest: `m${Math.round(pinned.mtime)}-${pinned.size}`,
         source: 'file',
-        kind: pinned.kind === 'video' ? 'video' : 'image',
+        kind: pinned.kind,
       };
     } else if (configured) {
       value = (await valueFor({ path: configured, source: 'config' })) ?? value;
-      value.kind = /\.(mp4|webm)$/i.test(configured) ? 'video' : 'image';
+      value.kind = kindOf(configured);
     } else if (process.platform === 'win32') {
       // "desktop" mode wants the real desktop behind the window, icons included.
       if (mode === 'desktop') {
@@ -487,7 +487,7 @@ export function apply(ctx, config) {
         });
       }
       try {
-        if (value.kind === 'video') return streamFile(value.path, mimeOf(null, value.path), String(value.mtime), request);
+        if (value.kind === 'video' || value.kind === 'animation') return streamFile(value.path, mimeOf(null, value.path), String(value.mtime), request);
         const data = await readFile(value.path);
         return new Response(new Uint8Array(data), {
           headers: {
@@ -512,7 +512,7 @@ export function apply(ctx, config) {
    * @param {Request} request
    */
   async function serveMedia(media, request) {
-    if (media.kind === 'video' || media.kind === 'audio') {
+    if (media.kind === 'video' || media.kind === 'audio' || media.kind === 'animation') {
       return streamFile(media.path, mimeOf(null, media.path), String(media.mtime), request);
     }
     const data = await readFile(media.path);

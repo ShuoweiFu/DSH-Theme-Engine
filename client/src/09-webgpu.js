@@ -49,6 +49,11 @@
 			let blurBView = null;
 			let blurKey = "";
 			const blurUniforms = new Float32Array(4);
+			// Task 8: a live wallpaper re-uploads its texture on a timer.
+			let liveSource = null;
+			let liveTimer = 0;
+			let liveCanvas = null;
+			const LIVE_INTERVAL = 110;
 			let running = false;
 			let disposed = false;
 			let shown = false;
@@ -278,6 +283,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function frameInterval() {
 				return perf.targetFps > 0 ? 1000 / perf.targetFps : 0;
 			}
+			/** Drop the live wallpaper source and its upload timer. */
+			function stopLiveWallpaper() {
+				if (liveTimer) clearInterval(liveTimer);
+				liveTimer = 0;
+				if (liveSource) liveSource.dispose();
+				liveSource = null;
+				liveCanvas = null;
+			}
+
+			/** Upload the current live frame into the existing wallpaper texture. */
+			function uploadLiveWallpaper() {
+				if (!device || !texture || !liveSource || !liveCanvas) return;
+				if (paused() || !running) return;
+				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
+				if (!liveFrame) return;
+				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
+				blurKey = "";
+				draw(performance.now());
+			}
+
+			/** Start uploading a decoded live source at ~9 fps. */
+			function startLiveWallpaper(source, canvas) {
+				stopLiveWallpaper();
+				liveSource = source;
+				liveCanvas = canvas;
+				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
+			}
+
 			function paused() {
 				return perf.paused.size > 0 || perf.idle || disposed;
 			}
@@ -386,6 +419,43 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			async function setWallpaper(url, kind = "image") {
 				if (!device || !url) return false;
 				try {
+					stopLiveWallpaper();
+					if (kind === "video" || kind === "animation") {
+						const live = createLiveWallpaper(url, kind);
+						const liveReady = await live.ready;
+						if (disposed || !liveReady) {
+							live.dispose();
+							return false;
+						}
+						const canvas = document.createElement("canvas");
+						const liveFrame = liveWallpaperFrame(live, canvas);
+						if (!liveFrame) {
+							live.dispose();
+							return false;
+						}
+						// Transient black first frames must not refuse the live
+						// wallpaper; skip the ink vote while the picture is dark.
+						const liveSample = measureInk(liveFrame);
+						if (!isBlackSwap(liveSample)) onInk?.(liveSample);
+						const MAX = 2048;
+						const ratio = Math.min(1, MAX / Math.max(liveFrame.width, liveFrame.height));
+						const w = Math.max(1, Math.round(liveFrame.width * ratio));
+						const h = Math.max(1, Math.round(liveFrame.height * ratio));
+						textureVersion += 1;
+						if (texture) texture.destroy();
+						texture = device.createTexture({
+							size: [w, h],
+							format: "rgba8unorm",
+							usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+						});
+						device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [w, h]);
+						wallpaperView = texture.createView();
+						bindGroup = null;
+						blurKey = "";
+						startLiveWallpaper(live, canvas);
+						draw(performance.now());
+						return true;
+					}
 					let source = null;
 					if (kind === "video") {
 						source = await frameFromVideo(url);
@@ -470,6 +540,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				dispose() {
 					disposed = true;
 					stop();
+					stopLiveWallpaper();
 					try { texture?.destroy(); } catch {}
 					for (const tex of [blurA, blurB]) {
 						try { tex?.destroy(); } catch {}

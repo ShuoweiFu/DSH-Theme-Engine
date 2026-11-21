@@ -209,7 +209,7 @@
 				const liquidRef = useRef(null);
 				const liquid = liquidRef.current;
 				const wallpaperUrl = value.wallpaper && state.url ? state.url : "";
-				const wallpaperKind = state.kind === "video" ? "video" : "image";
+				const wallpaperKind = state.kind === "video" ? "video" : state.kind === "animation" ? "animation" : "image";
 
 				// Intelligent mode needs one dominant colour per wallpaper. Image and
 				// video sources are sampled client-side; scene/web wallpapers arrive as
@@ -541,7 +541,7 @@
 								setWallpaper({
 									status: "ready",
 									url: `${API}/wallpaper?rev=${encodeURIComponent(rev)}&${query}`,
-									kind: data.kind === "video" ? "video" : "image",
+									kind: data.kind === "video" ? "video" : data.kind === "animation" ? "animation" : "image",
 									name: typeof data.name === "string" ? data.name : "",
 									mtime: typeof data.mtime === "number" ? data.mtime : 0,
 									bytes: typeof data.bytes === "number" ? data.bytes : 0,

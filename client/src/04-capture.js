@@ -239,3 +239,84 @@
 				return "";
 			}
 		}
+
+		/**
+		 * Task 8: a live wallpaper source. Local videos decode off-screen and
+		 * animated images are drawn from a hidden <img>; both feed the shared
+		 * canvas returned by liveWallpaperFrame() on a short timer.
+		 */
+		function createLiveWallpaper(url, kind) {
+			const animated = kind === "animation";
+			const element = document.createElement(animated ? "img" : "video");
+			element.setAttribute("aria-hidden", "true");
+			element.style.cssText = "position:fixed;left:-20000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+			if (animated) {
+				element.decoding = "async";
+			} else {
+				element.muted = true;
+				element.loop = true;
+				element.playsInline = true;
+				element.preload = "auto";
+			}
+			const ready = new Promise((resolve) => {
+				let settled = false;
+				const finish = (ok) => {
+					if (settled) return;
+					settled = true;
+					resolve(ok);
+				};
+				const check = () => {
+					if (animated) {
+						finish(element.naturalWidth > 0);
+					} else if (element.readyState >= 2) {
+						element.play().catch(() => {});
+						finish(true);
+					}
+				};
+				element.addEventListener(animated ? "load" : "loadeddata", check, { once: true });
+				element.addEventListener("error", () => finish(false), { once: true });
+				setTimeout(check, 4000);
+			});
+			element.src = url;
+			document.body.appendChild(element);
+			return {
+				kind,
+				element,
+				ready,
+				dispose() {
+					try {
+						element.pause?.();
+						element.removeAttribute("src");
+						element.remove();
+					} catch {
+						/* best effort */
+					}
+				}
+			};
+		}
+
+		/**
+		 * Paint the current frame of a live source into `canvas` (≤1600 px edge).
+		 * Returns null while the element still has no decoded frame.
+		 */
+		function liveWallpaperFrame(source, canvas) {
+			const element = source && source.element;
+			if (!element) return null;
+			const naturalWidth = element.videoWidth || element.naturalWidth || 0;
+			const naturalHeight = element.videoHeight || element.naturalHeight || 0;
+			if (!naturalWidth || !naturalHeight) return null;
+			const ratio = Math.min(1, 1600 / Math.max(naturalWidth, naturalHeight));
+			const width = Math.max(1, Math.round(naturalWidth * ratio));
+			const height = Math.max(1, Math.round(naturalHeight * ratio));
+			if (canvas.width !== width || canvas.height !== height) {
+				canvas.width = width;
+				canvas.height = height;
+			}
+			try {
+				const context = canvas.getContext("2d", { alpha: false });
+				context.drawImage(element, 0, 0, width, height);
+			} catch {
+				return null;
+			}
+			return canvas;
+		}

@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.154004";
+		const CLIENT_BUILD = "v.26.11.21.154805";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -917,6 +917,87 @@
 				return "";
 			}
 		}
+
+		/**
+		 * Task 8: a live wallpaper source. Local videos decode off-screen and
+		 * animated images are drawn from a hidden <img>; both feed the shared
+		 * canvas returned by liveWallpaperFrame() on a short timer.
+		 */
+		function createLiveWallpaper(url, kind) {
+			const animated = kind === "animation";
+			const element = document.createElement(animated ? "img" : "video");
+			element.setAttribute("aria-hidden", "true");
+			element.style.cssText = "position:fixed;left:-20000px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+			if (animated) {
+				element.decoding = "async";
+			} else {
+				element.muted = true;
+				element.loop = true;
+				element.playsInline = true;
+				element.preload = "auto";
+			}
+			const ready = new Promise((resolve) => {
+				let settled = false;
+				const finish = (ok) => {
+					if (settled) return;
+					settled = true;
+					resolve(ok);
+				};
+				const check = () => {
+					if (animated) {
+						finish(element.naturalWidth > 0);
+					} else if (element.readyState >= 2) {
+						element.play().catch(() => {});
+						finish(true);
+					}
+				};
+				element.addEventListener(animated ? "load" : "loadeddata", check, { once: true });
+				element.addEventListener("error", () => finish(false), { once: true });
+				setTimeout(check, 4000);
+			});
+			element.src = url;
+			document.body.appendChild(element);
+			return {
+				kind,
+				element,
+				ready,
+				dispose() {
+					try {
+						element.pause?.();
+						element.removeAttribute("src");
+						element.remove();
+					} catch {
+						/* best effort */
+					}
+				}
+			};
+		}
+
+		/**
+		 * Paint the current frame of a live source into `canvas` (≤1600 px edge).
+		 * Returns null while the element still has no decoded frame.
+		 */
+		function liveWallpaperFrame(source, canvas) {
+			const element = source && source.element;
+			if (!element) return null;
+			const naturalWidth = element.videoWidth || element.naturalWidth || 0;
+			const naturalHeight = element.videoHeight || element.naturalHeight || 0;
+			if (!naturalWidth || !naturalHeight) return null;
+			const ratio = Math.min(1, 1600 / Math.max(naturalWidth, naturalHeight));
+			const width = Math.max(1, Math.round(naturalWidth * ratio));
+			const height = Math.max(1, Math.round(naturalHeight * ratio));
+			if (canvas.width !== width || canvas.height !== height) {
+				canvas.width = width;
+				canvas.height = height;
+			}
+			try {
+				const context = canvas.getContext("2d", { alpha: false });
+				context.drawImage(element, 0, 0, width, height);
+			} catch {
+				return null;
+			}
+			return canvas;
+		}
 		// Shared darkness thresholds. 06-guard rejects a frame that drops below
 		// BLACK_LUM after a bright one; anything above RECOVER_LUM counts as a
 		// real bright frame. Kept here so the guard and the ink sampler cannot
@@ -1376,6 +1457,19 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 }
 
 /* ---- main panel page (native plugin-page chrome) ---- */
+/*
+ * DSH 不给插件页面套全局 box-sizing reset：页头/页身是 width:100% +
+ * max-width:960px + 左右 padding(clamp 24~48px) 的组合，默认 content-box
+ * 下外框会比 960 多出两倍内边距（≈96px），整列就会溢出到窗口右缘之外——
+ * 非最大化时右上角「已同步」开关正是被窗口边框切掉的那一截。
+ * 改成 border-box 后 960 才是外框宽度，标题、状态开关与下方卡片重新对齐。
+ */
+.lg-page,
+.lg-page-head,
+.lg-page-body {
+	box-sizing: border-box;
+}
+
 /*
  * The page itself is bare glass: the wallpaper, the liquid shader and the
  * frosted app backdrop must all stay visible through this column.  Clarity is
@@ -2214,6 +2308,23 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 	}
 }
+
+/*
+ * The composer's thinking-effort label ("High") ships in DSH as
+ * <span class="_9r0rkG_triggerEffort">, painted with --dsw-alias-label-caption,
+ * so it reads as idle grey right beside the model name.  The user asked for
+ * blue: the effort value gets a hue of its own instead.  Matching on the
+ * suffixed local name keeps working when DSH rebuilds and the CSS-module hash
+ * in front of the underscore changes.
+ */
+[class*="_triggerEffort"] {
+	color: #4d6bfe !important;
+}
+
+html[data-lg-mode="dark"] [class*="_triggerEffort"] {
+	color: #93a7ff !important;
+}
+
 `;
 
 		/**
@@ -2430,6 +2541,11 @@ void main() {
 			let blurBView = null;
 			let blurKey = "";
 			const blurUniforms = new Float32Array(4);
+			// Task 8: a live wallpaper re-uploads its texture on a timer.
+			let liveSource = null;
+			let liveTimer = 0;
+			let liveCanvas = null;
+			const LIVE_INTERVAL = 110;
 			let running = false;
 			let disposed = false;
 			let shown = false;
@@ -2659,6 +2775,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function frameInterval() {
 				return perf.targetFps > 0 ? 1000 / perf.targetFps : 0;
 			}
+			/** Drop the live wallpaper source and its upload timer. */
+			function stopLiveWallpaper() {
+				if (liveTimer) clearInterval(liveTimer);
+				liveTimer = 0;
+				if (liveSource) liveSource.dispose();
+				liveSource = null;
+				liveCanvas = null;
+			}
+
+			/** Upload the current live frame into the existing wallpaper texture. */
+			function uploadLiveWallpaper() {
+				if (!device || !texture || !liveSource || !liveCanvas) return;
+				if (paused() || !running) return;
+				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
+				if (!liveFrame) return;
+				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
+				blurKey = "";
+				draw(performance.now());
+			}
+
+			/** Start uploading a decoded live source at ~9 fps. */
+			function startLiveWallpaper(source, canvas) {
+				stopLiveWallpaper();
+				liveSource = source;
+				liveCanvas = canvas;
+				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
+			}
+
 			function paused() {
 				return perf.paused.size > 0 || perf.idle || disposed;
 			}
@@ -2767,6 +2911,43 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			async function setWallpaper(url, kind = "image") {
 				if (!device || !url) return false;
 				try {
+					stopLiveWallpaper();
+					if (kind === "video" || kind === "animation") {
+						const live = createLiveWallpaper(url, kind);
+						const liveReady = await live.ready;
+						if (disposed || !liveReady) {
+							live.dispose();
+							return false;
+						}
+						const canvas = document.createElement("canvas");
+						const liveFrame = liveWallpaperFrame(live, canvas);
+						if (!liveFrame) {
+							live.dispose();
+							return false;
+						}
+						// Transient black first frames must not refuse the live
+						// wallpaper; skip the ink vote while the picture is dark.
+						const liveSample = measureInk(liveFrame);
+						if (!isBlackSwap(liveSample)) onInk?.(liveSample);
+						const MAX = 2048;
+						const ratio = Math.min(1, MAX / Math.max(liveFrame.width, liveFrame.height));
+						const w = Math.max(1, Math.round(liveFrame.width * ratio));
+						const h = Math.max(1, Math.round(liveFrame.height * ratio));
+						textureVersion += 1;
+						if (texture) texture.destroy();
+						texture = device.createTexture({
+							size: [w, h],
+							format: "rgba8unorm",
+							usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+						});
+						device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [w, h]);
+						wallpaperView = texture.createView();
+						bindGroup = null;
+						blurKey = "";
+						startLiveWallpaper(live, canvas);
+						draw(performance.now());
+						return true;
+					}
 					let source = null;
 					if (kind === "video") {
 						source = await frameFromVideo(url);
@@ -2851,6 +3032,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				dispose() {
 					disposed = true;
 					stop();
+					stopLiveWallpaper();
 					try { texture?.destroy(); } catch {}
 					for (const tex of [blurA, blurB]) {
 						try { tex?.destroy(); } catch {}
@@ -3066,6 +3248,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			let blendStart = 0;
 			let textureError = "";
 			let textureRequest = 0;
+			// Task 8: a live wallpaper keeps re-uploading its texture on a timer
+			// instead of freezing on the first decoded frame.
+			let liveSource = null;
+			let liveTimer = 0;
+			let liveCanvas = null;
+			const LIVE_INTERVAL = 110;
 			const clock = { start: performance.now() };
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
@@ -3141,6 +3329,37 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				return true;
+			}
+
+			/** Drop the live wallpaper source and its upload timer. */
+			function stopLiveWallpaper() {
+				if (liveTimer) clearInterval(liveTimer);
+				liveTimer = 0;
+				if (liveSource) liveSource.dispose();
+				liveSource = null;
+				liveCanvas = null;
+			}
+
+			/** Upload the current live frame into the existing wallpaper texture. */
+			function uploadLiveWallpaper() {
+				if (!texture || !liveSource || !liveCanvas) return;
+				if (perf.paused.size || !running) return;
+				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
+				if (!liveFrame) return;
+				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
+				gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
+				renderBlur();
+				lastRenderAt = 0;
+				schedule(true);
+			}
+
+			/** Start uploading a decoded live source at ~9 fps. */
+			function startLiveWallpaper(source, canvas) {
+				stopLiveWallpaper();
+				liveSource = source;
+				liveCanvas = canvas;
+				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
 			}
 
 			/** Free one blur target (idempotent). */
@@ -3447,6 +3666,50 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			async function setWallpaper(url, kind = "image") {
 				const request = ++textureRequest;
 				try {
+					// A live source belongs to exactly one wallpaper; replacing the
+					// wallpaper replaces the source even if the new upload later fails.
+					stopLiveWallpaper();
+					if (kind === "video" || kind === "animation") {
+						const live = createLiveWallpaper(url, kind);
+						const liveReady = await live.ready;
+						if (request !== textureRequest || !liveReady) {
+							live.dispose();
+							if (request !== textureRequest) return;
+							throw new Error("live wallpaper failed to decode");
+						}
+						const canvas = document.createElement("canvas");
+						const liveFrame = liveWallpaperFrame(live, canvas);
+						if (!liveFrame) {
+							live.dispose();
+							throw new Error("live wallpaper has no frame");
+						}
+						// A video may open on a black frame; that is a transient
+						// state, not a failed capture, so it must not refuse the
+						// wallpaper. Only skip its ink vote until it has content.
+						const liveSample = measureInk(liveFrame);
+						if (!isBlackSwap(liveSample)) onInk?.(liveSample);
+						const liveHandle = gl.createTexture();
+						gl.bindTexture(gl.TEXTURE_2D, liveHandle);
+						gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+						if (params.blur <= 0.5 && texture && snapshotTexture(texture.handle, texture.width, texture.height)) {
+							blendStart = performance.now();
+						}
+						if (texture) gl.deleteTexture(texture.handle);
+						texture = { handle: liveHandle, width: liveFrame.width, height: liveFrame.height };
+						textureError = "";
+						renderBlur();
+						startLiveWallpaper(live, canvas);
+						if (running) {
+							lastRenderAt = 0;
+							schedule(true);
+						}
+						return true;
+					}
 					// Cap every texture so a 4K wallpaper cannot blow up VRAM on an iGPU.
 					const MAX_TEX = 2048;
 					/** @type {TexImageSource} */
@@ -3628,6 +3891,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				dispose() {
 					disposed = true;
 					stop();
+					stopLiveWallpaper();
 					textureRequest += 1;
 					if (texture) gl.deleteTexture(texture.handle);
 					if (blurTarget) {
@@ -3909,7 +4173,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				const liquidRef = useRef(null);
 				const liquid = liquidRef.current;
 				const wallpaperUrl = value.wallpaper && state.url ? state.url : "";
-				const wallpaperKind = state.kind === "video" ? "video" : "image";
+				const wallpaperKind = state.kind === "video" ? "video" : state.kind === "animation" ? "animation" : "image";
 
 				// Intelligent mode needs one dominant colour per wallpaper. Image and
 				// video sources are sampled client-side; scene/web wallpapers arrive as
@@ -4241,7 +4505,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								setWallpaper({
 									status: "ready",
 									url: `${API}/wallpaper?rev=${encodeURIComponent(rev)}&${query}`,
-									kind: data.kind === "video" ? "video" : "image",
+									kind: data.kind === "video" ? "video" : data.kind === "animation" ? "animation" : "image",
 									name: typeof data.name === "string" ? data.name : "",
 									mtime: typeof data.mtime === "number" ? data.mtime : 0,
 									bytes: typeof data.bytes === "number" ? data.bytes : 0,

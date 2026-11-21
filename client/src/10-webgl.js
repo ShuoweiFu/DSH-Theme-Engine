@@ -136,6 +136,12 @@
 			let blendStart = 0;
 			let textureError = "";
 			let textureRequest = 0;
+			// Task 8: a live wallpaper keeps re-uploading its texture on a timer
+			// instead of freezing on the first decoded frame.
+			let liveSource = null;
+			let liveTimer = 0;
+			let liveCanvas = null;
+			const LIVE_INTERVAL = 110;
 			const clock = { start: performance.now() };
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
@@ -211,6 +217,37 @@
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, null, 0);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				return true;
+			}
+
+			/** Drop the live wallpaper source and its upload timer. */
+			function stopLiveWallpaper() {
+				if (liveTimer) clearInterval(liveTimer);
+				liveTimer = 0;
+				if (liveSource) liveSource.dispose();
+				liveSource = null;
+				liveCanvas = null;
+			}
+
+			/** Upload the current live frame into the existing wallpaper texture. */
+			function uploadLiveWallpaper() {
+				if (!texture || !liveSource || !liveCanvas) return;
+				if (perf.paused.size || !running) return;
+				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
+				if (!liveFrame) return;
+				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
+				gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
+				renderBlur();
+				lastRenderAt = 0;
+				schedule(true);
+			}
+
+			/** Start uploading a decoded live source at ~9 fps. */
+			function startLiveWallpaper(source, canvas) {
+				stopLiveWallpaper();
+				liveSource = source;
+				liveCanvas = canvas;
+				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
 			}
 
 			/** Free one blur target (idempotent). */
@@ -517,6 +554,50 @@
 			async function setWallpaper(url, kind = "image") {
 				const request = ++textureRequest;
 				try {
+					// A live source belongs to exactly one wallpaper; replacing the
+					// wallpaper replaces the source even if the new upload later fails.
+					stopLiveWallpaper();
+					if (kind === "video" || kind === "animation") {
+						const live = createLiveWallpaper(url, kind);
+						const liveReady = await live.ready;
+						if (request !== textureRequest || !liveReady) {
+							live.dispose();
+							if (request !== textureRequest) return;
+							throw new Error("live wallpaper failed to decode");
+						}
+						const canvas = document.createElement("canvas");
+						const liveFrame = liveWallpaperFrame(live, canvas);
+						if (!liveFrame) {
+							live.dispose();
+							throw new Error("live wallpaper has no frame");
+						}
+						// A video may open on a black frame; that is a transient
+						// state, not a failed capture, so it must not refuse the
+						// wallpaper. Only skip its ink vote until it has content.
+						const liveSample = measureInk(liveFrame);
+						if (!isBlackSwap(liveSample)) onInk?.(liveSample);
+						const liveHandle = gl.createTexture();
+						gl.bindTexture(gl.TEXTURE_2D, liveHandle);
+						gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+						gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+						if (params.blur <= 0.5 && texture && snapshotTexture(texture.handle, texture.width, texture.height)) {
+							blendStart = performance.now();
+						}
+						if (texture) gl.deleteTexture(texture.handle);
+						texture = { handle: liveHandle, width: liveFrame.width, height: liveFrame.height };
+						textureError = "";
+						renderBlur();
+						startLiveWallpaper(live, canvas);
+						if (running) {
+							lastRenderAt = 0;
+							schedule(true);
+						}
+						return true;
+					}
 					// Cap every texture so a 4K wallpaper cannot blow up VRAM on an iGPU.
 					const MAX_TEX = 2048;
 					/** @type {TexImageSource} */
@@ -698,6 +779,7 @@
 				dispose() {
 					disposed = true;
 					stop();
+					stopLiveWallpaper();
 					textureRequest += 1;
 					if (texture) gl.deleteTexture(texture.handle);
 					if (blurTarget) {

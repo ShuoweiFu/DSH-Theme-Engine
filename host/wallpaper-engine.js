@@ -18,7 +18,7 @@ const WORKSHOP_DIR = join('steamapps', 'workshop', 'content', STEAM_APP_ID);
 const WE_DIR = join('steamapps', 'common', 'wallpaper_engine');
 const CACHE_MS = 20_000;
 
-const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif']);
+const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.apng', '.bmp', '.avif']);
 const VIDEO_EXT = new Set(['.mp4', '.webm', '.mkv', '.mov', '.m4v']);
 const AUDIO_EXT = new Set(['.mp3', '.flac', '.wav', '.ogg', '.m4a', '.aac', '.opus']);
 const MEDIA_EXT = new Set([...IMAGE_EXT, ...VIDEO_EXT, ...AUDIO_EXT]);
@@ -319,7 +319,13 @@ export async function mediaFile(path) {
   if (!info?.isFile()) return null;
   const ext = extname(file).toLowerCase();
   if (!MEDIA_EXT.has(ext)) return null;
-  const kind = IMAGE_EXT.has(ext) ? 'image' : VIDEO_EXT.has(ext) ? 'video' : 'audio';
+  const kind = IMAGE_EXT.has(ext)
+    ? ext === '.gif' || ext === '.apng'
+      ? 'animation'
+      : 'image'
+    : VIDEO_EXT.has(ext)
+      ? 'video'
+      : 'audio';
   return { path: file, name: file.split(/[\\/]/).pop() ?? '', size: info.size, mtime: info.mtimeMs, ext, kind };
 }
 

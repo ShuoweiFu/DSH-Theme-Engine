@@ -4,3 +4,5 @@ tmp-*
 *.pdb
 Thumbs.db
 .DS_Store
+
+/*.jpg

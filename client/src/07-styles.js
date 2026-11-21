@@ -303,6 +303,19 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 
 /* ---- main panel page (native plugin-page chrome) ---- */
 /*
+ * DSH 不给插件页面套全局 box-sizing reset：页头/页身是 width:100% +
+ * max-width:960px + 左右 padding(clamp 24~48px) 的组合，默认 content-box
+ * 下外框会比 960 多出两倍内边距（≈96px），整列就会溢出到窗口右缘之外——
+ * 非最大化时右上角「已同步」开关正是被窗口边框切掉的那一截。
+ * 改成 border-box 后 960 才是外框宽度，标题、状态开关与下方卡片重新对齐。
+ */
+.lg-page,
+.lg-page-head,
+.lg-page-body {
+	box-sizing: border-box;
+}
+
+/*
  * The page itself is bare glass: the wallpaper, the liquid shader and the
  * frosted app backdrop must all stay visible through this column.  Clarity is
  * bought locally — every settings group is its own translucent floating card —
@@ -1140,6 +1153,23 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
 	}
 }
+
+/*
+ * The composer's thinking-effort label ("High") ships in DSH as
+ * <span class="_9r0rkG_triggerEffort">, painted with --dsw-alias-label-caption,
+ * so it reads as idle grey right beside the model name.  The user asked for
+ * blue: the effort value gets a hue of its own instead.  Matching on the
+ * suffixed local name keeps working when DSH rebuilds and the CSS-module hash
+ * in front of the underscore changes.
+ */
+[class*="_triggerEffort"] {
+	color: #4d6bfe !important;
+}
+
+html[data-lg-mode="dark"] [class*="_triggerEffort"] {
+	color: #93a7ff !important;
+}
+
 `;
 
 		/**

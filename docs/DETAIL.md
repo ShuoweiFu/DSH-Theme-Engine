@@ -232,6 +232,16 @@ v.26.11.21.154004 起，设置页新增「声音」分组：
 - 律动：`audioBeat()` 用 RMS×2.1 + 低频能量×0.95 做快攻慢放包络，返回值经 `onBeat` 回调写进两个后端的 `uBeat` uniform；片元着色器把 warp / ripple / caustic / band 四项乘以 `(1 + uBeat × 系数)`，低音落下时液面起伏、高光呼吸。
 - 播放被浏览器自动播放策略拦截时提示「点试听开始播放」，用户点按钮即恢复。
 
+## 活体动态壁纸（任务 8）
+
+v.26.11.21.154805 起，视频与动态图壁纸不再只截第一帧，而是真正的「活体玻璃」：
+
+- 客户端 `createLiveWallpaper(url, kind)` 在屏幕外挂一个 `<video muted loop playsInline>`（或 `<img>` 解 gif / apng），首帧就绪后由 `liveWallpaperFrame()` 画进一块 ≤1600 px 的 canvas。
+- 渲染器每 110 ms 用 `texSubImage2D`（WebGL）或 `copyExternalImageToTexture`（WebGPU）更新同一张壁纸纹理，并重跑模糊前置通道，所以模糊后的波浪 / 人像仍然在动。
+- 宿主把 gif / apng 归为 `kind: "animation"`，与 `video` 一样走 Range 流式路由；本机文件、WE 视频壁纸与自定义路径共用这条通道。
+- 页面隐藏或渲染暂停时停止拷帧（不耗 GPU）；切换静态壁纸、切换后端或 dispose 时销毁隐藏元素与定时器。
+- 换源仍由前端 0.22 s 的 digest 轮询驱动：视频换了、gif 改了，画面立刻跟着换，不必等 6 s 的静态刷新。
+
 ## 四象模式与智能取色
 
 v.26.11.21.154004 起，设置页「外观」分组新增颜色模式，玻璃的底色不再只有跟随系统主题一种选择：

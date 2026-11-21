@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.160317";
+		const CLIENT_BUILD = "v.26.11.21.165200";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -288,6 +288,7 @@
 			weType_web: "网页",
 			weType_other: "其他",
 			weType_app: "应用",
+			weGold: "Wallpaper Engine 金标",
 			weEmpty: "没有符合筛选条件的壁纸。",
 			weCustom: "自定义壁纸文件",
 			weCustomHint: "也可以直接选择本机的图片 / 视频文件作为玻璃背景",
@@ -501,6 +502,7 @@
 			weType_web: "Web",
 			weType_other: "Other",
 			weType_app: "App",
+			weGold: "Wallpaper Engine badge",
 			weEmpty: "No wallpaper matches the current filter.",
 			weCustom: "Custom wallpaper file",
 			weCustomHint: "Or pick a local image / video file as the glass background",
@@ -2213,6 +2215,26 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);
 }
 
+.lg-we-gold {
+	display: inline-flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 6px;
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 18px;
+	letter-spacing: 0.04em;
+	color: #3a2a00;
+	background: linear-gradient(135deg, #ffe9a8, #e8b64a 55%, #c78d1f);
+	box-shadow: 0 1px 2px rgba(120, 80, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+	flex: none;
+}
+
+.lg-we-gold-inline {
+	margin-right: 2px;
+}
+
 .lg-we-thumb {
 	display: flex;
 	align-items: center;
@@ -2444,6 +2466,43 @@ html[data-lg-mode="dark"] [class*="_triggerEffort"] {
 	font-weight: 500;
 	letter-spacing: 0.02em;
 	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-branch-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin: 0 0 14px;
+}
+
+.lg-branch-tab {
+	height: 32px;
+	padding: 0 14px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 70%, transparent);
+	color: var(--dsw-alias-label-secondary);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.lg-branch-tab:hover {
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-branch-tab[data-on="on"] {
+	color: var(--dsw-alias-label-primary);
+	border-color: var(--dsw-alias-brand-primary);
+	background: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent);
+}
+
+.lg-island {
+	margin-left: auto;
+}
+
+.lg-branch-body {
+	display: block;
 }
 
 .lg-module-grid {
@@ -5364,223 +5423,228 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						"div",
 						{ className: "lg-page-body" },
 						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("perf")),
-							h("h3", { className: "lg-group-subtitle" }, t("moduleTitle")),
+							"div",
+							{ className: "lg-branch-tabs" },
 							h(
-								"div",
-								{ className: "lg-module-grid" },
-								moduleOption("glass", t("moduleGlass"), t("moduleGlassHint")),
-								moduleOption("wallpaper", t("moduleWallpaper"), t("moduleWallpaperHint")),
-								state.elysia && state.elysia.installed
-									? moduleOption("elysia", t("moduleElysia"), `${t("moduleElysiaHint")} · ${state.elysia.name}`)
-									: null,
-								h(
-									"button",
-									{
-										type: "button",
-										className: "lg-module",
-										"data-on": value.island ? "on" : undefined,
-										onClick: () => setSettings({ island: !value.island })
-									},
-									h("span", { className: "lg-module-name" }, t("moduleIsland")),
-									h("span", { className: "lg-module-hint" }, t("moduleIslandHint")),
-									h("i", { className: "lg-module-dot", "aria-hidden": "true" })
-								)
-							),
-							h("p", { className: "lg-group-hint" }, t("moduleHint")),
-							state.elysia && state.elysia.installed ? null : h("p", { className: "lg-group-hint" }, t("moduleLocked")),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h(
-									"div",
-									{ className: "lg-label" },
-									h("span", null, t("hardware")),
-									h("span", { className: "lg-hint" }, `${hw.vendor || "—"} · ${hw.renderer || t("tier_unknown")}`)
-								),
-								h("b", { className: "lg-badge" }, t(`tier_${hw.tier}`))
+								"button",
+								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "glass" ? "on" : undefined, onClick: () => chooseModule("glass") },
+								t("moduleGlass")
 							),
 							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("preset")), h("span", { className: "lg-hint" }, t("presetHint"))),
-								h(
-									"select",
-									{
-										className: "lg-select",
-										value: value.preset ?? "auto",
-										onChange: (event) => {
-											applyPreset(event.target.value);
-										}
-									},
-									h("option", { value: "auto" }, t("presetAuto")),
-									h("option", { value: "igpu" }, t("presetIgpu")),
-									h("option", { value: "balanced" }, t("presetBalanced")),
-									h("option", { value: "beast" }, t("presetBeast"))
-								)
+								"button",
+								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "wallpaper" ? "on" : undefined, onClick: () => chooseModule("wallpaper") },
+								t("moduleWallpaper")
 							),
-							h("p", { className: "lg-group-hint" }, t("hardwareHint")),
-							(value.fps === 0 || value.fps > (SAFE_FPS[hw.tier] ?? 30)) && (hw.tier === "igpu" || hw.tier === "unknown")
-								? h("p", { className: "lg-group-hint", "data-warn": "on" }, `⚠ ${t("fpsWarn")}`)
-								: null
-						),
-						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("look")),
-							h(
-								Row,
-								{ label: t("wallpaper"), hint: t("wallpaperHint") },
-								h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("sourceLabel")), h("span", { className: "lg-hint" }, t("sourceHint"))),
-								h(
-									"select",
-									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },
-									h("option", { value: "desktop" }, t("sourceDesktop")),
-									h("option", { value: "wallpaper" }, t("sourceWallpaper")),
-									h("option", { value: "we" }, t("sourceWe")),
-									h("option", { value: "file" }, t("sourceFile"))
-								)
-							),
-							h(Slider, {
-								label: t("blur"),
-								value: value.blur,
-								min: 0,
-								max: 48,
-								step: 1,
-								display: `${value.blur} px`,
-								onChange: (next) => setSettings({ blur: next })
-							}),
-							h(Slider, {
-								label: t("saturation"),
-								value: value.saturation,
-								min: 1,
-								max: 2.4,
-								step: 0.05,
-								display: value.saturation.toFixed(2),
-								onChange: (next) => setSettings({ saturation: next })
-							}),
-							h(Slider, {
-								label: t("tint"),
-								value: value.tint,
-								min: 0,
-								max: 1,
-								step: 0.01,
-								display: `${Math.round(value.tint * 100)}%`,
-								onChange: (next) => setSettings({ tint: next })
-							}),
-							h(Slider, {
-								label: t("veil"),
-								value: value.veil,
-								min: 0,
-								max: 1,
-								step: 0.01,
-								display: `${Math.round(value.veil * 100)}%`,
-								onChange: (next) => setSettings({ veil: next })
-							}),
-							h("p", { className: "lg-group-hint" }, t("veilHint")),
-							h(Slider, {
-								label: t("dim"),
-								value: value.dim,
-								min: 0,
-								max: 0.6,
-								step: 0.01,
-								display: `${Math.round(value.dim * 100)}%`,
-								onChange: (next) => setSettings({ dim: next })
-							}),
-							h(Slider, {
-								label: t("flow"),
-								value: value.flow,
-								min: 0,
-								max: 1.5,
-								step: 0.05,
-								display: value.flow.toFixed(2),
-								onChange: (next) => setSettings({ flow: next })
-							}),
-							h("p", { className: "lg-group-hint" }, t("flowHint")),
-							h("p", { className: "lg-group-hint" }, t("moveHint"))
-						),
-						h(AppearanceModes, null),
-						h(WallpaperCenter, null),
-						h(AudioPanel, null),
-						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("renderGroup")),
-							h(
-								Row,
-								{ label: t("renderMode"), hint: t("renderModeHint") },
-								h(
-									"select",
-									{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
-									h("option", { value: "webgl" }, t("renderWebgl")),
-									h("option", { value: "webgpu" }, t("renderWebgpu"))
-								)
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("fps")), h("span", { className: "lg-hint" }, t("fpsHint"))),
-								h(
-									"select",
-									{ className: "lg-select", value: String(value.fps), onChange: (event) => setSettings({ fps: Number(event.target.value) }) },
-									[24, 30, 40, 48, 60, 90, 120, 144, 0].map((option) =>
-										h("option", { key: option, value: String(option) }, option === 0 ? t("unlimited") : `${option} FPS`)
+							state.elysia && state.elysia.installed
+								? h(
+										"button",
+										{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "elysia" ? "on" : undefined, onClick: () => chooseModule("elysia") },
+										t("moduleElysia")
 									)
-								)
-							),
+								: null,
 							h(
-								Row,
-								{ label: t("autoScale"), hint: t("autoScaleHint") },
-								h(Switch, { on: value.autoScale, onChange: (next) => setSettings({ autoScale: next }), label: t("autoScale") })
-							),
-							h(
-								Row,
-								{ label: t("behind"), hint: t("behindHint") },
-								h(Switch, { on: value.behind, onChange: (next) => setSettings({ behind: next }), label: t("behind") })
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h(
-									"div",
-									{ className: "lg-label" },
-									h("span", null, t("ink")),
-									h(
-										"span",
-										{ className: "lg-hint" },
-										inkProbe.sample
-											? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
-											: t("inkHint")
-									)
-								),
-								h(
-									"select",
-									{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
-									h("option", { value: "auto" }, t("inkAuto")),
-									h("option", { value: "dark" }, t("inkDark")),
-									h("option", { value: "light" }, t("inkLight"))
-								)
-							),
-							h(
-								"dl",
-								{ className: "lg-facts" },
-								h("div", { className: "lg-fact" }, h("dt", null, t("renderer")), h("dd", null, modeText)),
-								h("div", { className: "lg-fact" }, h("dt", null, t("fps")), h("dd", null, perf ? (perf.fps === 0 ? "∞" : `${perf.fps}`) : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
+								"button",
+								{
+									type: "button",
+									className: "lg-chip lg-island",
+									"data-on": value.island ? "on" : undefined,
+									onClick: () => setSettings({ island: !value.island })
+								},
+								t("moduleIsland")
 							)
 						),
-						h(
+						h("p", { className: "lg-group-hint" }, t("moduleHint")),
+						moduleValue === "glass"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("look")),
+										h(
+											Row,
+											{ label: t("wallpaper"), hint: t("wallpaperHint") },
+											h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
+										),
+										h(Slider, {
+											label: t("blur"),
+											value: value.blur,
+											min: 0,
+											max: 48,
+											step: 1,
+											display: `${value.blur} px`,
+											onChange: (next) => setSettings({ blur: next })
+										}),
+										h(Slider, {
+											label: t("saturation"),
+											value: value.saturation,
+											min: 1,
+											max: 2.4,
+											step: 0.05,
+											display: value.saturation.toFixed(2),
+											onChange: (next) => setSettings({ saturation: next })
+										}),
+										h(Slider, {
+											label: t("tint"),
+											value: value.tint,
+											min: 0,
+											max: 1,
+											step: 0.01,
+											display: `${Math.round(value.tint * 100)}%`,
+											onChange: (next) => setSettings({ tint: next })
+										}),
+										h(Slider, {
+											label: t("veil"),
+											value: value.veil,
+											min: 0,
+											max: 1,
+											step: 0.01,
+											display: `${Math.round(value.veil * 100)}%`,
+											onChange: (next) => setSettings({ veil: next })
+										}),
+										h("p", { className: "lg-group-hint" }, t("veilHint")),
+										h(Slider, {
+											label: t("dim"),
+											value: value.dim,
+											min: 0,
+											max: 0.6,
+											step: 0.01,
+											display: `${Math.round(value.dim * 100)}%`,
+											onChange: (next) => setSettings({ dim: next })
+										}),
+										h(Slider, {
+											label: t("flow"),
+											value: value.flow,
+											min: 0,
+											max: 1.5,
+											step: 0.05,
+											display: value.flow.toFixed(2),
+											onChange: (next) => setSettings({ flow: next })
+										}),
+										h("p", { className: "lg-group-hint" }, t("flowHint")),
+										h("p", { className: "lg-group-hint" }, t("moveHint"))
+									),
+									h(AppearanceModes, null),
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("renderGroup")),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h(
+												"div",
+												{ className: "lg-label" },
+												h("span", null, t("hardware")),
+												h("span", { className: "lg-hint" }, `${hw.vendor || "—"} · ${hw.renderer || t("tier_unknown")}`)
+											),
+											h("b", { className: "lg-badge" }, t(`tier_${hw.tier}`))
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h("div", { className: "lg-label" }, h("span", null, t("preset")), h("span", { className: "lg-hint" }, t("presetHint"))),
+											h(
+												"select",
+												{
+													className: "lg-select",
+													value: value.preset ?? "auto",
+													onChange: (event) => applyPreset(event.target.value)
+												},
+												h("option", { value: "auto" }, t("presetAuto")),
+												h("option", { value: "igpu" }, t("presetIgpu")),
+												h("option", { value: "balanced" }, t("presetBalanced")),
+												h("option", { value: "beast" }, t("presetBeast"))
+											)
+										),
+										(value.fps === 0 || value.fps > (SAFE_FPS[hw.tier] ?? 30)) && (hw.tier === "igpu" || hw.tier === "unknown")
+											? h("p", { className: "lg-group-hint", "data-warn": "on" }, `⚠ ${t("fpsWarn")}`)
+											: null,
+										h(
+											Row,
+											{ label: t("renderMode"), hint: t("renderModeHint") },
+											h(
+												"select",
+												{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
+												h("option", { value: "webgl" }, t("renderWebgl")),
+												h("option", { value: "webgpu" }, t("renderWebgpu"))
+											)
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h("div", { className: "lg-label" }, h("span", null, t("fps")), h("span", { className: "lg-hint" }, t("fpsHint"))),
+											h(
+												"select",
+												{ className: "lg-select", value: String(value.fps), onChange: (event) => setSettings({ fps: Number(event.target.value) }) },
+												[24, 30, 40, 48, 60, 90, 120, 144, 0].map((option) =>
+													h("option", { key: option, value: String(option) }, option === 0 ? t("unlimited") : `${option} FPS`)
+												)
+											)
+										),
+										h(
+											Row,
+											{ label: t("autoScale"), hint: t("autoScaleHint") },
+											h(Switch, { on: value.autoScale, onChange: (next) => setSettings({ autoScale: next }), label: t("autoScale") })
+										),
+										h(
+											Row,
+											{ label: t("behind"), hint: t("behindHint") },
+											h(Switch, { on: value.behind, onChange: (next) => setSettings({ behind: next }), label: t("behind") })
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h(
+												"div",
+												{ className: "lg-label" },
+												h("span", null, t("ink")),
+												h(
+													"span",
+													{ className: "lg-hint" },
+													inkProbe.sample
+														? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
+														: t("inkHint")
+												)
+											),
+											h(
+												"select",
+												{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
+												h("option", { value: "auto" }, t("inkAuto")),
+												h("option", { value: "dark" }, t("inkDark")),
+												h("option", { value: "light" }, t("inkLight"))
+											)
+										),
+										h(
+											"dl",
+											{ className: "lg-facts" },
+											h("div", { className: "lg-fact" }, h("dt", null, t("renderer")), h("dd", null, modeText)),
+											h("div", { className: "lg-fact" }, h("dt", null, t("fps")), h("dd", null, perf ? (perf.fps === 0 ? "∞" : `${perf.fps}`) : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
+										)
+									)
+								)
+							: null,
+						moduleValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
+						moduleValue === "elysia"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("moduleElysia")),
+										h("p", { className: "lg-group-hint" }, t("moduleElysiaHint")),
+										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null
+									)
+								)
+							: null,
+h(
 							"section",
 							{ className: "lg-group" },
 							h("h2", { className: "lg-group-title" }, t("updateGroup")),
@@ -5824,183 +5888,57 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const value = useSettings();
 			const lang = useLang();
 			const t = makeTranslate(lang);
-			const [we, setWe] = useState(null);
+			const [library, setLibrary] = useState(null);
 			const [loading, setLoading] = useState(false);
+			const [error, setError] = useState("");
 			const [search, setSearch] = useState("");
-			const [hint, setHint] = useState("");
-			const [browser, setBrowser] = useState("");
-			const [selected, setSelected] = useState(null);
-			const [tab, setTab] = useState("installed");
-			const [props, setProps] = useState({ volume: 50, speed: 100, align: "cover", offset: 50, flip: false, filter: "none", showColor: false });
-			const [presetMsg, setPresetMsg] = useState("");
-
+			const [filter, setFilter] = useState("all");
+			const [browser, setBrowser] = useState(false);
 			const load = useCallback((force) => {
 				setLoading(true);
+				setError("");
 				fetch(`${API}/we${force ? "?force=1" : ""}`, { cache: "no-store" })
 					.then((response) => response.json())
-					.then((data) => setWe(data))
-					.catch(() => setWe({ ok: false, installed: false, items: [], current: null }))
+					.then((next) => {
+						setLibrary(next);
+						if (next && next.ok === false) setError(String(next.error ?? "failed"));
+					})
+					.catch((failure) => setError(String((failure && failure.message) || failure)))
 					.finally(() => setLoading(false));
 			}, []);
 			useEffect(() => {
 				load(false);
 			}, [load]);
-
 			const launch = (target) => {
-				fetch(`${API}/launch?target=${target}`, { cache: "no-store" }).catch(() => {});
+				fetch(`${API}/launch?target=${target}`).catch(() => {});
 			};
-			const apply = (item) => {
-				if (item.type === "video") {
-					setSettings({ source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
-					setHint(t("weApplied"));
-					return;
-				}
-				setSettings({ source: "desktop", wallpaper: true });
-				setHint(t("weLiveHint"));
-			};
-			const setProp = (patch) => setProps(Object.assign({}, props, patch));
-
-			const installed = Boolean(we && we.installed);
-			const seen = {};
-			const all = (we && we.items ? we.items : []).filter((item) => {
-				if (!item || seen[item.id]) return false;
-				seen[item.id] = true;
-				return true;
+			const installed = Boolean(library && library.installed);
+			const current = library && library.current;
+			const items = (library && library.items) || [];
+			const needle = search.trim().toLowerCase();
+			const shown = items.filter((item) => {
+				if (filter !== "all" && item.type !== filter) return false;
+				return !needle || String(item.title || "").toLowerCase().includes(needle);
 			});
-			const shown = all
-				.filter((item) => !search || String(item.title).toLowerCase().includes(search.toLowerCase()))
-				.slice(0, 120);
-			const current = we && we.current ? we.current : null;
-
-			const alignOptions = [
-				["cover", "weAlignCover"],
-				["contain", "weAlignContain"],
-				["stretch", "weAlignStretch"],
-				["center", "weAlignCenter"]
-			];
-			const filterOptions = [
-				["none", "weFilterNone"],
-				["mono", "weFilterMono"],
-				["warm", "weFilterWarm"]
-			];
-			const propRow = (label, control) =>
+			const apply = (item) => {
+				if (!item) return;
+				if (item.type === "video") {
+					setSettings({ module: "wallpaper", source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
+				} else {
+					setSettings({ module: "wallpaper", source: "desktop", weId: item.id, wallpaper: true });
+				}
+			};
+			const pickFile = (file) => {
+				if (!file || !file.path) return;
+				setSettings({ module: "wallpaper", source: "file", filePath: file.path, wallpaper: true });
+				setBrowser(false);
+			};
+			const chip = (id) =>
 				h(
-					"div",
-					{ className: "lg-we-prop" },
-					h("span", { className: "lg-we-prop-label" }, label),
-					h("div", { className: "lg-we-prop-control" }, control)
+					"button",
+					{ key: id, type: "button", className: "lg-chip", "data-on": filter === id ? "on" : undefined, onClick: () => setFilter(id) },
+					t(`weFilter_${id}`)
 				);
-
-			const side = selected
-				? h(
-						"aside",
-						{ className: "lg-we-side" },
-						h(
-							"div",
-							{ className: "lg-we-side-hero" },
-							h(
-								"span",
-								{ className: "lg-we-side-thumb" },
-								selected.preview
-									? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(selected.id)}`, alt: "" })
-									: h("span", { className: "lg-we-fallback" }, "WE")
-							),
-							h(
-								"div",
-								{ className: "lg-we-side-title" },
-								h("strong", null, selected.title),
-								h("span", { className: "lg-hint" }, `${h(WeTypeLabel, { t, type: selected.type })} · ${formatBytes(selected.size)}`)
-							)
-						),
-						h("div", { className: "lg-we-side-section" }, h("h3", null, t("weProps"))),
-						propRow(t("wePropColor"), h("span", { className: "lg-we-prop-value" }, t("wePropColorAuto"))),
-						propRow(
-							t("wePropVolume"),
-							h("input", { className: "lg-range", type: "range", min: 0, max: 100, step: 1, value: props.volume, onChange: (event) => setProp({ volume: Number(event.target.value) }) })
-						),
-						propRow(
-							t("wePropSpeed"),
-							h("input", { className: "lg-range", type: "range", min: 50, max: 200, step: 5, value: props.speed, onChange: (event) => setProp({ speed: Number(event.target.value) }) })
-						),
-						propRow(
-							t("wePropAlign"),
-							h(
-								"select",
-								{ className: "lg-input", value: props.align, onChange: (event) => setProp({ align: event.target.value }) },
-								alignOptions.map(([id, key]) => h("option", { key: id, value: id }, t(key)))
-							)
-						),
-						propRow(
-							t("wePropOffset"),
-							h("input", { className: "lg-range", type: "range", min: 0, max: 100, step: 1, value: props.offset, onChange: (event) => setProp({ offset: Number(event.target.value) }) })
-						),
-						propRow(t("wePropFlip"), h(Switch, { on: props.flip, label: "", onChange: (next) => setProp({ flip: next }) })),
-						propRow(
-							t("wePropFilter"),
-							h(
-								"select",
-								{ className: "lg-input", value: props.filter, onChange: (event) => setProp({ filter: event.target.value }) },
-								filterOptions.map(([id, key]) => h("option", { key: id, value: id }, t(key)))
-							)
-						),
-						propRow(t("wePropColorOptions"), h(Switch, { on: props.showColor, label: "", onChange: (next) => setProp({ showColor: next }) })),
-						h("div", { className: "lg-we-side-section" }, h("h3", null, t("wePresets"))),
-						h(
-							"div",
-							{ className: "lg-actions" },
-							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("wePresetLoaded")) }, t("wePresetLoad")),
-							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("wePresetSaved")) }, t("wePresetSave"))
-						),
-						presetMsg ? h("p", { className: "lg-group-hint" }, presetMsg) : null,
-						h(
-							"div",
-							{ className: "lg-actions lg-we-side-actions" },
-							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("weApplied")) }, t("weApplyAll")),
-							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("weShareDone")) }, t("weShare"))
-						)
-					)
-				: h("aside", { className: "lg-we-side lg-we-side-empty" }, h("p", { className: "lg-group-hint" }, t("weSelectHint")));
-
-			const footer = h(
-				"div",
-				{ className: "lg-we-footer" },
-				h(
-					"div",
-					{ className: "lg-we-footer-group" },
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("wePlaylistHint")) }, t("wePlaylist")),
-					h("span", { className: "lg-we-sep" }),
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("weReadHint")) }, t("weRead")),
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("wePresetSaved")) }, t("weSave")),
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("weConfigHint")) }, t("weConfig"))
-				),
-				h(
-					"div",
-					{ className: "lg-we-footer-group" },
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => setBrowser(browser === "wallpaper" ? "" : "wallpaper") }, t("weAdd")),
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => launch("we") }, t("weEditor")),
-					h("button", { type: "button", className: "lg-we-foot", onClick: () => launch("we") }, t("weOpenWallpaper"))
-				),
-				h(
-					"div",
-					{ className: "lg-we-footer-group" },
-					h(
-						"button",
-						{
-							type: "button",
-							className: "lg-button lg-we-primary",
-							disabled: !selected,
-							onClick: () => {
-								if (!selected) return;
-								apply(selected);
-								setPresetMsg("");
-							}
-						},
-						t("weConfirm")
-					),
-					h("button", { type: "button", className: "lg-button", onClick: () => setSelected(null) }, t("weCancel"))
-				)
-			);
-
 			return h(
 				"section",
 				{ className: "lg-group" },
@@ -6008,92 +5946,66 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				h("p", { className: "lg-group-hint" }, t("weHint")),
 				h(
 					"div",
-					{ className: "lg-we-app" },
-					h(
-						"div",
-						{ className: "lg-we-topbar" },
-						h(
-							"div",
-							{ className: "lg-we-tabs" },
-							h("button", { type: "button", className: "lg-we-tab", "data-on": tab === "installed" ? "on" : undefined, onClick: () => setTab("installed") }, t("weTabInstalled")),
-							h("button", { type: "button", className: "lg-we-tab", disabled: true, title: t("weTabDisabled") }, t("weTabDiscover")),
-							h("button", { type: "button", className: "lg-we-tab", disabled: true, title: t("weTabDisabled") }, t("weTabWorkshop"))
-						),
-						h(
-							"div",
-							{ className: "lg-we-toolbar" },
-							h("input", {
-								className: "lg-input lg-we-search",
-								type: "search",
-								value: search,
-								placeholder: t("weSearch"),
-								onChange: (event) => setSearch(event.target.value)
-							}),
-							h("span", { className: "lg-we-toolcount" }, t("weFilterResults")),
-							h("button", { type: "button", className: "lg-we-icon", title: t("weRefresh"), onClick: () => load(true), disabled: loading }, "⟳"),
-							h("button", { type: "button", className: "lg-we-icon", title: t("weOpen"), onClick: () => launch("we") }, "WE"),
-							h("button", { type: "button", className: "lg-we-icon", title: t("weSteam"), onClick: () => launch("steam") }, "S"),
-							h(
-								"a",
-								{
-									className: "lg-we-icon",
-									href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
-									target: "_blank",
-									rel: "noreferrer",
-									title: t("weStore")
-								},
-								"⤓"
-							)
-						),
-						h(
-							"span",
-							{ className: "lg-we-current" },
-							current ? `${t("weCurrent")} ${current.title}` : installed ? (we.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")
-						)
-					),
-					installed
-						? h(
-								"div",
-								{ className: "lg-we-body" },
-								h(
-									"div",
-									{ className: "lg-we-left" },
-									shown.length
-										? h(
-												"div",
-												{ className: "lg-we-grid lg-we-grid-lg" },
-												shown.map((item) =>
-													h(
-														"button",
-														{
-															key: item.id,
-															type: "button",
-															className: "lg-we-card",
-															title: item.title,
-															"data-active": selected && selected.id === item.id ? "on" : undefined,
-															"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
-															onClick: () => setSelected(item),
-															onDoubleClick: () => apply(item)
-														},
-														h(
-															"span",
-															{ className: "lg-we-thumb" },
-															item.preview
-																? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(item.id)}`, alt: "", loading: "lazy" })
-																: h("span", { className: "lg-we-fallback" }, String(item.type).toUpperCase())
-														),
-														h("span", { className: "lg-we-name" }, item.title),
-														h("span", { className: "lg-we-meta" }, h(WeTypeLabel, { t, type: item.type }))
-													)
-												)
-											)
-										: h("p", { className: "lg-group-hint" }, t("weEmpty"))
-								),
-								side
-							)
-						: h("p", { className: "lg-group-hint" }, t("weMissing")),
-					installed ? footer : null
+					{ className: "lg-we-status" },
+					h("span", { className: "lg-dot", "data-state": installed ? (library.running ? "ready" : "idle") : "error" }),
+					h("span", null, installed ? (library.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")),
+					current && current.title ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
 				),
+				h(
+					"div",
+					{ className: "lg-we-tools" },
+					h("input", {
+						className: "lg-input lg-we-search",
+						type: "search",
+						placeholder: t("weSearch"),
+						value: search,
+						onChange: (event) => setSearch(event.target.value)
+					}),
+					h("div", { className: "lg-chips" }, chip("all"), chip("video"), chip("scene"), chip("web")),
+					h("button", { type: "button", className: "lg-button", disabled: loading, onClick: () => load(true) }, loading ? t("weLoading") : t("weRefresh")),
+					h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
+					h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
+					h(
+						"a",
+						{
+							className: "lg-button",
+							href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
+							target: "_blank",
+							rel: "noreferrer"
+						},
+						t("weStore")
+					)
+				),
+				installed && shown.length
+					? h(
+							"div",
+							{ className: "lg-we-grid" },
+							shown.map((item) =>
+								h(
+									"button",
+									{
+										key: item.id,
+										type: "button",
+										className: "lg-we-card",
+										title: item.title,
+										"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
+										onClick: () => apply(item)
+									},
+									h(
+										"span",
+										{ className: "lg-we-thumb" },
+										item.preview
+											? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(item.id)}`, alt: "", loading: "lazy" })
+											: h("span", { className: "lg-we-fallback" }, String(item.type || "").toUpperCase())
+									),
+									h("span", { className: "lg-we-name" }, item.title),
+									h("span", { className: "lg-we-meta" }, h("span", { className: "lg-we-gold", title: t("weGold") }, "WE"), h(WeTypeLabel, { t, type: item.type }))
+								)
+							)
+						)
+					: installed
+						? h("p", { className: "lg-group-hint" }, t("weEmpty"))
+						: null,
 				h(
 					"div",
 					{ className: "lg-row" },
@@ -6106,27 +6018,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					h(
 						"div",
 						{ className: "lg-actions" },
-						h("button", { type: "button", className: "lg-button", onClick: () => setBrowser(browser === "wallpaper" ? "" : "wallpaper") }, t("weBrowse")),
-						value.filePath ? h("button", { type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "" }) }, t("weClear")) : null
+						h("button", { type: "button", className: "lg-button", onClick: () => setBrowser((open) => !open) }, t("weBrowse")),
+						value.filePath
+							? h(
+									"button",
+									{ type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "", wallpaper: true }) },
+									t("weClear")
+								)
+							: null
 					)
 				),
-				browser === "wallpaper"
-					? h(WeFileBrowser, {
-							path: value.filePath || "",
-							kind: "media",
-							onPick: (file) => {
-								setSettings({ source: "file", filePath: file.path, wallpaper: true });
-								setBrowser("");
-								setHint(t("weApplied"));
-							},
-							onClose: () => setBrowser("")
-						})
-					: null,
-				hint ? h("p", { className: "lg-group-hint" }, hint) : null
+				browser ? h(WeFileBrowser, { path: value.filePath || "", kind: "media", onPick: pickFile, onClose: () => setBrowser(false) }) : null,
+				error ? h("p", { className: "lg-group-hint", "data-warn": "on" }, error) : null
 			);
 		}
-
-		/* ---- Appearance modes (task 12 / task 14 / task 15) ----------------- */
 
 		function AppearanceModes() {
 			const value = useSettings();

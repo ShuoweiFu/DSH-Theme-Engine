@@ -898,223 +898,228 @@
 						"div",
 						{ className: "lg-page-body" },
 						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("perf")),
-							h("h3", { className: "lg-group-subtitle" }, t("moduleTitle")),
+							"div",
+							{ className: "lg-branch-tabs" },
 							h(
-								"div",
-								{ className: "lg-module-grid" },
-								moduleOption("glass", t("moduleGlass"), t("moduleGlassHint")),
-								moduleOption("wallpaper", t("moduleWallpaper"), t("moduleWallpaperHint")),
-								state.elysia && state.elysia.installed
-									? moduleOption("elysia", t("moduleElysia"), `${t("moduleElysiaHint")} · ${state.elysia.name}`)
-									: null,
-								h(
-									"button",
-									{
-										type: "button",
-										className: "lg-module",
-										"data-on": value.island ? "on" : undefined,
-										onClick: () => setSettings({ island: !value.island })
-									},
-									h("span", { className: "lg-module-name" }, t("moduleIsland")),
-									h("span", { className: "lg-module-hint" }, t("moduleIslandHint")),
-									h("i", { className: "lg-module-dot", "aria-hidden": "true" })
-								)
-							),
-							h("p", { className: "lg-group-hint" }, t("moduleHint")),
-							state.elysia && state.elysia.installed ? null : h("p", { className: "lg-group-hint" }, t("moduleLocked")),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h(
-									"div",
-									{ className: "lg-label" },
-									h("span", null, t("hardware")),
-									h("span", { className: "lg-hint" }, `${hw.vendor || "—"} · ${hw.renderer || t("tier_unknown")}`)
-								),
-								h("b", { className: "lg-badge" }, t(`tier_${hw.tier}`))
+								"button",
+								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "glass" ? "on" : undefined, onClick: () => chooseModule("glass") },
+								t("moduleGlass")
 							),
 							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("preset")), h("span", { className: "lg-hint" }, t("presetHint"))),
-								h(
-									"select",
-									{
-										className: "lg-select",
-										value: value.preset ?? "auto",
-										onChange: (event) => {
-											applyPreset(event.target.value);
-										}
-									},
-									h("option", { value: "auto" }, t("presetAuto")),
-									h("option", { value: "igpu" }, t("presetIgpu")),
-									h("option", { value: "balanced" }, t("presetBalanced")),
-									h("option", { value: "beast" }, t("presetBeast"))
-								)
+								"button",
+								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "wallpaper" ? "on" : undefined, onClick: () => chooseModule("wallpaper") },
+								t("moduleWallpaper")
 							),
-							h("p", { className: "lg-group-hint" }, t("hardwareHint")),
-							(value.fps === 0 || value.fps > (SAFE_FPS[hw.tier] ?? 30)) && (hw.tier === "igpu" || hw.tier === "unknown")
-								? h("p", { className: "lg-group-hint", "data-warn": "on" }, `⚠ ${t("fpsWarn")}`)
-								: null
-						),
-						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("look")),
-							h(
-								Row,
-								{ label: t("wallpaper"), hint: t("wallpaperHint") },
-								h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("sourceLabel")), h("span", { className: "lg-hint" }, t("sourceHint"))),
-								h(
-									"select",
-									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },
-									h("option", { value: "desktop" }, t("sourceDesktop")),
-									h("option", { value: "wallpaper" }, t("sourceWallpaper")),
-									h("option", { value: "we" }, t("sourceWe")),
-									h("option", { value: "file" }, t("sourceFile"))
-								)
-							),
-							h(Slider, {
-								label: t("blur"),
-								value: value.blur,
-								min: 0,
-								max: 48,
-								step: 1,
-								display: `${value.blur} px`,
-								onChange: (next) => setSettings({ blur: next })
-							}),
-							h(Slider, {
-								label: t("saturation"),
-								value: value.saturation,
-								min: 1,
-								max: 2.4,
-								step: 0.05,
-								display: value.saturation.toFixed(2),
-								onChange: (next) => setSettings({ saturation: next })
-							}),
-							h(Slider, {
-								label: t("tint"),
-								value: value.tint,
-								min: 0,
-								max: 1,
-								step: 0.01,
-								display: `${Math.round(value.tint * 100)}%`,
-								onChange: (next) => setSettings({ tint: next })
-							}),
-							h(Slider, {
-								label: t("veil"),
-								value: value.veil,
-								min: 0,
-								max: 1,
-								step: 0.01,
-								display: `${Math.round(value.veil * 100)}%`,
-								onChange: (next) => setSettings({ veil: next })
-							}),
-							h("p", { className: "lg-group-hint" }, t("veilHint")),
-							h(Slider, {
-								label: t("dim"),
-								value: value.dim,
-								min: 0,
-								max: 0.6,
-								step: 0.01,
-								display: `${Math.round(value.dim * 100)}%`,
-								onChange: (next) => setSettings({ dim: next })
-							}),
-							h(Slider, {
-								label: t("flow"),
-								value: value.flow,
-								min: 0,
-								max: 1.5,
-								step: 0.05,
-								display: value.flow.toFixed(2),
-								onChange: (next) => setSettings({ flow: next })
-							}),
-							h("p", { className: "lg-group-hint" }, t("flowHint")),
-							h("p", { className: "lg-group-hint" }, t("moveHint"))
-						),
-						h(AppearanceModes, null),
-						h(WallpaperCenter, null),
-						h(AudioPanel, null),
-						h(
-							"section",
-							{ className: "lg-group" },
-							h("h2", { className: "lg-group-title" }, t("renderGroup")),
-							h(
-								Row,
-								{ label: t("renderMode"), hint: t("renderModeHint") },
-								h(
-									"select",
-									{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
-									h("option", { value: "webgl" }, t("renderWebgl")),
-									h("option", { value: "webgpu" }, t("renderWebgpu"))
-								)
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h("div", { className: "lg-label" }, h("span", null, t("fps")), h("span", { className: "lg-hint" }, t("fpsHint"))),
-								h(
-									"select",
-									{ className: "lg-select", value: String(value.fps), onChange: (event) => setSettings({ fps: Number(event.target.value) }) },
-									[24, 30, 40, 48, 60, 90, 120, 144, 0].map((option) =>
-										h("option", { key: option, value: String(option) }, option === 0 ? t("unlimited") : `${option} FPS`)
+							state.elysia && state.elysia.installed
+								? h(
+										"button",
+										{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "elysia" ? "on" : undefined, onClick: () => chooseModule("elysia") },
+										t("moduleElysia")
 									)
-								)
-							),
+								: null,
 							h(
-								Row,
-								{ label: t("autoScale"), hint: t("autoScaleHint") },
-								h(Switch, { on: value.autoScale, onChange: (next) => setSettings({ autoScale: next }), label: t("autoScale") })
-							),
-							h(
-								Row,
-								{ label: t("behind"), hint: t("behindHint") },
-								h(Switch, { on: value.behind, onChange: (next) => setSettings({ behind: next }), label: t("behind") })
-							),
-							h(
-								"div",
-								{ className: "lg-row" },
-								h(
-									"div",
-									{ className: "lg-label" },
-									h("span", null, t("ink")),
-									h(
-										"span",
-										{ className: "lg-hint" },
-										inkProbe.sample
-											? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
-											: t("inkHint")
-									)
-								),
-								h(
-									"select",
-									{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
-									h("option", { value: "auto" }, t("inkAuto")),
-									h("option", { value: "dark" }, t("inkDark")),
-									h("option", { value: "light" }, t("inkLight"))
-								)
-							),
-							h(
-								"dl",
-								{ className: "lg-facts" },
-								h("div", { className: "lg-fact" }, h("dt", null, t("renderer")), h("dd", null, modeText)),
-								h("div", { className: "lg-fact" }, h("dt", null, t("fps")), h("dd", null, perf ? (perf.fps === 0 ? "∞" : `${perf.fps}`) : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
-								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
+								"button",
+								{
+									type: "button",
+									className: "lg-chip lg-island",
+									"data-on": value.island ? "on" : undefined,
+									onClick: () => setSettings({ island: !value.island })
+								},
+								t("moduleIsland")
 							)
 						),
-						h(
+						h("p", { className: "lg-group-hint" }, t("moduleHint")),
+						moduleValue === "glass"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("look")),
+										h(
+											Row,
+											{ label: t("wallpaper"), hint: t("wallpaperHint") },
+											h(Switch, { on: value.wallpaper, onChange: (next) => setSettings({ wallpaper: next }), label: t("wallpaper") })
+										),
+										h(Slider, {
+											label: t("blur"),
+											value: value.blur,
+											min: 0,
+											max: 48,
+											step: 1,
+											display: `${value.blur} px`,
+											onChange: (next) => setSettings({ blur: next })
+										}),
+										h(Slider, {
+											label: t("saturation"),
+											value: value.saturation,
+											min: 1,
+											max: 2.4,
+											step: 0.05,
+											display: value.saturation.toFixed(2),
+											onChange: (next) => setSettings({ saturation: next })
+										}),
+										h(Slider, {
+											label: t("tint"),
+											value: value.tint,
+											min: 0,
+											max: 1,
+											step: 0.01,
+											display: `${Math.round(value.tint * 100)}%`,
+											onChange: (next) => setSettings({ tint: next })
+										}),
+										h(Slider, {
+											label: t("veil"),
+											value: value.veil,
+											min: 0,
+											max: 1,
+											step: 0.01,
+											display: `${Math.round(value.veil * 100)}%`,
+											onChange: (next) => setSettings({ veil: next })
+										}),
+										h("p", { className: "lg-group-hint" }, t("veilHint")),
+										h(Slider, {
+											label: t("dim"),
+											value: value.dim,
+											min: 0,
+											max: 0.6,
+											step: 0.01,
+											display: `${Math.round(value.dim * 100)}%`,
+											onChange: (next) => setSettings({ dim: next })
+										}),
+										h(Slider, {
+											label: t("flow"),
+											value: value.flow,
+											min: 0,
+											max: 1.5,
+											step: 0.05,
+											display: value.flow.toFixed(2),
+											onChange: (next) => setSettings({ flow: next })
+										}),
+										h("p", { className: "lg-group-hint" }, t("flowHint")),
+										h("p", { className: "lg-group-hint" }, t("moveHint"))
+									),
+									h(AppearanceModes, null),
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("renderGroup")),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h(
+												"div",
+												{ className: "lg-label" },
+												h("span", null, t("hardware")),
+												h("span", { className: "lg-hint" }, `${hw.vendor || "—"} · ${hw.renderer || t("tier_unknown")}`)
+											),
+											h("b", { className: "lg-badge" }, t(`tier_${hw.tier}`))
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h("div", { className: "lg-label" }, h("span", null, t("preset")), h("span", { className: "lg-hint" }, t("presetHint"))),
+											h(
+												"select",
+												{
+													className: "lg-select",
+													value: value.preset ?? "auto",
+													onChange: (event) => applyPreset(event.target.value)
+												},
+												h("option", { value: "auto" }, t("presetAuto")),
+												h("option", { value: "igpu" }, t("presetIgpu")),
+												h("option", { value: "balanced" }, t("presetBalanced")),
+												h("option", { value: "beast" }, t("presetBeast"))
+											)
+										),
+										(value.fps === 0 || value.fps > (SAFE_FPS[hw.tier] ?? 30)) && (hw.tier === "igpu" || hw.tier === "unknown")
+											? h("p", { className: "lg-group-hint", "data-warn": "on" }, `⚠ ${t("fpsWarn")}`)
+											: null,
+										h(
+											Row,
+											{ label: t("renderMode"), hint: t("renderModeHint") },
+											h(
+												"select",
+												{ className: "lg-select", value: value.renderMode, onChange: (event) => setSettings({ renderMode: event.target.value }) },
+												h("option", { value: "webgl" }, t("renderWebgl")),
+												h("option", { value: "webgpu" }, t("renderWebgpu"))
+											)
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h("div", { className: "lg-label" }, h("span", null, t("fps")), h("span", { className: "lg-hint" }, t("fpsHint"))),
+											h(
+												"select",
+												{ className: "lg-select", value: String(value.fps), onChange: (event) => setSettings({ fps: Number(event.target.value) }) },
+												[24, 30, 40, 48, 60, 90, 120, 144, 0].map((option) =>
+													h("option", { key: option, value: String(option) }, option === 0 ? t("unlimited") : `${option} FPS`)
+												)
+											)
+										),
+										h(
+											Row,
+											{ label: t("autoScale"), hint: t("autoScaleHint") },
+											h(Switch, { on: value.autoScale, onChange: (next) => setSettings({ autoScale: next }), label: t("autoScale") })
+										),
+										h(
+											Row,
+											{ label: t("behind"), hint: t("behindHint") },
+											h(Switch, { on: value.behind, onChange: (next) => setSettings({ behind: next }), label: t("behind") })
+										),
+										h(
+											"div",
+											{ className: "lg-row" },
+											h(
+												"div",
+												{ className: "lg-label" },
+												h("span", null, t("ink")),
+												h(
+													"span",
+													{ className: "lg-hint" },
+													inkProbe.sample
+														? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
+														: t("inkHint")
+												)
+											),
+											h(
+												"select",
+												{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
+												h("option", { value: "auto" }, t("inkAuto")),
+												h("option", { value: "dark" }, t("inkDark")),
+												h("option", { value: "light" }, t("inkLight"))
+											)
+										),
+										h(
+											"dl",
+											{ className: "lg-facts" },
+											h("div", { className: "lg-fact" }, h("dt", null, t("renderer")), h("dd", null, modeText)),
+											h("div", { className: "lg-fact" }, h("dt", null, t("fps")), h("dd", null, perf ? (perf.fps === 0 ? "∞" : `${perf.fps}`) : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("scale")), h("dd", null, perf ? `${Math.round(perf.scale * 100)}%` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("frames")), h("dd", null, perf ? `${perf.frames}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, "ms"), h("dd", null, perf && typeof perf.ms === "number" ? `${perf.ms}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
+											h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
+										)
+									)
+								)
+							: null,
+						moduleValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
+						moduleValue === "elysia"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("moduleElysia")),
+										h("p", { className: "lg-group-hint" }, t("moduleElysiaHint")),
+										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null
+									)
+								)
+							: null,
+h(
 							"section",
 							{ className: "lg-group" },
 							h("h2", { className: "lg-group-title" }, t("updateGroup")),

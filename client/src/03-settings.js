@@ -8,14 +8,42 @@
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
 				: [];
+			const colorMode = ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto";
+			const legacyTint = num(source.tint, DEFAULT_SETTINGS.tint, 0, 1);
+			const legacyVeil = num(source.veil, DEFAULT_SETTINGS.veil, 0, 1);
+			const legacyDim = num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6);
+			const legacyInk = source.ink === "dark" || source.ink === "light" ? source.ink : "auto";
+			const legacyColor = /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor;
+			// Each colour mode keeps its own appearance values. The top-level keys
+			// stay the render truth and always mirror the active bucket; switching
+			// modes loads the target bucket back into them (12-apply.js setSettings).
+			//
+			// Upgrade path: the first load after this shape grew has no modeValues,
+			// so every bucket is seeded from the active values. Upgrading must never
+			// repaint a look the user already signed off on.
+			const rawBuckets = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
+			const modeValues = {};
+			for (const mode of MODE_IDS) {
+				const rawBucket = rawBuckets && rawBuckets[mode] && typeof rawBuckets[mode] === "object" ? rawBuckets[mode] : null;
+				const bucket = rawBucket || (rawBuckets ? DEFAULT_SETTINGS.modeValues[mode] : source);
+				modeValues[mode] = {
+					tint: num(bucket.tint, legacyTint, 0, 1),
+					veil: num(bucket.veil, legacyVeil, 0, 1),
+					dim: num(bucket.dim, legacyDim, 0, 0.6),
+					ink: bucket.ink === "dark" || bucket.ink === "light" ? bucket.ink : legacyInk,
+					customColor: /^#[0-9a-f]{6}$/i.test(bucket.customColor) ? bucket.customColor : legacyColor,
+					autoInvert: bucket.autoInvert !== false
+				};
+			}
+			const active = modeValues[colorMode];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
 				blur: Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48)),
 				saturation: num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4),
-				tint: num(source.tint, DEFAULT_SETTINGS.tint, 0, 1),
-				veil: num(source.veil, DEFAULT_SETTINGS.veil, 0, 1),
-				dim: num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6),
+				tint: active.tint,
+				veil: active.veil,
+				dim: active.dim,
 				refreshSec: Math.round(num(source.refreshSec, DEFAULT_SETTINGS.refreshSec, 1, 60)),
 				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
@@ -24,9 +52,10 @@
 				wePath: typeof source.wePath === "string" ? source.wePath : "",
 				weId: typeof source.weId === "string" ? source.weId : "",
 				filePath: typeof source.filePath === "string" ? source.filePath : "",
-				colorMode: ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto",
-				customColor: /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor,
-				autoInvert: source.autoInvert !== false,
+				colorMode,
+				customColor: active.customColor,
+				autoInvert: active.autoInvert,
+				modeValues,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,
@@ -36,7 +65,7 @@
 				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
-				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
+				ink: active.ink,
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
 				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
 				island: source.island === true
@@ -151,6 +180,10 @@
 				Math.round(from[1] + (to[1] - from[1]) * t),
 				Math.round(from[2] + (to[2] - from[2]) * t)
 			];
+		}
+
+		function rgbHex(rgb) {
+			return "#" + rgb.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("");
 		}
 
 		function rgba(rgb, alpha) {

@@ -6,8 +6,16 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.165200";
+		const CLIENT_BUILD = "v.26.11.21.165900";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
+		/**
+		 * Appearance values are archived per colour mode. These ids and keys are
+		 * shared by the settings model, the panel and the transition code; do not
+		 * rename them without migrating storage (see 03-settings.js).
+		 */
+		const MODE_IDS = Object.freeze(["auto", "light", "dark", "custom", "intelligent"]);
+		const MODE_KEYS = Object.freeze(["tint", "veil", "dim", "ink", "customColor", "autoInvert"]);
+		const MODE_DEFAULTS = Object.freeze({ tint: 0.55, veil: 0.34, dim: 0.08, ink: "auto", customColor: "#8ab4ff", autoInvert: true });
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
 			wallpaper: true,
@@ -33,7 +41,8 @@
 			ink: "auto",
 			preset: "auto",
 			module: "glass",
-			island: false
+			island: false,
+			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }]))
 		});
 
 		/**

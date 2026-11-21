@@ -137,6 +137,7 @@
 				// repaint the whole transcript once per poll (the flicker). Only a
 				// sample that could change the decision is allowed through.
 				const [inkInfo, setInkInfo] = useState(null);
+				const [intelColor, setIntelColor] = useState("");
 				const inkRef = useRef(null);
 				const onInk = useCallback((next) => {
 					if (!next || typeof next.lum !== "number") return;
@@ -173,20 +174,52 @@
 					};
 				}, []);
 
+				// Colour modes (tasks 12-15): force light / dark, colour the glass from a
+				// custom hex, or follow the wallpaper's own dominant colour. "auto" is the
+				// system theme plus the optional auto-invert rule.
+				const colorMode = value.colorMode || "auto";
+				const autoInvert = value.autoInvert !== false;
+				const glassBase = colorMode === "custom" ? value.customColor : colorMode === "intelligent" ? intelColor : "";
+				let forcedMode = colorMode === "light" ? "light" : colorMode === "dark" ? "dark" : "";
+				if (!forcedMode && autoInvert) {
+					let lum = null;
+					if (colorMode === "intelligent" && intelColor) lum = hexLuminance(intelColor);
+					else if (colorMode === "auto" && inkInfo) lum = inkInfo.content ?? inkInfo.lum;
+					if (lum != null) forcedMode = lum > 0.62 ? "light" : lum < 0.34 ? "dark" : "";
+				}
+				const appliedMode = forcedMode || mode;
+
 				useEffect(() => {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
-					root.dataset.lgMode = mode;
+					root.dataset.lgMode = appliedMode;
 					root.style.setProperty("--lg-dim", String(value.dim));
-					root.style.setProperty("--lg-fallback", mode === "dark" ? "#0b0e14" : "#eef1f6");
+					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
-				}, [value, state.url, state.kind, mode, appsBehind]);
+				}, [value.enabled, value.dim, appliedMode, appsBehind]);
 
 				// WebGL liquid wallpaper: owns its canvas under <body>.
 				const liquidRef = useRef(null);
 				const liquid = liquidRef.current;
 				const wallpaperUrl = value.wallpaper && state.url ? state.url : "";
 				const wallpaperKind = state.kind === "video" ? "video" : "image";
+
+				// Intelligent mode needs one dominant colour per wallpaper. Image and
+				// video sources are sampled client-side; scene/web wallpapers arrive as
+				// the live desktop image, so the desktop capture is sampled instead.
+				useEffect(() => {
+					if (colorMode !== "intelligent" || !wallpaperUrl) {
+						setIntelColor("");
+						return undefined;
+					}
+					let alive = true;
+					sampleWallpaperColor(wallpaperUrl, wallpaperKind).then((color) => {
+						if (alive && color) setIntelColor(color);
+					});
+					return () => {
+						alive = false;
+					};
+				}, [colorMode, wallpaperUrl, wallpaperKind]);
 
 				// Layer 1 + 2: a pointer move only wakes the renderer; it never starts
 				// a second loop, and the highlight itself is throttled to one rAF.
@@ -423,10 +456,15 @@
 						// ink from the sample.
 						let ink = value.ink;
 						let veil = value.veil;
-						if (ink !== "dark" && ink !== "light" && inkInfo) {
-							const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
-							ink = decided.ink;
-							veil = decided.veil;
+						if (ink !== "dark" && ink !== "light") {
+							if (forcedMode) {
+								// A forced light glass always needs dark ink and vice versa.
+								ink = forcedMode === "light" ? "dark" : "light";
+							} else if (inkInfo) {
+								const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
+								ink = decided.ink;
+								veil = decided.veil;
+							}
 						}
 						// The composer is its own surface: the frosted card reads the overlay
 						// token, which glassTokens() already tints toward the ink in use.
@@ -434,7 +472,7 @@
 						// token itself, so stamp the decision on <html> and let 07-styles.js
 						// map it: dark ink -> light caret, light ink -> dark caret.
 						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
-						const next = glassTokens(value.tint, veil, ink);
+						const next = glassTokens(value.tint, veil, ink, { force: forcedMode, base: glassBase });
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
@@ -442,7 +480,7 @@
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo]);
+				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo, forcedMode, colorMode, value.customColor, glassBase]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper) {
@@ -947,6 +985,7 @@
 							h("p", { className: "lg-group-hint" }, t("flowHint")),
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
+						h(AppearanceModes, null),
 						h(WallpaperCenter, null),
 						h(AudioPanel, null),
 						h(

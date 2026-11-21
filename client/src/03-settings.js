@@ -135,38 +135,85 @@
 		 * "light" ink on a dark one. Both theme modes receive the same colour, so
 		 * the switch happens live no matter which DSH theme the user picked.
 		 */
-		function glassTokens(tint, veil, ink) {
+		function hexRgb(hex) {
+			const match = /^#([0-9a-f]{6})$/i.exec(String(hex || ""));
+			if (!match) return null;
+			const value = parseInt(match[1], 16);
+			return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+		}
+
+		function mixRgb(from, to, amount) {
+			const t = Math.min(1, Math.max(0, amount));
+			return [
+				Math.round(from[0] + (to[0] - from[0]) * t),
+				Math.round(from[1] + (to[1] - from[1]) * t),
+				Math.round(from[2] + (to[2] - from[2]) * t)
+			];
+		}
+
+		function rgba(rgb, alpha) {
+			return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${clampAlpha(alpha)})`;
+		}
+
+		/**
+		 * Per-token glass values. `veil` is the frost density (0 = bare glass,
+		 * 1 = heavy frosting) and is the only knob that raises surface opacity, so
+		 * the tint slider can never reintroduce the milky fog. 0.13 keeps the 0.11
+		 * contract (veil drives the frost) but maps the curve so veil = 1 lands on
+		 * exactly the surface the 0.8 formula produced at tint 1 (0.47 * 1.1 ≈
+		 * 0.52): the restored slider cannot repaint a look the user just approved.
+		 *
+		 * `ink` is the adaptive text colour: "dark" ink on a bright backdrop,
+		 * "light" ink on a dark one. Both theme modes receive the same colour, so
+		 * the switch happens live no matter which DSH theme the user picked.
+		 *
+		 * `options.force` pins both theme slots to the palette of one mode (the WE
+		 * light/dark switch of tasks 12-13). `options.base` tints the glass from a
+		 * custom colour or the wallpaper's dominant colour (tasks 14-15); the alpha
+		 * curve is unchanged so the frost slider keeps its meaning.
+		 */
+		function glassTokens(tint, veil, ink, options = {}) {
 			const t = Math.min(1, Math.max(0, tint));
 			const v = Math.min(1, Math.max(0, veil == null ? DEFAULT_SETTINGS.veil : veil));
 			const base = 0.02 + 0.45 * v;
 			const lift = 0.02 + 0.05 * v;
 			const tintLift = 0.9 + 0.2 * t;
+			const force = options.force === "light" || options.force === "dark" ? options.force : "";
+			const accent = hexRgb(options.base);
+			const lightRgb = accent ? mixRgb(accent, [255, 255, 255], 0.68) : [255, 255, 255];
+			const lightLayerRgb = accent ? mixRgb(accent, [252, 253, 255], 0.56) : [252, 253, 255];
+			const lightOverlayRgb = accent ? mixRgb(accent, [251, 252, 255], 0.72) : [251, 252, 255];
+			const darkRgb = accent ? mixRgb(accent, [9, 11, 16], 0.62) : [9, 11, 16];
+			const darkLayerRgb = accent ? mixRgb(accent, [20, 25, 35], 0.55) : [20, 25, 35];
+			const darkOverlayRgb = accent ? mixRgb(accent, [18, 22, 31], 0.6) : [18, 22, 31];
 			const light = {
-				"--dsw-alias-bg-base": `rgba(255,255,255,${clampAlpha(base * tintLift)})`,
-				"--dsw-alias-bg-layer-1": `rgba(255,255,255,${clampAlpha((base + lift) * tintLift)})`,
-				"--dsw-alias-bg-layer-2": `rgba(252,253,255,${clampAlpha((base + lift * 2.4) * tintLift)})`,
+				"--dsw-alias-bg-base": rgba(lightRgb, base * tintLift),
+				"--dsw-alias-bg-layer-1": rgba(lightRgb, (base + lift) * tintLift),
+				"--dsw-alias-bg-layer-2": rgba(lightLayerRgb, (base + lift * 2.4) * tintLift),
 				// The composer, menus and popovers paint with bg-overlay. It used to be
 				// pinned at 0.5 white regardless of veil, so at "bare glass" the input
 				// box stayed a solid white slab while every other surface dropped to
 				// 0.02 — that white slab is what swallowed white placeholder text.
 				// Overlay now rides the same frost curve (0.06 → 0.92) so it can only be
 				// as dense as the rest of the glass.
-				"--dsw-alias-bg-overlay": `rgba(251,252,255,${clampAlpha(0.06 + 0.86 * v)})`,
-				"--dsw-specific-sidebar-fill": `rgba(255,255,255,${clampAlpha((0.02 + 0.38 * v) * tintLift)})`,
+				"--dsw-alias-bg-overlay": rgba(lightOverlayRgb, 0.06 + 0.86 * v),
+				"--dsw-specific-sidebar-fill": rgba(lightRgb, (0.02 + 0.38 * v) * tintLift),
 				"--dsw-alias-border-l1": "rgba(20,24,32,0.1)",
 				"--dsw-alias-border-l2": "rgba(20,24,32,0.16)"
 			};
 			const dark = {
-				"--dsw-alias-bg-base": `rgba(9,11,16,${clampAlpha((base + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-layer-1": `rgba(14,18,26,${clampAlpha((base + lift + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-layer-2": `rgba(20,25,35,${clampAlpha((base + lift * 2.4 + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-overlay": `rgba(18,22,31,${clampAlpha(0.1 + 0.85 * v)})`,
-				"--dsw-specific-sidebar-fill": `rgba(11,14,21,${clampAlpha((0.02 + 0.38 * v + 0.03) * tintLift)})`,
+				"--dsw-alias-bg-base": rgba(darkRgb, (base + 0.03) * tintLift),
+				"--dsw-alias-bg-layer-1": rgba(darkRgb, (base + lift + 0.03) * tintLift),
+				"--dsw-alias-bg-layer-2": rgba(darkLayerRgb, (base + lift * 2.4 + 0.03) * tintLift),
+				"--dsw-alias-bg-overlay": rgba(darkOverlayRgb, 0.1 + 0.85 * v),
+				"--dsw-specific-sidebar-fill": rgba(darkRgb, (0.02 + 0.38 * v + 0.03) * tintLift),
 				"--dsw-alias-border-l1": "rgba(255,255,255,0.1)",
 				"--dsw-alias-border-l2": "rgba(255,255,255,0.16)"
 			};
 			const out = {};
-			for (const token of Object.keys(light)) out[token] = { light: light[token], dark: dark[token] };
+			const lightMode = force === "dark" ? dark : light;
+			const darkMode = force === "light" ? light : dark;
+			for (const token of Object.keys(light)) out[token] = { light: lightMode[token], dark: darkMode[token] };
 			if (ink === "dark" || ink === "light") {
 				const primary = ink === "dark" ? "rgba(12,14,20,0.95)" : "rgba(246,248,252,0.96)";
 				const secondary = ink === "dark" ? "rgba(12,14,20,0.68)" : "rgba(246,248,252,0.72)";

@@ -27,7 +27,7 @@ Blur runs on the GPU: both backends (WebGL / WebGPU) share the same **13-tap Poi
 
 The plugin registers no agent tools and injects no prompt text, so it adds **zero model token cost**.
 
-Current version **v.26.11.21.152253**.
+Current version **v.26.11.21.153026**.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ Current version **v.26.11.21.152253**.
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>Version: <code>v.26.11.21.152253</code></li>
+        <li>Version: <code>v.26.11.21.153026</code></li>
         <li>Platform: Windows 10 20348+ / Windows 11</li>
         <li>Host: DeepSeek Harness desktop</li>
         <li>License: <a href="LICENSE">Apache-2.0</a></li>
@@ -62,6 +62,7 @@ Current version **v.26.11.21.152253**.
 - **Performance guard**: three presets (iGPU-safe / discrete-balanced / overkill); frame budget exceeded → lower resolution → disable occlusion compositing → static translucent scrim → auto-disable. Five layers, each one safer than the last.
 - **Wallpaper centre**: reads the local Steam / Wallpaper Engine library (video, scene and web projects), applies a video wallpaper as the glass backdrop in one click, or picks a local image / video. Scene and web wallpapers are played by WE and captured live from the desktop.
 - **Sound**: a local audio playlist (mp3 / flac / wav / ogg / m4a / aac / opus, 1.0–2.0× rate), or capture what the system is playing. Audio energy drives the shader so the liquid breathes with the beat.
+- **Four colour modes**: light / dark / custom colour / intelligent. Intelligent samples the dominant colour of the wallpaper behind the glass; auto-invert keeps text readable on bright or dark backdrops.
 - **Native main view**: the sidebar gains a single row, **Liquid Glass**. Clicking it renders the settings page full-page in the right main workspace, exactly like the native Plugins page. Reloading returns to the conversation.
 
 ## Hardware tiers
@@ -131,6 +132,9 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe (main
 | Appearance | Glass tint | 55% | Color temperature / frost bias only; does not set thickness |
 | Appearance | Frost density | 34% | The only thickness control: 0% = bare glass, 100% = thickest frost |
 | Appearance | Ink color | Auto | Switches black/white by background luminance (WCAG 7:1); manual choice is respected |
+| Appearance | Colour mode | Auto | Light / dark / custom / intelligent; intelligent tints the glass with the wallpaper colour |
+| Appearance | Custom colour | #8ab4ff | Base colour used by the custom mode |
+| Appearance | Auto light/dark | On | Switches the glass between light and dark by backdrop luminance in auto/intelligent mode |
 | Appearance | Wallpaper dim | 8% | Only dims very bright wallpapers to keep text readable |
 | Appearance | Liquid flow | 0.9 | 0 = render on demand; fully idle when the mouse stops |
 | Performance | Render engine | WebGL | WebGL (recommended) / WebGPU (experimental) |

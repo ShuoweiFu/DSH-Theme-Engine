@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.152253";
+		const CLIENT_BUILD = "v.26.11.21.153026";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -583,38 +583,85 @@
 		 * "light" ink on a dark one. Both theme modes receive the same colour, so
 		 * the switch happens live no matter which DSH theme the user picked.
 		 */
-		function glassTokens(tint, veil, ink) {
+		function hexRgb(hex) {
+			const match = /^#([0-9a-f]{6})$/i.exec(String(hex || ""));
+			if (!match) return null;
+			const value = parseInt(match[1], 16);
+			return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+		}
+
+		function mixRgb(from, to, amount) {
+			const t = Math.min(1, Math.max(0, amount));
+			return [
+				Math.round(from[0] + (to[0] - from[0]) * t),
+				Math.round(from[1] + (to[1] - from[1]) * t),
+				Math.round(from[2] + (to[2] - from[2]) * t)
+			];
+		}
+
+		function rgba(rgb, alpha) {
+			return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${clampAlpha(alpha)})`;
+		}
+
+		/**
+		 * Per-token glass values. `veil` is the frost density (0 = bare glass,
+		 * 1 = heavy frosting) and is the only knob that raises surface opacity, so
+		 * the tint slider can never reintroduce the milky fog. 0.13 keeps the 0.11
+		 * contract (veil drives the frost) but maps the curve so veil = 1 lands on
+		 * exactly the surface the 0.8 formula produced at tint 1 (0.47 * 1.1 ≈
+		 * 0.52): the restored slider cannot repaint a look the user just approved.
+		 *
+		 * `ink` is the adaptive text colour: "dark" ink on a bright backdrop,
+		 * "light" ink on a dark one. Both theme modes receive the same colour, so
+		 * the switch happens live no matter which DSH theme the user picked.
+		 *
+		 * `options.force` pins both theme slots to the palette of one mode (the WE
+		 * light/dark switch of tasks 12-13). `options.base` tints the glass from a
+		 * custom colour or the wallpaper's dominant colour (tasks 14-15); the alpha
+		 * curve is unchanged so the frost slider keeps its meaning.
+		 */
+		function glassTokens(tint, veil, ink, options = {}) {
 			const t = Math.min(1, Math.max(0, tint));
 			const v = Math.min(1, Math.max(0, veil == null ? DEFAULT_SETTINGS.veil : veil));
 			const base = 0.02 + 0.45 * v;
 			const lift = 0.02 + 0.05 * v;
 			const tintLift = 0.9 + 0.2 * t;
+			const force = options.force === "light" || options.force === "dark" ? options.force : "";
+			const accent = hexRgb(options.base);
+			const lightRgb = accent ? mixRgb(accent, [255, 255, 255], 0.68) : [255, 255, 255];
+			const lightLayerRgb = accent ? mixRgb(accent, [252, 253, 255], 0.56) : [252, 253, 255];
+			const lightOverlayRgb = accent ? mixRgb(accent, [251, 252, 255], 0.72) : [251, 252, 255];
+			const darkRgb = accent ? mixRgb(accent, [9, 11, 16], 0.62) : [9, 11, 16];
+			const darkLayerRgb = accent ? mixRgb(accent, [20, 25, 35], 0.55) : [20, 25, 35];
+			const darkOverlayRgb = accent ? mixRgb(accent, [18, 22, 31], 0.6) : [18, 22, 31];
 			const light = {
-				"--dsw-alias-bg-base": `rgba(255,255,255,${clampAlpha(base * tintLift)})`,
-				"--dsw-alias-bg-layer-1": `rgba(255,255,255,${clampAlpha((base + lift) * tintLift)})`,
-				"--dsw-alias-bg-layer-2": `rgba(252,253,255,${clampAlpha((base + lift * 2.4) * tintLift)})`,
+				"--dsw-alias-bg-base": rgba(lightRgb, base * tintLift),
+				"--dsw-alias-bg-layer-1": rgba(lightRgb, (base + lift) * tintLift),
+				"--dsw-alias-bg-layer-2": rgba(lightLayerRgb, (base + lift * 2.4) * tintLift),
 				// The composer, menus and popovers paint with bg-overlay. It used to be
 				// pinned at 0.5 white regardless of veil, so at "bare glass" the input
 				// box stayed a solid white slab while every other surface dropped to
 				// 0.02 — that white slab is what swallowed white placeholder text.
 				// Overlay now rides the same frost curve (0.06 → 0.92) so it can only be
 				// as dense as the rest of the glass.
-				"--dsw-alias-bg-overlay": `rgba(251,252,255,${clampAlpha(0.06 + 0.86 * v)})`,
-				"--dsw-specific-sidebar-fill": `rgba(255,255,255,${clampAlpha((0.02 + 0.38 * v) * tintLift)})`,
+				"--dsw-alias-bg-overlay": rgba(lightOverlayRgb, 0.06 + 0.86 * v),
+				"--dsw-specific-sidebar-fill": rgba(lightRgb, (0.02 + 0.38 * v) * tintLift),
 				"--dsw-alias-border-l1": "rgba(20,24,32,0.1)",
 				"--dsw-alias-border-l2": "rgba(20,24,32,0.16)"
 			};
 			const dark = {
-				"--dsw-alias-bg-base": `rgba(9,11,16,${clampAlpha((base + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-layer-1": `rgba(14,18,26,${clampAlpha((base + lift + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-layer-2": `rgba(20,25,35,${clampAlpha((base + lift * 2.4 + 0.03) * tintLift)})`,
-				"--dsw-alias-bg-overlay": `rgba(18,22,31,${clampAlpha(0.1 + 0.85 * v)})`,
-				"--dsw-specific-sidebar-fill": `rgba(11,14,21,${clampAlpha((0.02 + 0.38 * v + 0.03) * tintLift)})`,
+				"--dsw-alias-bg-base": rgba(darkRgb, (base + 0.03) * tintLift),
+				"--dsw-alias-bg-layer-1": rgba(darkRgb, (base + lift + 0.03) * tintLift),
+				"--dsw-alias-bg-layer-2": rgba(darkLayerRgb, (base + lift * 2.4 + 0.03) * tintLift),
+				"--dsw-alias-bg-overlay": rgba(darkOverlayRgb, 0.1 + 0.85 * v),
+				"--dsw-specific-sidebar-fill": rgba(darkRgb, (0.02 + 0.38 * v + 0.03) * tintLift),
 				"--dsw-alias-border-l1": "rgba(255,255,255,0.1)",
 				"--dsw-alias-border-l2": "rgba(255,255,255,0.16)"
 			};
 			const out = {};
-			for (const token of Object.keys(light)) out[token] = { light: light[token], dark: dark[token] };
+			const lightMode = force === "dark" ? dark : light;
+			const darkMode = force === "light" ? light : dark;
+			for (const token of Object.keys(light)) out[token] = { light: lightMode[token], dark: darkMode[token] };
 			if (ink === "dark" || ink === "light") {
 				const primary = ink === "dark" ? "rgba(12,14,20,0.95)" : "rgba(246,248,252,0.96)";
 				const secondary = ink === "dark" ? "rgba(12,14,20,0.68)" : "rgba(246,248,252,0.72)";
@@ -744,6 +791,130 @@
 				};
 			} catch {
 				return null;
+			}
+		}
+
+
+		/* Average colour of a wallpaper frame. Used by the intelligent mode. */
+		function colorFromCanvas(canvas) {
+			const ctx = canvas.getContext("2d", { willReadFrequently: true });
+			if (!ctx) return "";
+			const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			let r = 0;
+			let g = 0;
+			let b = 0;
+			let n = 0;
+			let ar = 0;
+			let ag = 0;
+			let ab = 0;
+			let an = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				const rr = data[i];
+				const gg = data[i + 1];
+				const bb = data[i + 2];
+				const max = Math.max(rr, gg, bb);
+				const min = Math.min(rr, gg, bb);
+				const lum = (0.299 * rr + 0.587 * gg + 0.114 * bb) / 255;
+				const sat = max === 0 ? 0 : (max - min) / max;
+				ar += rr;
+				ag += gg;
+				ab += bb;
+				an += 1;
+				if (lum > 0.06 && lum < 0.94 && sat > 0.12) {
+					r += rr;
+					g += gg;
+					b += bb;
+					n += 1;
+				}
+			}
+			if (an === 0) return "";
+			const pick = n >= an * 0.08 ? [r / n, g / n, b / n] : [ar / an, ag / an, ab / an];
+			return "#" + pick.map((value) => Math.round(value).toString(16).padStart(2, "0")).join("");
+		}
+
+		function probeCanvas(width, height) {
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			return canvas;
+		}
+
+		function hexLuminance(color) {
+			const match = /^#([0-9a-f]{6})$/i.exec(String(color || ""));
+			if (!match) return null;
+			const value = parseInt(match[1], 16);
+			const r = (value >> 16) & 255;
+			const g = (value >> 8) & 255;
+			const b = value & 255;
+			return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+		}
+
+		async function sampleImageColor(url) {
+			const response = await fetch(url, { cache: "no-store" });
+			if (!response.ok) return "";
+			const blob = await response.blob();
+			const bitmap = await createImageBitmap(blob);
+			const canvas = probeCanvas(28, 18);
+			canvas.getContext("2d", { willReadFrequently: true }).drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+			bitmap.close?.();
+			return colorFromCanvas(canvas);
+		}
+
+		async function sampleVideoColor(url) {
+			const video = document.createElement("video");
+			video.muted = true;
+			video.playsInline = true;
+			video.preload = "metadata";
+			video.src = url;
+			const ready = await new Promise((resolve) => {
+				let done = false;
+				const finish = (ok) => {
+					if (done) return;
+					done = true;
+					resolve(ok);
+				};
+				video.addEventListener("loadeddata", () => finish(true), { once: true });
+				video.addEventListener("error", () => finish(false), { once: true });
+				setTimeout(() => finish(false), 5000);
+			});
+			if (!ready) {
+				video.removeAttribute("src");
+				return "";
+			}
+			try {
+				video.currentTime = Number.isFinite(video.duration) && video.duration > 1 ? Math.min(3, video.duration * 0.3) : 0;
+			} catch {
+				/* seek not ready */
+			}
+			await new Promise((resolve) => {
+				let done = false;
+				const finish = () => {
+					if (done) return;
+					done = true;
+					resolve();
+				};
+				video.addEventListener("seeked", finish, { once: true });
+				setTimeout(finish, 2500);
+			});
+			const canvas = probeCanvas(28, 18);
+			let color = "";
+			try {
+				canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, canvas.width, canvas.height);
+				color = colorFromCanvas(canvas);
+			} catch {
+				color = "";
+			}
+			video.removeAttribute("src");
+			video.load();
+			return color;
+		}
+
+		async function sampleWallpaperColor(url, kind) {
+			try {
+				if (!url) return "";
+				return kind === "video" ? await sampleVideoColor(url) : await sampleImageColor(url);
+			} catch {
+				return "";
 			}
 		}
 		// Shared darkness thresholds. 06-guard rejects a frame that drops below
@@ -900,9 +1071,22 @@
 	--lg-mx: 50%;
 	--lg-my: 30%;
 	--lg-fallback: #0b0e14;
-	/* The caret rides the adaptive ink, so it is black on a bright glass and
-	   white on a dark one without either side being hard-coded here. */
-	--lg-caret: var(--dsw-alias-label-primary, currentColor);
+	/* Fallback until the first ink decision lands: follow the text colour. */
+	--lg-caret: currentColor;
+}
+
+/*
+ * The caret is the INVERSE of the ink, not the ink itself: dark glyphs get a
+ * light caret, light glyphs get a dark one, so the insertion point never
+ * vanishes inside a run of text. 12-apply.js stamps data-lg-ink from the ink
+ * it just decided; these two rules are the whole mapping.
+ */
+html[data-lg-ink="dark"] {
+	--lg-caret: #f6f8fc;
+}
+
+html[data-lg-ink="light"] {
+	--lg-caret: #0c0e14;
 }
 
 html[data-lg-enabled="on"],
@@ -1090,8 +1274,9 @@ html[data-lg-mode="dark"] div[data-composer-card] {
  * DSH paints no caret-color, so it stays currentColor, and the ink the
  * token layer picks is already inverted against the wallpaper (05-ink.js
  * decides "dark" or "light" ink from the sampled luminance).  Reusing that
- * same token is what makes the caret black on a white wallpaper and white on
- * a black one: there is nothing to hard-code and nothing to keep in sync.
+ * same token alone would paint the caret IN the ink colour, which is exactly
+ * where it hides; the caret reads data-lg-ink instead and lands on the far
+ * side of the ink, while the ring below keeps the ink tint.
  * caret-color is the only caret property CSS exposes, so the width stays
  * 1px and the rest of the contrast comes from the sheet -- :focus-within
  * lifts the ring and the top highlight while you type.
@@ -1104,26 +1289,26 @@ div[data-composer-card] [contenteditable]:not([contenteditable="false"]) {
 div[data-composer-card]:focus-within {
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.55),
-		inset 0 0 0 1px color-mix(in srgb, var(--lg-caret) 55%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-label-primary) 45%, transparent),
 		0 12px 32px rgba(8, 12, 20, 0.16);
 }
 
 html[data-lg-mode="dark"] div[data-composer-card]:focus-within {
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.14),
-		inset 0 0 0 1px color-mix(in srgb, var(--lg-caret) 55%, transparent),
+		inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-label-primary) 45%, transparent),
 		0 14px 36px rgba(0, 0, 0, 0.46);
 }
 
 div[data-composer-card] textarea::selection,
 div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
-	background: color-mix(in srgb, var(--lg-caret) 34%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-label-primary) 24%, transparent);
 	color: var(--dsw-alias-label-primary);
 }
 
 html[data-lg-mode="dark"] div[data-composer-card] textarea::selection,
 html[data-lg-mode="dark"] div[data-composer-card] [contenteditable]:not([contenteditable="false"])::selection {
-	background: color-mix(in srgb, var(--lg-caret) 46%, transparent);
+	background: color-mix(in srgb, var(--dsw-alias-label-primary) 32%, transparent);
 }
 
 /*
@@ -3645,6 +3830,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// repaint the whole transcript once per poll (the flicker). Only a
 				// sample that could change the decision is allowed through.
 				const [inkInfo, setInkInfo] = useState(null);
+				const [intelColor, setIntelColor] = useState("");
 				const inkRef = useRef(null);
 				const onInk = useCallback((next) => {
 					if (!next || typeof next.lum !== "number") return;
@@ -3681,20 +3867,52 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					};
 				}, []);
 
+				// Colour modes (tasks 12-15): force light / dark, colour the glass from a
+				// custom hex, or follow the wallpaper's own dominant colour. "auto" is the
+				// system theme plus the optional auto-invert rule.
+				const colorMode = value.colorMode || "auto";
+				const autoInvert = value.autoInvert !== false;
+				const glassBase = colorMode === "custom" ? value.customColor : colorMode === "intelligent" ? intelColor : "";
+				let forcedMode = colorMode === "light" ? "light" : colorMode === "dark" ? "dark" : "";
+				if (!forcedMode && autoInvert) {
+					let lum = null;
+					if (colorMode === "intelligent" && intelColor) lum = hexLuminance(intelColor);
+					else if (colorMode === "auto" && inkInfo) lum = inkInfo.content ?? inkInfo.lum;
+					if (lum != null) forcedMode = lum > 0.62 ? "light" : lum < 0.34 ? "dark" : "";
+				}
+				const appliedMode = forcedMode || mode;
+
 				useEffect(() => {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
-					root.dataset.lgMode = mode;
+					root.dataset.lgMode = appliedMode;
 					root.style.setProperty("--lg-dim", String(value.dim));
-					root.style.setProperty("--lg-fallback", mode === "dark" ? "#0b0e14" : "#eef1f6");
+					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
-				}, [value, state.url, state.kind, mode, appsBehind]);
+				}, [value.enabled, value.dim, appliedMode, appsBehind]);
 
 				// WebGL liquid wallpaper: owns its canvas under <body>.
 				const liquidRef = useRef(null);
 				const liquid = liquidRef.current;
 				const wallpaperUrl = value.wallpaper && state.url ? state.url : "";
 				const wallpaperKind = state.kind === "video" ? "video" : "image";
+
+				// Intelligent mode needs one dominant colour per wallpaper. Image and
+				// video sources are sampled client-side; scene/web wallpapers arrive as
+				// the live desktop image, so the desktop capture is sampled instead.
+				useEffect(() => {
+					if (colorMode !== "intelligent" || !wallpaperUrl) {
+						setIntelColor("");
+						return undefined;
+					}
+					let alive = true;
+					sampleWallpaperColor(wallpaperUrl, wallpaperKind).then((color) => {
+						if (alive && color) setIntelColor(color);
+					});
+					return () => {
+						alive = false;
+					};
+				}, [colorMode, wallpaperUrl, wallpaperKind]);
 
 				// Layer 1 + 2: a pointer move only wakes the renderer; it never starts
 				// a second loop, and the highlight itself is throttled to one rAF.
@@ -3923,6 +4141,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						if (!value.enabled) {
 							appliedRef.current?.dispose?.();
 							appliedRef.current = null;
+							delete document.documentElement.dataset.lgInk;
 							return;
 						}
 						// Manual override wins, always: picking white text on a bright
@@ -3930,14 +4149,23 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// ink from the sample.
 						let ink = value.ink;
 						let veil = value.veil;
-						if (ink !== "dark" && ink !== "light" && inkInfo) {
-							const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
-							ink = decided.ink;
-							veil = decided.veil;
+						if (ink !== "dark" && ink !== "light") {
+							if (forcedMode) {
+								// A forced light glass always needs dark ink and vice versa.
+								ink = forcedMode === "light" ? "dark" : "light";
+							} else if (inkInfo) {
+								const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
+								ink = decided.ink;
+								veil = decided.veil;
+							}
 						}
 						// The composer is its own surface: the frosted card reads the overlay
 						// token, which glassTokens() already tints toward the ink in use.
-						const next = glassTokens(value.tint, veil, ink);
+						// The caret must land on the far side of the ink, and the ink is a
+						// token itself, so stamp the decision on <html> and let 07-styles.js
+						// map it: dark ink -> light caret, light ink -> dark caret.
+						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
+						const next = glassTokens(value.tint, veil, ink, { force: forcedMode, base: glassBase });
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
@@ -3945,7 +4173,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo]);
+				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo, forcedMode, colorMode, value.customColor, glassBase]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper) {
@@ -4450,6 +4678,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							h("p", { className: "lg-group-hint" }, t("flowHint")),
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
+						h(AppearanceModes, null),
 						h(WallpaperCenter, null),
 						h(AudioPanel, null),
 						h(

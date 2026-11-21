@@ -115,3 +115,127 @@
 				return null;
 			}
 		}
+
+
+		/* Average colour of a wallpaper frame. Used by the intelligent mode. */
+		function colorFromCanvas(canvas) {
+			const ctx = canvas.getContext("2d", { willReadFrequently: true });
+			if (!ctx) return "";
+			const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			let r = 0;
+			let g = 0;
+			let b = 0;
+			let n = 0;
+			let ar = 0;
+			let ag = 0;
+			let ab = 0;
+			let an = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				const rr = data[i];
+				const gg = data[i + 1];
+				const bb = data[i + 2];
+				const max = Math.max(rr, gg, bb);
+				const min = Math.min(rr, gg, bb);
+				const lum = (0.299 * rr + 0.587 * gg + 0.114 * bb) / 255;
+				const sat = max === 0 ? 0 : (max - min) / max;
+				ar += rr;
+				ag += gg;
+				ab += bb;
+				an += 1;
+				if (lum > 0.06 && lum < 0.94 && sat > 0.12) {
+					r += rr;
+					g += gg;
+					b += bb;
+					n += 1;
+				}
+			}
+			if (an === 0) return "";
+			const pick = n >= an * 0.08 ? [r / n, g / n, b / n] : [ar / an, ag / an, ab / an];
+			return "#" + pick.map((value) => Math.round(value).toString(16).padStart(2, "0")).join("");
+		}
+
+		function probeCanvas(width, height) {
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			return canvas;
+		}
+
+		function hexLuminance(color) {
+			const match = /^#([0-9a-f]{6})$/i.exec(String(color || ""));
+			if (!match) return null;
+			const value = parseInt(match[1], 16);
+			const r = (value >> 16) & 255;
+			const g = (value >> 8) & 255;
+			const b = value & 255;
+			return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+		}
+
+		async function sampleImageColor(url) {
+			const response = await fetch(url, { cache: "no-store" });
+			if (!response.ok) return "";
+			const blob = await response.blob();
+			const bitmap = await createImageBitmap(blob);
+			const canvas = probeCanvas(28, 18);
+			canvas.getContext("2d", { willReadFrequently: true }).drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+			bitmap.close?.();
+			return colorFromCanvas(canvas);
+		}
+
+		async function sampleVideoColor(url) {
+			const video = document.createElement("video");
+			video.muted = true;
+			video.playsInline = true;
+			video.preload = "metadata";
+			video.src = url;
+			const ready = await new Promise((resolve) => {
+				let done = false;
+				const finish = (ok) => {
+					if (done) return;
+					done = true;
+					resolve(ok);
+				};
+				video.addEventListener("loadeddata", () => finish(true), { once: true });
+				video.addEventListener("error", () => finish(false), { once: true });
+				setTimeout(() => finish(false), 5000);
+			});
+			if (!ready) {
+				video.removeAttribute("src");
+				return "";
+			}
+			try {
+				video.currentTime = Number.isFinite(video.duration) && video.duration > 1 ? Math.min(3, video.duration * 0.3) : 0;
+			} catch {
+				/* seek not ready */
+			}
+			await new Promise((resolve) => {
+				let done = false;
+				const finish = () => {
+					if (done) return;
+					done = true;
+					resolve();
+				};
+				video.addEventListener("seeked", finish, { once: true });
+				setTimeout(finish, 2500);
+			});
+			const canvas = probeCanvas(28, 18);
+			let color = "";
+			try {
+				canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, 0, 0, canvas.width, canvas.height);
+				color = colorFromCanvas(canvas);
+			} catch {
+				color = "";
+			}
+			video.removeAttribute("src");
+			video.load();
+			return color;
+		}
+
+		async function sampleWallpaperColor(url, kind) {
+			try {
+				if (!url) return "";
+				return kind === "video" ? await sampleVideoColor(url) : await sampleImageColor(url);
+			} catch {
+				return "";
+			}
+		}

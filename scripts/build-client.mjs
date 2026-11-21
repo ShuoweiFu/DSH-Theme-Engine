@@ -11,6 +11,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { Script } from "node:vm";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +58,15 @@ for (const name of PARTS) {
 const text = chunks.join("\r\n") + "\r\n";
 HASH.update(text);
 console.log(`\ntotal: ${total} lines, ${Buffer.byteLength(text, "utf8")} B, sha256 ${HASH.digest("hex").slice(0, 16)}`);
+
+// Every part shares one scope, so a duplicate `let`/`const` only appears once the
+// pieces are joined. Parse the result before it reaches the devtools console.
+try {
+	new Script(text, { filename: outFile });
+} catch (error) {
+	console.error(`\nsyntax error in the concatenated bundle: ${error.message}`);
+	process.exit(1);
+}
 
 if (check) {
   console.log("--check: not writing");

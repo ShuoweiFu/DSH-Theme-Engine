@@ -1062,7 +1062,7 @@
 		 */
 		// One persistent probe canvas: a fresh canvas + 2D context for every video
 		// frame (30-60 a second) cost more than the measurement itself.
-		let inkProbe = null;
+		let liveInkProbe = null;
 		function measureInk(source, sizeHint = 24) {
 			try {
 				const size = Math.max(4, Math.min(64, Math.round(sizeHint) || 24));
@@ -1074,7 +1074,7 @@
 				const viewport = window.innerWidth || 0;
 				const contentStart =
 					viewport > 0 && sidebarWidth > 0 ? Math.min(0.45, Math.max(0.16, sidebarWidth / viewport)) : 0.24;
-				const probe = inkProbe || (inkProbe = document.createElement("canvas"));
+				const probe = liveInkProbe || (liveInkProbe = document.createElement("canvas"));
 				probe.width = size;
 				probe.height = size;
 				const ctx = probe.getContext("2d", { willReadFrequently: true });

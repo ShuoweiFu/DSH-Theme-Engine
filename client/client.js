@@ -9,8 +9,16 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.165200";
+		const CLIENT_BUILD = "v.26.11.21.165900";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
+		/**
+		 * Appearance values are archived per colour mode. These ids and keys are
+		 * shared by the settings model, the panel and the transition code; do not
+		 * rename them without migrating storage (see 03-settings.js).
+		 */
+		const MODE_IDS = Object.freeze(["auto", "light", "dark", "custom", "intelligent"]);
+		const MODE_KEYS = Object.freeze(["tint", "veil", "dim", "ink", "customColor", "autoInvert"]);
+		const MODE_DEFAULTS = Object.freeze({ tint: 0.55, veil: 0.34, dim: 0.08, ink: "auto", customColor: "#8ab4ff", autoInvert: true });
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
 			wallpaper: true,
@@ -36,7 +44,8 @@
 			ink: "auto",
 			preset: "auto",
 			module: "glass",
-			island: false
+			island: false,
+			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }]))
 		});
 
 		/**
@@ -297,6 +306,10 @@
 			weApplied: "已应用为该玻璃背景。",
 			weLiveHint: "场景/网页壁纸无法直接读取，已切换到实时桌面捕获；请先在 Wallpaper Engine 中播放它。",
 			modesGroup: "外观模式（四象）",
+			modesIndependentHint: "每个模式各自保存参数：切到浅色调的数值不会影响深色。",
+			modeResetColor: "恢复默认色",
+			modeSampledColor: "当前主色",
+			modeResample: "重新取色",
 			modesHint: "让玻璃颜色跟随壁纸或手动指定；只覆盖玻璃面板底色，不改 DSH 自身主题设置。",
 			mode_auto: "跟随主题",
 			mode_light: "浅色",
@@ -511,6 +524,10 @@
 			weApplied: "Applied as the glass background.",
 			weLiveHint: "Scenes and web wallpapers cannot be read directly, so the live desktop capture was selected — play it in Wallpaper Engine first.",
 			modesGroup: "Appearance modes",
+			modesIndependentHint: "Each mode keeps its own values — tweaking Light never changes Dark.",
+			modeResetColor: "Reset colour",
+			modeSampledColor: "Sampled colour",
+			modeResample: "Resample",
 			modesHint: "Let the glass follow the wallpaper or pin a colour; this only overrides the glass surfaces, not the DSH theme itself.",
 			mode_auto: "Follow theme",
 			mode_light: "Light",
@@ -568,14 +585,42 @@
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
 				: [];
+			const colorMode = ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto";
+			const legacyTint = num(source.tint, DEFAULT_SETTINGS.tint, 0, 1);
+			const legacyVeil = num(source.veil, DEFAULT_SETTINGS.veil, 0, 1);
+			const legacyDim = num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6);
+			const legacyInk = source.ink === "dark" || source.ink === "light" ? source.ink : "auto";
+			const legacyColor = /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor;
+			// Each colour mode keeps its own appearance values. The top-level keys
+			// stay the render truth and always mirror the active bucket; switching
+			// modes loads the target bucket back into them (12-apply.js setSettings).
+			//
+			// Upgrade path: the first load after this shape grew has no modeValues,
+			// so every bucket is seeded from the active values. Upgrading must never
+			// repaint a look the user already signed off on.
+			const rawBuckets = source.modeValues && typeof source.modeValues === "object" ? source.modeValues : null;
+			const modeValues = {};
+			for (const mode of MODE_IDS) {
+				const rawBucket = rawBuckets && rawBuckets[mode] && typeof rawBuckets[mode] === "object" ? rawBuckets[mode] : null;
+				const bucket = rawBucket || (rawBuckets ? DEFAULT_SETTINGS.modeValues[mode] : source);
+				modeValues[mode] = {
+					tint: num(bucket.tint, legacyTint, 0, 1),
+					veil: num(bucket.veil, legacyVeil, 0, 1),
+					dim: num(bucket.dim, legacyDim, 0, 0.6),
+					ink: bucket.ink === "dark" || bucket.ink === "light" ? bucket.ink : legacyInk,
+					customColor: /^#[0-9a-f]{6}$/i.test(bucket.customColor) ? bucket.customColor : legacyColor,
+					autoInvert: bucket.autoInvert !== false
+				};
+			}
+			const active = modeValues[colorMode];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
 				blur: Math.round(num(source.blur, DEFAULT_SETTINGS.blur, 0, 48)),
 				saturation: num(source.saturation, DEFAULT_SETTINGS.saturation, 1, 2.4),
-				tint: num(source.tint, DEFAULT_SETTINGS.tint, 0, 1),
-				veil: num(source.veil, DEFAULT_SETTINGS.veil, 0, 1),
-				dim: num(source.dim, DEFAULT_SETTINGS.dim, 0, 0.6),
+				tint: active.tint,
+				veil: active.veil,
+				dim: active.dim,
 				refreshSec: Math.round(num(source.refreshSec, DEFAULT_SETTINGS.refreshSec, 1, 60)),
 				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
@@ -584,9 +629,10 @@
 				wePath: typeof source.wePath === "string" ? source.wePath : "",
 				weId: typeof source.weId === "string" ? source.weId : "",
 				filePath: typeof source.filePath === "string" ? source.filePath : "",
-				colorMode: ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto",
-				customColor: /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor,
-				autoInvert: source.autoInvert !== false,
+				colorMode,
+				customColor: active.customColor,
+				autoInvert: active.autoInvert,
+				modeValues,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,
@@ -596,7 +642,7 @@
 				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
-				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
+				ink: active.ink,
 				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
 				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
 				island: source.island === true
@@ -711,6 +757,10 @@
 				Math.round(from[1] + (to[1] - from[1]) * t),
 				Math.round(from[2] + (to[2] - from[2]) * t)
 			];
+		}
+
+		function rgbHex(rgb) {
+			return "#" + rgb.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("");
 		}
 
 		function rgba(rgb, alpha) {
@@ -2421,6 +2471,45 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	font-size: 11.5px;
 	line-height: 16px;
 	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-mode-panel {
+	margin-top: 4px;
+}
+
+.lg-mode-panel > div > * {
+	animation: lg-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes lg-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lg-mode-panel > div > * {
+		animation: none;
+	}
+}
+
+.lg-color-value {
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.lg-swatch {
+	width: 18px;
+	height: 18px;
+	border-radius: 6px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	background: var(--dsw-alias-bg-overlay);
 }
 
 .lg-color {
@@ -4567,7 +4656,23 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const settingsListeners = new Set();
 			const getSettings = () => settings;
 			const setSettings = (patch) => {
-				settings = normalize({ ...settings, ...patch });
+				const prev = settings;
+				const modeValues = { ...prev.modeValues };
+				// 1) Write this patch's appearance keys into the *active* mode's bucket.
+				const touched = MODE_KEYS.filter((key) => key in patch);
+				if (touched.length) {
+					const bucket = { ...modeValues[prev.colorMode] };
+					for (const key of touched) bucket[key] = patch[key];
+					modeValues[prev.colorMode] = bucket;
+				}
+				// 2) A mode switch loads the target bucket back into the top-level
+				//    keys; keys explicitly present in the patch still win.
+				const next = { ...patch };
+				if (patch.colorMode && patch.colorMode !== prev.colorMode) {
+					const target = modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
+					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target[key];
+				}
+				settings = normalize({ ...prev, ...next, modeValues });
 				persistSettings(settings);
 				for (const listener of settingsListeners) listener();
 			};
@@ -4576,6 +4681,34 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				return () => settingsListeners.delete(listener);
 			};
 			const useSettings = () => useSyncExternalStore(subscribeSettings, getSettings, getSettings);
+
+			// ---- Intelligent-mode colour bridge --------------------------------
+			// The sampler lives in GlassLayer, but the appearance panel also needs the
+			// sampled colour (swatch + resample button), so the value sits in a tiny
+			// external store that both sides subscribe to.
+			let intelColor = "";
+			let intelToken = 0;
+			const intelListeners = new Set();
+			const intelNotify = () => {
+				for (const listener of intelListeners) listener();
+			};
+			const intelSubscribe = (listener) => {
+				intelListeners.add(listener);
+				return () => intelListeners.delete(listener);
+			};
+			const intelSnapshotColor = () => intelColor;
+			const intelSnapshotToken = () => intelToken;
+			const intelSetColor = (next) => {
+				if (next === intelColor) return;
+				intelColor = next;
+				intelNotify();
+			};
+			const intelResample = () => {
+				intelToken += 1;
+				intelNotify();
+			};
+			const useIntelColor = () => useSyncExternalStore(intelSubscribe, intelSnapshotColor, intelSnapshotColor);
+			const useIntelToken = () => useSyncExternalStore(intelSubscribe, intelSnapshotToken, intelSnapshotToken);
 
 			// ---- Hardware adaptive presets --------------------------------------
 			// The probe runs once per page load and only reads a renderer string; the
@@ -4630,6 +4763,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			panelHooks.setSettings = setSettings;
 			panelHooks.useLang = useLang;
 			panelHooks.useWallpaper = useWallpaper;
+			panelHooks.useIntelColor = useIntelColor;
+			panelHooks.resampleIntel = intelResample;
 
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
@@ -4669,7 +4804,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// repaint the whole transcript once per poll (the flicker). Only a
 				// sample that could change the decision is allowed through.
 				const [inkInfo, setInkInfo] = useState(null);
-				const [intelColor, setIntelColor] = useState("");
+				const intelColor = useIntelColor();
+				const intelToken = useIntelToken();
 				const inkRef = useRef(null);
 				const onInk = useCallback((next) => {
 					if (!next || typeof next.lum !== "number") return;
@@ -4721,14 +4857,76 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				}
 				const appliedMode = forcedMode || mode;
 
+				// ---- Appearance transition -----------------------------------------
+				// A mode switch can also change tint / veil / dim / base colour, because
+				// every mode owns its own values. Ease those numbers over 240 ms so the
+				// glass cross-fades instead of hard-cutting.
+				const displayRef = useRef({ tint: value.tint, veil: value.veil, dim: value.dim, base: glassBase, force: forcedMode });
+				const [display, setDisplay] = useState(displayRef.current);
+				const transitionRef = useRef(0);
+				const switchingRef = useRef(false);
+				const targetDisplay = () => ({ tint: value.tint, veil: value.veil, dim: value.dim, base: glassBase, force: forcedMode });
+				const applyDisplay = (next) => {
+					displayRef.current = next;
+					setDisplay(next);
+				};
+				useEffect(() => {
+					const from = displayRef.current;
+					const to = targetDisplay();
+					if (from.tint === to.tint && from.veil === to.veil && from.dim === to.dim && from.base === to.base && from.force === to.force) return undefined;
+					const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+					const fromRgb = hexRgb(from.base);
+					const toRgb = hexRgb(to.base);
+					// iGPU / reduced motion / hidden window / no base colour: snap. The
+					// transition is a nicety and never a reason to miss a frame.
+					if (!value.enabled || hw.tier === "igpu" || document.hidden || reduce || !fromRgb || !toRgb) {
+						switchingRef.current = false;
+						applyDisplay(to);
+						return undefined;
+					}
+					switchingRef.current = true;
+					const started = performance.now();
+					const duration = 240;
+					const step = (now) => {
+						const progress = Math.min(1, (now - started) / duration);
+						const eased = 1 - Math.pow(1 - progress, 3);
+						applyDisplay({
+							tint: from.tint + (to.tint - from.tint) * eased,
+							veil: from.veil + (to.veil - from.veil) * eased,
+							dim: from.dim + (to.dim - from.dim) * eased,
+							base: rgbHex(mixRgb(fromRgb, toRgb, eased)),
+							force: to.force
+						});
+						if (progress < 1) transitionRef.current = requestAnimationFrame(step);
+						else switchingRef.current = false;
+					};
+					cancelAnimationFrame(transitionRef.current);
+					transitionRef.current = requestAnimationFrame(step);
+					return () => cancelAnimationFrame(transitionRef.current);
+				}, [value.colorMode]);
+				const modeSeenRef = useRef(value.colorMode);
+				useEffect(() => {
+					// The mode-switch render also changes tint/veil/dim; the transition above
+					// owns that frame. Any later slider move wins immediately — an eased
+					// catch-up would feel laggy while the user is watching their own drag.
+					if (modeSeenRef.current !== value.colorMode) {
+						modeSeenRef.current = value.colorMode;
+						return;
+					}
+					cancelAnimationFrame(transitionRef.current);
+					switchingRef.current = false;
+					applyDisplay(targetDisplay());
+				}, [value.enabled, value.tint, value.veil, value.dim, glassBase, forcedMode, value.colorMode]);
+				useEffect(() => () => cancelAnimationFrame(transitionRef.current), []);
+
 				useEffect(() => {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = appliedMode;
-					root.style.setProperty("--lg-dim", String(value.dim));
+					root.style.setProperty("--lg-dim", String(display.dim));
 					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
-				}, [value.enabled, value.dim, appliedMode, appsBehind]);
+				}, [value.enabled, display.dim, appliedMode, appsBehind]);
 
 				// WebGL liquid wallpaper: owns its canvas under <body>.
 				const liquidRef = useRef(null);
@@ -4741,17 +4939,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// the live desktop image, so the desktop capture is sampled instead.
 				useEffect(() => {
 					if (colorMode !== "intelligent" || !wallpaperUrl) {
-						setIntelColor("");
+						intelSetColor("");
 						return undefined;
 					}
 					let alive = true;
 					sampleWallpaperColor(wallpaperUrl, wallpaperKind).then((color) => {
-						if (alive && color) setIntelColor(color);
+						if (alive && color) intelSetColor(color);
 					});
 					return () => {
 						alive = false;
 					};
-				}, [colorMode, wallpaperUrl, wallpaperKind]);
+				}, [colorMode, wallpaperUrl, wallpaperKind, intelToken]);
 
 				// Layer 1 + 2: a pointer move only wakes the renderer; it never starts
 				// a second loop, and the highlight itself is throttled to one rAF.
@@ -4987,13 +5185,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// wallpaper is the user's call, not ours. Only "auto" derives an
 						// ink from the sample.
 						let ink = value.ink;
-						let veil = value.veil;
+						let veil = display.veil;
 						if (ink !== "dark" && ink !== "light") {
 							if (forcedMode) {
 								// A forced light glass always needs dark ink and vice versa.
 								ink = forcedMode === "light" ? "dark" : "light";
 							} else if (inkInfo) {
-								const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
+								const decided = decideInk(inkInfo.content ?? inkInfo.lum, display.tint, display.veil, currentMode() === "dark");
 								ink = decided.ink;
 								veil = decided.veil;
 							}
@@ -5004,7 +5202,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// token itself, so stamp the decision on <html> and let 07-styles.js
 						// map it: dark ink -> light caret, light ink -> dark caret.
 						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
-						const next = glassTokens(value.tint, veil, ink, { force: forcedMode, base: glassBase });
+						const next = glassTokens(display.tint, veil, ink, { force: display.force, base: display.base });
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
@@ -5012,7 +5210,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo, forcedMode, colorMode, value.customColor, glassBase]);
+				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper) {
@@ -5788,7 +5986,9 @@ h(
 			useSettings: null,
 			setSettings: null,
 			useLang: null,
-			useWallpaper: null
+			useWallpaper: null,
+			useIntelColor: null,
+			resampleIntel: null
 		};
 
 		function useSettings() {
@@ -5805,6 +6005,14 @@ h(
 
 		function useWallpaper() {
 			return panelHooks.useWallpaper();
+		}
+
+		function useIntelColor() {
+			return panelHooks.useIntelColor();
+		}
+
+		function resampleIntel() {
+			return panelHooks.resampleIntel();
 		}
 
 		/*
@@ -6037,23 +6245,77 @@ h(
 			const value = useSettings();
 			const lang = useLang();
 			const t = makeTranslate(lang);
-			const modes = ["auto", "light", "dark", "custom", "intelligent"];
+			const intelColor = useIntelColor();
+			const mode = value.colorMode;
+			const autoInvertRow = h(
+				Row,
+				{ label: t("modeAutoInvert"), hint: t("modeAutoInvertHint") },
+				h(Switch, { on: value.autoInvert, onChange: (next) => setSettings({ autoInvert: next }), label: t("modeAutoInvert") })
+			);
+			const hint = (id) => h("p", { className: "lg-group-hint" }, t(`modeHint_${id}`));
+			let body = null;
+			if (mode === "auto") {
+				body = h(Fragment, null, autoInvertRow, hint("auto"));
+			} else if (mode === "light" || mode === "dark") {
+				// Forced modes derive their ink from the mode itself; the invert switch
+				// has no effect there, so it is not rendered (no dead controls).
+				body = hint(mode);
+			} else if (mode === "custom") {
+				body = h(
+					Row,
+					{ label: t("modeCustomColor"), hint: t("modeHint_custom") },
+					h(
+						"div",
+						{ className: "lg-actions" },
+						h("input", {
+							className: "lg-color",
+							type: "color",
+							value: value.customColor,
+							onChange: (event) => setSettings({ customColor: event.target.value })
+						}),
+						h("span", { className: "lg-color-value" }, String(value.customColor).toUpperCase()),
+						h(
+							"button",
+							{ type: "button", className: "lg-button", onClick: () => setSettings({ customColor: DEFAULT_SETTINGS.customColor }) },
+							t("modeResetColor")
+						)
+					)
+				);
+			} else if (mode === "intelligent") {
+				body = h(
+					Fragment,
+					null,
+					h(
+						Row,
+						{ label: t("modeSampledColor"), hint: t("modeHint_intelligent") },
+						h(
+							"div",
+							{ className: "lg-actions" },
+							h("span", { className: "lg-swatch", style: { background: intelColor || "transparent" } }),
+							h("span", { className: "lg-color-value" }, intelColor ? String(intelColor).toUpperCase() : "—"),
+							h("button", { type: "button", className: "lg-button", onClick: () => resampleIntel() }, t("modeResample"))
+						)
+					),
+					autoInvertRow
+				);
+			}
 			return h(
 				"section",
 				{ className: "lg-group" },
 				h("h2", { className: "lg-group-title" }, t("modesGroup")),
 				h("p", { className: "lg-group-hint" }, t("modesHint")),
+				h("p", { className: "lg-group-hint" }, t("modesIndependentHint")),
 				h(
 					"div",
 					{ className: "lg-modes" },
-					modes.map((id) =>
+					MODE_IDS.map((id) =>
 						h(
 							"button",
 							{
 								key: id,
 								type: "button",
 								className: "lg-mode",
-								"data-on": value.colorMode === id || undefined,
+								"data-on": mode === id || undefined,
 								onClick: () => setSettings({ colorMode: id })
 							},
 							h("strong", null, t(`mode_${id}`)),
@@ -6061,27 +6323,12 @@ h(
 						)
 					)
 				),
-				value.colorMode === "custom"
-					? h(
-							"div",
-							{ className: "lg-row" },
-							h("div", { className: "lg-label" }, h("span", null, t("modeCustomColor")), h("span", { className: "lg-hint" }, value.customColor)),
-							h("input", {
-								className: "lg-color",
-								type: "color",
-								value: value.customColor,
-								onChange: (event) => setSettings({ customColor: event.target.value })
-							})
-						)
-					: null,
-				h(
-					Row,
-					{ label: t("modeAutoInvert"), hint: t("modeAutoInvertHint") },
-					h(Switch, { on: value.autoInvert, onChange: (next) => setSettings({ autoInvert: next }), label: t("modeAutoInvert") })
-				)
+				// The panel is the only dynamic block: it mounts with the mode as its
+				// key, so the entry animation replays on every switch, and unselected
+				// modes render nothing at all.
+				h("div", { className: "lg-mode-panel", "data-mode": mode, key: mode }, h("div", null, body))
 			);
 		}
-
 		function AudioPanel() {
 			const value = useSettings();
 			const lang = useLang();

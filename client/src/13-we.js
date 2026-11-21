@@ -10,7 +10,9 @@
 			useSettings: null,
 			setSettings: null,
 			useLang: null,
-			useWallpaper: null
+			useWallpaper: null,
+			useIntelColor: null,
+			resampleIntel: null
 		};
 
 		function useSettings() {
@@ -27,6 +29,14 @@
 
 		function useWallpaper() {
 			return panelHooks.useWallpaper();
+		}
+
+		function useIntelColor() {
+			return panelHooks.useIntelColor();
+		}
+
+		function resampleIntel() {
+			return panelHooks.resampleIntel();
 		}
 
 		/*
@@ -259,23 +269,77 @@
 			const value = useSettings();
 			const lang = useLang();
 			const t = makeTranslate(lang);
-			const modes = ["auto", "light", "dark", "custom", "intelligent"];
+			const intelColor = useIntelColor();
+			const mode = value.colorMode;
+			const autoInvertRow = h(
+				Row,
+				{ label: t("modeAutoInvert"), hint: t("modeAutoInvertHint") },
+				h(Switch, { on: value.autoInvert, onChange: (next) => setSettings({ autoInvert: next }), label: t("modeAutoInvert") })
+			);
+			const hint = (id) => h("p", { className: "lg-group-hint" }, t(`modeHint_${id}`));
+			let body = null;
+			if (mode === "auto") {
+				body = h(Fragment, null, autoInvertRow, hint("auto"));
+			} else if (mode === "light" || mode === "dark") {
+				// Forced modes derive their ink from the mode itself; the invert switch
+				// has no effect there, so it is not rendered (no dead controls).
+				body = hint(mode);
+			} else if (mode === "custom") {
+				body = h(
+					Row,
+					{ label: t("modeCustomColor"), hint: t("modeHint_custom") },
+					h(
+						"div",
+						{ className: "lg-actions" },
+						h("input", {
+							className: "lg-color",
+							type: "color",
+							value: value.customColor,
+							onChange: (event) => setSettings({ customColor: event.target.value })
+						}),
+						h("span", { className: "lg-color-value" }, String(value.customColor).toUpperCase()),
+						h(
+							"button",
+							{ type: "button", className: "lg-button", onClick: () => setSettings({ customColor: DEFAULT_SETTINGS.customColor }) },
+							t("modeResetColor")
+						)
+					)
+				);
+			} else if (mode === "intelligent") {
+				body = h(
+					Fragment,
+					null,
+					h(
+						Row,
+						{ label: t("modeSampledColor"), hint: t("modeHint_intelligent") },
+						h(
+							"div",
+							{ className: "lg-actions" },
+							h("span", { className: "lg-swatch", style: { background: intelColor || "transparent" } }),
+							h("span", { className: "lg-color-value" }, intelColor ? String(intelColor).toUpperCase() : "—"),
+							h("button", { type: "button", className: "lg-button", onClick: () => resampleIntel() }, t("modeResample"))
+						)
+					),
+					autoInvertRow
+				);
+			}
 			return h(
 				"section",
 				{ className: "lg-group" },
 				h("h2", { className: "lg-group-title" }, t("modesGroup")),
 				h("p", { className: "lg-group-hint" }, t("modesHint")),
+				h("p", { className: "lg-group-hint" }, t("modesIndependentHint")),
 				h(
 					"div",
 					{ className: "lg-modes" },
-					modes.map((id) =>
+					MODE_IDS.map((id) =>
 						h(
 							"button",
 							{
 								key: id,
 								type: "button",
 								className: "lg-mode",
-								"data-on": value.colorMode === id || undefined,
+								"data-on": mode === id || undefined,
 								onClick: () => setSettings({ colorMode: id })
 							},
 							h("strong", null, t(`mode_${id}`)),
@@ -283,27 +347,12 @@
 						)
 					)
 				),
-				value.colorMode === "custom"
-					? h(
-							"div",
-							{ className: "lg-row" },
-							h("div", { className: "lg-label" }, h("span", null, t("modeCustomColor")), h("span", { className: "lg-hint" }, value.customColor)),
-							h("input", {
-								className: "lg-color",
-								type: "color",
-								value: value.customColor,
-								onChange: (event) => setSettings({ customColor: event.target.value })
-							})
-						)
-					: null,
-				h(
-					Row,
-					{ label: t("modeAutoInvert"), hint: t("modeAutoInvertHint") },
-					h(Switch, { on: value.autoInvert, onChange: (next) => setSettings({ autoInvert: next }), label: t("modeAutoInvert") })
-				)
+				// The panel is the only dynamic block: it mounts with the mode as its
+				// key, so the entry animation replays on every switch, and unselected
+				// modes render nothing at all.
+				h("div", { className: "lg-mode-panel", "data-mode": mode, key: mode }, h("div", null, body))
 			);
 		}
-
 		function AudioPanel() {
 			const value = useSettings();
 			const lang = useLang();

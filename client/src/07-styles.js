@@ -1154,6 +1154,45 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	color: var(--dsw-alias-label-secondary);
 }
 
+.lg-mode-panel {
+	margin-top: 4px;
+}
+
+.lg-mode-panel > div > * {
+	animation: lg-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes lg-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lg-mode-panel > div > * {
+		animation: none;
+	}
+}
+
+.lg-color-value {
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.lg-swatch {
+	width: 18px;
+	height: 18px;
+	border-radius: 6px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	background: var(--dsw-alias-bg-overlay);
+}
+
 .lg-color {
 	width: 46px;
 	height: 30px;

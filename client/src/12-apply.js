@@ -42,7 +42,23 @@
 			const settingsListeners = new Set();
 			const getSettings = () => settings;
 			const setSettings = (patch) => {
-				settings = normalize({ ...settings, ...patch });
+				const prev = settings;
+				const modeValues = { ...prev.modeValues };
+				// 1) Write this patch's appearance keys into the *active* mode's bucket.
+				const touched = MODE_KEYS.filter((key) => key in patch);
+				if (touched.length) {
+					const bucket = { ...modeValues[prev.colorMode] };
+					for (const key of touched) bucket[key] = patch[key];
+					modeValues[prev.colorMode] = bucket;
+				}
+				// 2) A mode switch loads the target bucket back into the top-level
+				//    keys; keys explicitly present in the patch still win.
+				const next = { ...patch };
+				if (patch.colorMode && patch.colorMode !== prev.colorMode) {
+					const target = modeValues[patch.colorMode] || DEFAULT_SETTINGS.modeValues[patch.colorMode];
+					for (const key of MODE_KEYS) if (!(key in patch)) next[key] = target[key];
+				}
+				settings = normalize({ ...prev, ...next, modeValues });
 				persistSettings(settings);
 				for (const listener of settingsListeners) listener();
 			};
@@ -51,6 +67,34 @@
 				return () => settingsListeners.delete(listener);
 			};
 			const useSettings = () => useSyncExternalStore(subscribeSettings, getSettings, getSettings);
+
+			// ---- Intelligent-mode colour bridge --------------------------------
+			// The sampler lives in GlassLayer, but the appearance panel also needs the
+			// sampled colour (swatch + resample button), so the value sits in a tiny
+			// external store that both sides subscribe to.
+			let intelColor = "";
+			let intelToken = 0;
+			const intelListeners = new Set();
+			const intelNotify = () => {
+				for (const listener of intelListeners) listener();
+			};
+			const intelSubscribe = (listener) => {
+				intelListeners.add(listener);
+				return () => intelListeners.delete(listener);
+			};
+			const intelSnapshotColor = () => intelColor;
+			const intelSnapshotToken = () => intelToken;
+			const intelSetColor = (next) => {
+				if (next === intelColor) return;
+				intelColor = next;
+				intelNotify();
+			};
+			const intelResample = () => {
+				intelToken += 1;
+				intelNotify();
+			};
+			const useIntelColor = () => useSyncExternalStore(intelSubscribe, intelSnapshotColor, intelSnapshotColor);
+			const useIntelToken = () => useSyncExternalStore(intelSubscribe, intelSnapshotToken, intelSnapshotToken);
 
 			// ---- Hardware adaptive presets --------------------------------------
 			// The probe runs once per page load and only reads a renderer string; the
@@ -105,6 +149,8 @@
 			panelHooks.setSettings = setSettings;
 			panelHooks.useLang = useLang;
 			panelHooks.useWallpaper = useWallpaper;
+			panelHooks.useIntelColor = useIntelColor;
+			panelHooks.resampleIntel = intelResample;
 
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
@@ -144,7 +190,8 @@
 				// repaint the whole transcript once per poll (the flicker). Only a
 				// sample that could change the decision is allowed through.
 				const [inkInfo, setInkInfo] = useState(null);
-				const [intelColor, setIntelColor] = useState("");
+				const intelColor = useIntelColor();
+				const intelToken = useIntelToken();
 				const inkRef = useRef(null);
 				const onInk = useCallback((next) => {
 					if (!next || typeof next.lum !== "number") return;
@@ -196,14 +243,76 @@
 				}
 				const appliedMode = forcedMode || mode;
 
+				// ---- Appearance transition -----------------------------------------
+				// A mode switch can also change tint / veil / dim / base colour, because
+				// every mode owns its own values. Ease those numbers over 240 ms so the
+				// glass cross-fades instead of hard-cutting.
+				const displayRef = useRef({ tint: value.tint, veil: value.veil, dim: value.dim, base: glassBase, force: forcedMode });
+				const [display, setDisplay] = useState(displayRef.current);
+				const transitionRef = useRef(0);
+				const switchingRef = useRef(false);
+				const targetDisplay = () => ({ tint: value.tint, veil: value.veil, dim: value.dim, base: glassBase, force: forcedMode });
+				const applyDisplay = (next) => {
+					displayRef.current = next;
+					setDisplay(next);
+				};
+				useEffect(() => {
+					const from = displayRef.current;
+					const to = targetDisplay();
+					if (from.tint === to.tint && from.veil === to.veil && from.dim === to.dim && from.base === to.base && from.force === to.force) return undefined;
+					const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+					const fromRgb = hexRgb(from.base);
+					const toRgb = hexRgb(to.base);
+					// iGPU / reduced motion / hidden window / no base colour: snap. The
+					// transition is a nicety and never a reason to miss a frame.
+					if (!value.enabled || hw.tier === "igpu" || document.hidden || reduce || !fromRgb || !toRgb) {
+						switchingRef.current = false;
+						applyDisplay(to);
+						return undefined;
+					}
+					switchingRef.current = true;
+					const started = performance.now();
+					const duration = 240;
+					const step = (now) => {
+						const progress = Math.min(1, (now - started) / duration);
+						const eased = 1 - Math.pow(1 - progress, 3);
+						applyDisplay({
+							tint: from.tint + (to.tint - from.tint) * eased,
+							veil: from.veil + (to.veil - from.veil) * eased,
+							dim: from.dim + (to.dim - from.dim) * eased,
+							base: rgbHex(mixRgb(fromRgb, toRgb, eased)),
+							force: to.force
+						});
+						if (progress < 1) transitionRef.current = requestAnimationFrame(step);
+						else switchingRef.current = false;
+					};
+					cancelAnimationFrame(transitionRef.current);
+					transitionRef.current = requestAnimationFrame(step);
+					return () => cancelAnimationFrame(transitionRef.current);
+				}, [value.colorMode]);
+				const modeSeenRef = useRef(value.colorMode);
+				useEffect(() => {
+					// The mode-switch render also changes tint/veil/dim; the transition above
+					// owns that frame. Any later slider move wins immediately — an eased
+					// catch-up would feel laggy while the user is watching their own drag.
+					if (modeSeenRef.current !== value.colorMode) {
+						modeSeenRef.current = value.colorMode;
+						return;
+					}
+					cancelAnimationFrame(transitionRef.current);
+					switchingRef.current = false;
+					applyDisplay(targetDisplay());
+				}, [value.enabled, value.tint, value.veil, value.dim, glassBase, forcedMode, value.colorMode]);
+				useEffect(() => () => cancelAnimationFrame(transitionRef.current), []);
+
 				useEffect(() => {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = appliedMode;
-					root.style.setProperty("--lg-dim", String(value.dim));
+					root.style.setProperty("--lg-dim", String(display.dim));
 					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
-				}, [value.enabled, value.dim, appliedMode, appsBehind]);
+				}, [value.enabled, display.dim, appliedMode, appsBehind]);
 
 				// WebGL liquid wallpaper: owns its canvas under <body>.
 				const liquidRef = useRef(null);
@@ -216,17 +325,17 @@
 				// the live desktop image, so the desktop capture is sampled instead.
 				useEffect(() => {
 					if (colorMode !== "intelligent" || !wallpaperUrl) {
-						setIntelColor("");
+						intelSetColor("");
 						return undefined;
 					}
 					let alive = true;
 					sampleWallpaperColor(wallpaperUrl, wallpaperKind).then((color) => {
-						if (alive && color) setIntelColor(color);
+						if (alive && color) intelSetColor(color);
 					});
 					return () => {
 						alive = false;
 					};
-				}, [colorMode, wallpaperUrl, wallpaperKind]);
+				}, [colorMode, wallpaperUrl, wallpaperKind, intelToken]);
 
 				// Layer 1 + 2: a pointer move only wakes the renderer; it never starts
 				// a second loop, and the highlight itself is throttled to one rAF.
@@ -462,13 +571,13 @@
 						// wallpaper is the user's call, not ours. Only "auto" derives an
 						// ink from the sample.
 						let ink = value.ink;
-						let veil = value.veil;
+						let veil = display.veil;
 						if (ink !== "dark" && ink !== "light") {
 							if (forcedMode) {
 								// A forced light glass always needs dark ink and vice versa.
 								ink = forcedMode === "light" ? "dark" : "light";
 							} else if (inkInfo) {
-								const decided = decideInk(inkInfo.content ?? inkInfo.lum, value.tint, value.veil, currentMode() === "dark");
+								const decided = decideInk(inkInfo.content ?? inkInfo.lum, display.tint, display.veil, currentMode() === "dark");
 								ink = decided.ink;
 								veil = decided.veil;
 							}
@@ -479,7 +588,7 @@
 						// token itself, so stamp the decision on <html> and let 07-styles.js
 						// map it: dark ink -> light caret, light ink -> dark caret.
 						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
-						const next = glassTokens(value.tint, veil, ink, { force: forcedMode, base: glassBase });
+						const next = glassTokens(display.tint, veil, ink, { force: display.force, base: display.base });
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
@@ -487,7 +596,7 @@
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, value.tint, value.veil, value.ink, inkInfo, forcedMode, colorMode, value.customColor, glassBase]);
+				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper) {

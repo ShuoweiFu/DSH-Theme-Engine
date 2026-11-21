@@ -264,3 +264,14 @@ v.26.11.21.154004 起，设置页「外观」分组新增颜色模式，玻璃�
 
 公共页脚保留「更新与下载」与「壁纸状态」两组。宿主通过 `/liquid-glass/state` 的 `elysia` 字段（读 profile 的依赖与 node_modules）决定是否显示第三枚标签。切换分支时会自动把背景来源指向对应模块（壁纸引擎 → WE 源；液态玻璃 → 真实桌面），互斥由界面直接保证。
 
+
+## 外观模式：每模式独立设置（v.26.11.21.165900）
+
+v.26.11.21.165900 起，「外观模式（四象）」区改成「模式选择器 + 该模式自己的设置块」：选哪个模式，就只渲染那个模式的设置，未选中的模式一个控件都不渲染。
+
+- **每模式各存一份值**：`settings.modeValues` 给 auto / light / dark / custom / intelligent 各存一个桶，桶里只放外观相关的 6 个键（`tint`、`veil`、`dim`、`ink`、`customColor`、`autoInvert`）。切换模式时把目标桶装载回 top-level，top-level 始终是当前桶的镜像。
+- **渲染与性能参数不进桶**：`blur / saturation / fps / refreshSec / flow / preset / renderMode / behind / source / audio` 仍由「智能预设 + 硬件档位」统一治理，避免切一次模式帧率跟着变。
+- **存储兼容**：仍是 `dsh-liquid-glass.settings.v3`，只增量加了 `modeValues` 字段。老配置首次启动时用当前 top-level 值填满五个桶，视觉零变化；缺桶 / 桶内缺键各自回落默认，不抛错、不清空其它桶。
+- **切换动画**：面板用 180ms 淡入 + 上移；玻璃颜色用 240ms rAF 数值插值（`tint / veil / dim / base`，easeOutCubic），每帧复用既有的 `glassTokens` 与 `overrideTokens`，不做 CSS transition。集显、系统「减少动效」或页面隐藏时直接跳到终值；动画中拖动任意滑杆会立刻取消动画并落到手动值（手动优先）。
+- **智能取色不锁定**：采样跟着壁纸走，「重新取色」只是重算一次；`autoInvert` 只在 auto / intelligent 下显示（light / dark 下强制模式已经接管，开关无效所以不渲染）。
+- **文案补齐**：`locale/zh.json`、`locale/en.json` 现在完整包含 `client/src/02-locale.js` 的全部键（各 216 个），修复了此前 `modesGroup`、`mode_*` 等键落空、界面显示原始 key 的问题。

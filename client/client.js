@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.165900";
+		const CLIENT_BUILD = "v.26.11.21.170813";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -190,6 +190,10 @@
 			moduleElysiaHint: "已检测到，可接管其设置",
 			moduleIsland: "灵动岛",
 			moduleIslandHint: "独立模块，可与其他模块同时开启",
+			moduleIslandNote: "灵动岛是叠加层，功能施工中；开启后不会替换当前背景模块。",
+			modulePlugin: "插件管理",
+			modulePluginHint: "本插件的版本、更新与运行状态。",
+			pluginHint: "模块选择、检查更新与壁纸状态集中在这里。",
 			moduleLocked: "安装 elysia395 壁纸引擎后，这里会出现兼容选项。",
 			wallpaper: "同步桌面壁纸",
 			wallpaperHint: "抓取当前桌面（含 Wallpaper Engine 动态壁纸）；窗口后面压着别的应用时，会把那个应用被遮住的部分一起合成进来。",
@@ -408,6 +412,10 @@
 			moduleElysiaHint: "Detected here; can take over its settings",
 			moduleIsland: "Dynamic Island",
 			moduleIslandHint: "Independent module, runs with any other module",
+			moduleIslandNote: "Dynamic Island is an overlay and still under construction; it never replaces the active background module.",
+			modulePlugin: "Plugin manager",
+			modulePluginHint: "Version, updates and runtime status for this plugin.",
+			pluginHint: "Module choice, update checks and wallpaper status live here.",
 			moduleLocked: "Install the elysia395 wallpaper engine to unlock the compatibility option.",
 			wallpaper: "Sync desktop wallpaper",
 			wallpaperHint: "Captures the live desktop (Wallpaper Engine included); when another app sits behind this window, the occluded part of that app is composited in too.",
@@ -5485,6 +5493,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				const t = (key) => translate(key);
 				const [perf, setPerf] = useState(null);
 				const [update, setUpdate] = useState(null);
+				const [tab, setTab] = useState(null);
 				const checkUpdates = useCallback((force) => {
 					setUpdate((prev) => ({ ...(prev ?? {}), loading: true, error: "" }));
 					fetch(`${API}/update${force ? "?force=1" : ""}`)
@@ -5567,28 +5576,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						: `${t("updateUpToDate")} · ${info.latest}`;
 				};
 				const moduleValue = value.module ?? "glass";
-				const chooseModule = (next) => {
-					if (next === moduleValue) return;
-					const patchValue = { module: next };
-					// Only one background module may run at a time: switching modules
-					// also points the wallpaper source at that module's engine.
-					if (next === "wallpaper") patchValue.source = "we";
-					if (next === "glass") patchValue.source = "desktop";
-					setSettings(patchValue);
+				// `tab` is view-only: island and the plugin manager are not background
+				// modules, so they must not overwrite settings.module.
+				const tabValue = tab ?? moduleValue;
+				const chooseTab = (next) => {
+					setTab(next);
+					if (next === "glass" || next === "wallpaper" || next === "elysia") {
+						if (next === moduleValue) return;
+						const patchValue = { module: next };
+						// Only one background module may run at a time: switching modules
+						// also points the wallpaper source at that module's engine.
+						if (next === "wallpaper") patchValue.source = "we";
+						if (next === "glass") patchValue.source = "desktop";
+						setSettings(patchValue);
+					}
 				};
-				const moduleOption = (id, name, hint) =>
-					h(
-						"button",
-						{
-							type: "button",
-							className: "lg-module",
-							"data-on": moduleValue === id ? "on" : undefined,
-							onClick: () => chooseModule(id)
-						},
-						h("span", { className: "lg-module-name" }, name),
-						h("span", { className: "lg-module-hint" }, hint),
-						h("i", { className: "lg-module-dot", "aria-hidden": "true" })
-					);
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -5625,34 +5627,33 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							{ className: "lg-branch-tabs" },
 							h(
 								"button",
-								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "glass" ? "on" : undefined, onClick: () => chooseModule("glass") },
+								{ type: "button", className: "lg-branch-tab", "data-on": tabValue === "glass" ? "on" : undefined, onClick: () => chooseTab("glass") },
 								t("moduleGlass")
 							),
 							h(
 								"button",
-								{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "wallpaper" ? "on" : undefined, onClick: () => chooseModule("wallpaper") },
+								{ type: "button", className: "lg-branch-tab", "data-on": tabValue === "wallpaper" ? "on" : undefined, onClick: () => chooseTab("wallpaper") },
 								t("moduleWallpaper")
 							),
 							state.elysia && state.elysia.installed
 								? h(
 										"button",
-										{ type: "button", className: "lg-branch-tab", "data-on": moduleValue === "elysia" ? "on" : undefined, onClick: () => chooseModule("elysia") },
+										{ type: "button", className: "lg-branch-tab", "data-on": tabValue === "elysia" ? "on" : undefined, onClick: () => chooseTab("elysia") },
 										t("moduleElysia")
 									)
 								: null,
 							h(
 								"button",
-								{
-									type: "button",
-									className: "lg-chip lg-island",
-									"data-on": value.island ? "on" : undefined,
-									onClick: () => setSettings({ island: !value.island })
-								},
+								{ type: "button", className: "lg-branch-tab", "data-on": tabValue === "island" ? "on" : undefined, onClick: () => chooseTab("island") },
 								t("moduleIsland")
-							)
-						),
+							),
+							h(
+								"button",
+								{ type: "button", className: "lg-branch-tab", "data-on": tabValue === "plugin" ? "on" : undefined, onClick: () => chooseTab("plugin") },
+								t("modulePlugin")
+							),						),
 						h("p", { className: "lg-group-hint" }, t("moduleHint")),
-						moduleValue === "glass"
+						tabValue === "glass"
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
@@ -5828,8 +5829,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									)
 								)
 							: null,
-						moduleValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
-						moduleValue === "elysia"
+						tabValue === "wallpaper" ? h("div", { className: "lg-branch-body" }, h(WallpaperCenter, { key: "we" }), h(AudioPanel, { key: "audio" })) : null,
+						tabValue === "elysia"
 							? h(
 									"div",
 									{ className: "lg-branch-body" },
@@ -5842,6 +5843,58 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									)
 								)
 							: null,
+						tabValue === "island"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+									h(
+										"section",
+										{ className: "lg-group" },
+										h("h2", { className: "lg-group-title" }, t("moduleIsland")),
+										h(
+											Row,
+											{ label: t("moduleIsland"), hint: t("moduleIslandHint") },
+											h(Switch, { on: value.island, onChange: (next) => setSettings({ island: next }), label: t("moduleIsland") })
+										),
+										h("p", { className: "lg-group-hint" }, t("moduleIslandNote"))
+									)
+								)
+							: null,
+						tabValue === "plugin"
+							? h(
+									"div",
+									{ className: "lg-branch-body" },
+										h(
+											"section",
+											{ className: "lg-group" },
+											h("h2", { className: "lg-group-title" }, t("modulePlugin")),
+											h("p", { className: "lg-group-hint" }, t("pluginHint")),
+											h(
+												"div",
+												{ className: "lg-row" },
+												h("div", { className: "lg-label" }, h("span", null, t("version")), h("span", { className: "lg-hint" }, CLIENT_BUILD))
+											),
+											h(
+												"div",
+												{ className: "lg-row" },
+												h("div", { className: "lg-label" }, h("span", null, "GitHub")),
+												h(
+													"a",
+													{ className: "lg-button", href: "https://github.com/ShuoweiFu/DSH-Theme-Engine", target: "_blank", rel: "noreferrer" },
+													t("download")
+												)
+											),
+											h(
+												"div",
+												{ className: "lg-row" },
+												h("div", { className: "lg-label" }, h("span", null, "npm")),
+												h(
+													"a",
+													{ className: "lg-button", href: "https://www.npmjs.com/package/dsh-theme-engine", target: "_blank", rel: "noreferrer" },
+													t("download")
+												)
+											)
+										),
 h(
 							"section",
 							{ className: "lg-group" },
@@ -5922,6 +5975,8 @@ h(
 								)
 							)
 						)
+							)
+						: null,
 					)
 				);
 			}

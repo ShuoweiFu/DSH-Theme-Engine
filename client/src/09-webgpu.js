@@ -65,16 +65,20 @@
 			let fast = 0;
 			let scaleIndex = 1;
 			let mouse = { x: 0.5, y: 0.5 };
-			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
+			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0, fit: 0, pan: [0.5, 0.5], flip: [0, 0] };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(20);
+			// 28 floats = 112 B: the original 17 plus fit / pan / flip, padded so the
+			// buffer keeps the 16-byte alignment WebGPU requires.
+			const uniforms = new Float32Array(28);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
   tint: f32, dpr: f32, vpW: f32, vpH: f32,
-  beat: f32, pad0: f32, pad1: f32, pad2: f32,
+  beat: f32, fit: f32, panX: f32, panY: f32,
+  flipX: f32, flipY: f32, pad0: f32, pad1: f32,
+  pad2: f32, pad3: f32, pad4: f32, pad5: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -109,8 +113,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let fragCss = in.frag * vec2<f32>(u.vpW, u.vpH);
   let screenUv = (vec2<f32>(u.winX, u.winY) + fragCss) / vec2<f32>(u.scrW, u.scrH);
   let screenDev = vec2<f32>(u.scrW, u.scrH) * u.dpr;
-  let cover = max(screenDev.x / u.texW, screenDev.y / u.texH);
-  var uv = (screenUv - vec2<f32>(0.5)) * (screenDev / (vec2<f32>(u.texW, u.texH) * cover)) + vec2<f32>(0.5);
+  // Same four alignment modes as the WebGL shader, plus the WE style
+  // position and mirroring knobs.
+  var fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * max(screenDev.x / u.texW, screenDev.y / u.texH));
+  if (u.fit > 0.5 && u.fit < 1.5) {
+    fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * min(screenDev.x / u.texW, screenDev.y / u.texH));
+  } else if (u.fit >= 1.5 && u.fit < 2.5) {
+    fitScale = vec2<f32>(1.0, 1.0);
+  } else if (u.fit >= 2.5) {
+    fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * u.dpr);
+  }
+  var uv = (screenUv - vec2<f32>(0.5)) * fitScale + vec2<f32>(0.5);
+  uv = uv + (vec2<f32>(0.5, 0.5) - vec2<f32>(u.panX, u.panY)) * fitScale;
+  if (u.flipX > 0.5) { uv.x = 1.0 - uv.x; }
+  if (u.flipY > 0.5) { uv.y = 1.0 - uv.y; }
   uv.y = 1.0 - uv.y;
   let t = u.time;
   let w1 = noise(uv * 3.1 + vec2<f32>(t * 0.05, t * 0.04));
@@ -298,6 +314,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				if (paused() || !running) return;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
+				// A looping <video> decodes one near-black frame when it wraps to 0:00;
+				// uploading it blacks out the glass for ~110 ms. Same guard as WebGL.
+				const liveSample = measureInk(liveFrame);
+				if (liveSample && isBlackSwap(liveSample)) return;
 				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
 				blurKey = "";
 				draw(performance.now());
@@ -347,6 +367,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[12] = params.tint; uniforms[13] = g.dpr;
 				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
 				uniforms[16] = onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0;
+				uniforms[17] = params.fit;
+				uniforms[18] = params.pan[0]; uniforms[19] = params.pan[1];
+				uniforms[20] = params.flip[0]; uniforms[21] = params.flip[1];
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {
@@ -560,6 +583,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.tint === "number") params.tint = next.tint;
+					if (typeof next.fit === "number") params.fit = next.fit;
+					if (Array.isArray(next.pan)) params.pan = next.pan;
+					if (Array.isArray(next.flip)) params.flip = next.flip;
 					if (typeof next.blur === "number" && next.blur !== params.blur) {
 						params.blur = next.blur;
 						blurKey = "";

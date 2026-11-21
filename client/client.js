@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.173500";
+		const CLIENT_BUILD = "v.26.11.21.174500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -26,6 +26,8 @@
 		 * inherits the other module's look.
 		 */
 		const MODULE_IDS = Object.freeze(["glass", "wallpaper", "elysia"]);
+		/** Wallpaper Engine alignment ids, in the order the shader branches on. */
+		const FIT_IDS = Object.freeze(["cover", "contain", "stretch", "pixel"]);
 		const APPEARANCE_SCALARS = Object.freeze(["blur", "saturation", "flow", "colorMode", "customColor", "autoInvert", "ink"]);
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -54,6 +56,10 @@
 			module: "glass",
 			island: false,
 			weGlass: true,
+			// Wallpaper property sheet: per-wallpaper playback and framing, the same
+			// knobs Wallpaper Engine exposes in its own properties panel.
+			wp: { fit: "cover", panX: 50, panY: 50, flipX: false, flipY: false, rate: 1, volume: 0, muted: true },
+			wpPresets: [],
 			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }])),
 			moduleValues: Object.fromEntries(
 				MODULE_IDS.map((id) => [
@@ -311,6 +317,20 @@
 			sourceFile: "本地文件",
 			weGroup: "壁纸中枢（Wallpaper Engine）",
 			weHint: "读取本机 Steam 与 Wallpaper Engine 的壁纸库：视频壁纸可直接成为玻璃背景；场景/网页壁纸由 WE 播放，经实时桌面捕获进入玻璃。",
+			weNoEngine: "本机未安装 Wallpaper Engine：下面的属性面板与本地文件照样能用，壁纸库不会出现。",
+			weHintAlign: "对齐方式、位置、翻转与播放速度只作用于玻璃背景这一层，不改动 Wallpaper Engine 本身的设置。",
+			weAlignPixel: "像素（1:1）",
+			wePropMute: "静音",
+			wePropMuteHint: "壁纸默认静音；打开音量后需要手动关闭静音才会出声。",
+			wePropReset: "恢复默认属性",
+			wePresetName: "预设名称",
+			wePresetDelete: "删除",
+			wePresetEmpty: "还没有预设：调好属性后起个名字保存。",
+			weShareHint: "这里是预设 JSON，可复制给别人，也可粘贴别人的 JSON 后点导入。",
+			weImport: "导入",
+			weJsonBad: "这段 JSON 读不出来，检查一下再试。",
+			weStorePage: "Wallpaper Engine（Steam 商店）",
+
 			weMissing: "未检测到 Wallpaper Engine",
 			weRunning: "Wallpaper Engine 运行中",
 			weNotRunning: "Wallpaper Engine 未运行",
@@ -538,6 +558,20 @@
 			sourceFile: "Local file",
 			weGroup: "Wallpaper centre (Wallpaper Engine)",
 			weHint: "Reads the local Steam / Wallpaper Engine library: video wallpapers can back the glass directly; scenes and web wallpapers are played by WE and arrive through the live desktop capture.",
+			weNoEngine: "Wallpaper Engine is not installed: the property sheet and local files below still work, the library will not appear.",
+			weHintAlign: "Alignment, position, flip and playback speed only affect the glass layer; Wallpaper Engine's own settings are untouched.",
+			weAlignPixel: "Pixel (1:1)",
+			wePropMute: "Mute",
+			wePropMuteHint: "Wallpapers start muted; raise the volume and turn mute off to hear them.",
+			wePropReset: "Reset properties",
+			wePresetName: "Preset name",
+			wePresetDelete: "Delete",
+			wePresetEmpty: "No presets yet: dial the properties in, name them and save.",
+			weShareHint: "Preset JSON lives here: copy it to someone else, or paste theirs and press import.",
+			weImport: "Import",
+			weJsonBad: "That JSON could not be parsed; check it and try again.",
+			weStorePage: "Wallpaper Engine (Steam store)",
+
 			weMissing: "Wallpaper Engine not detected",
 			weRunning: "Wallpaper Engine is running",
 			weNotRunning: "Wallpaper Engine is not running",
@@ -634,6 +668,13 @@
 				customColor: pickColor(bucket.customColor, fallback.customColor),
 				autoInvert: bucket.autoInvert === undefined ? fallback.autoInvert : bucket.autoInvert !== false
 			});
+			const wpRaw = source.wp && typeof source.wp === "object" ? source.wp : {};
+			const wpPresets = Array.isArray(source.wpPresets)
+				? source.wpPresets
+						.filter((entry) => entry && typeof entry === "object" && typeof entry.name === "string" && entry.value && typeof entry.value === "object")
+						.slice(0, 24)
+						.map((entry) => ({ name: entry.name.slice(0, 40), value: entry.value }))
+				: [];
 			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
@@ -728,6 +769,17 @@
 				autoInvert: activeMode.autoInvert,
 				modeValues: activeModule.modeValues,
 				moduleValues,
+				wp: {
+					fit: FIT_IDS.includes(wpRaw.fit) ? wpRaw.fit : DEFAULT_SETTINGS.wp.fit,
+					panX: Math.round(num(wpRaw.panX, DEFAULT_SETTINGS.wp.panX, 0, 100)),
+					panY: Math.round(num(wpRaw.panY, DEFAULT_SETTINGS.wp.panY, 0, 100)),
+					flipX: wpRaw.flipX === true,
+					flipY: wpRaw.flipY === true,
+					rate: Math.round(num(wpRaw.rate, DEFAULT_SETTINGS.wp.rate, 0.25, 2) * 100) / 100,
+					volume: num(wpRaw.volume, DEFAULT_SETTINGS.wp.volume, 0, 1),
+					muted: wpRaw.muted !== false
+				},
+				wpPresets,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,
@@ -1179,6 +1231,33 @@
 		}
 
 		/**
+		 * Playback properties of the wallpaper video: the "playback speed",
+		 * "volume" and "mute" rows of the property sheet. Applied to every live
+		 * element, including ones created before the user touched a slider.
+		 */
+		const livePrefs = { rate: 1, volume: 0, muted: true };
+		const liveElements = new Set();
+
+		function applyLivePrefs(element) {
+			if (!element || !("playbackRate" in element)) return;
+			const rate = Math.min(2, Math.max(0.25, Number(livePrefs.rate) || 1));
+			const volume = Math.min(1, Math.max(0, Number(livePrefs.volume) || 0));
+			element.playbackRate = rate;
+			element.volume = volume;
+			// Muted by default: a wallpaper that talks over the user is worse than
+			// a silent one, so audio has to be switched on explicitly.
+			element.muted = livePrefs.muted !== false || volume === 0;
+		}
+
+		function setLivePrefs(next) {
+			if (!next) return;
+			if (typeof next.rate === "number") livePrefs.rate = next.rate;
+			if (typeof next.volume === "number") livePrefs.volume = next.volume;
+			if (typeof next.muted === "boolean") livePrefs.muted = next.muted;
+			for (const element of liveElements) applyLivePrefs(element);
+		}
+
+		/**
 		 * Task 8: a live wallpaper source. Local videos decode off-screen and
 		 * animated images are drawn from a hidden <img>; both feed the shared
 		 * canvas returned by liveWallpaperFrame() on a short timer.
@@ -1195,6 +1274,8 @@
 				element.loop = true;
 				element.playsInline = true;
 				element.preload = "auto";
+				liveElements.add(element);
+				applyLivePrefs(element);
 			}
 			const ready = new Promise((resolve) => {
 				let settled = false;
@@ -1224,6 +1305,7 @@
 				dispose() {
 					try {
 						element.pause?.();
+					liveElements.delete(element);
 						element.removeAttribute("src");
 						element.remove();
 					} catch {
@@ -2432,7 +2514,65 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	letter-spacing: 0.02em;
 }
 
+.lg-wp-sheet {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border-radius: 14px;
+	background: var(--lg-surface, rgba(255, 255, 255, 0.05));
+	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
+}
+
+.lg-wp-saverow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.lg-wp-saverow .lg-input {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+.lg-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	resize: vertical;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: 10px;
+	color: inherit;
+	background: var(--lg-field, rgba(127, 127, 127, 0.12));
+	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
+}
+
+.lg-wp-presets {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.lg-wp-preset {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.lg-wp-preset-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+
 .lg-browser {
+
 	margin-top: 12px;
 	padding: 10px;
 	border: 0.5px solid var(--dsw-alias-border-l2);
@@ -3099,6 +3239,9 @@ uniform float uFlow;
 uniform float uBeat;
 uniform float uRipple;
 uniform vec2 uMouse;
+uniform float uFit;
+uniform vec2 uPan;
+uniform vec2 uFlip;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -3133,12 +3276,28 @@ void main() {
 	vec2 fragCss = frag / uScale;
 	vec2 screenUv = (uWin + fragCss) / uScreen;
 	vec2 screenDev = uScreen * uDpr;
-	float cover = max(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y);
+	// Wallpaper Engine's alignment property: 0 cover, 1 contain, 2 stretch,
+	// 3 pixel exact. cover stays the default, the glass is designed around a
+	// wallpaper that bleeds past the window on every side.
+	vec2 fitScale;
+	if (uFit < 0.5) {
+		fitScale = screenDev / (uTexRes * max(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y));
+	} else if (uFit < 1.5) {
+		fitScale = screenDev / (uTexRes * min(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y));
+	} else if (uFit < 2.5) {
+		fitScale = vec2(1.0);
+	} else {
+		fitScale = screenDev / (uTexRes * uDpr);
+	}
 	// gl_FragCoord counts upwards from the bottom; texture rows count from the
 	// top, so flip V here instead of relying on UNPACK_FLIP_Y_WEBGL (which
 	// Chromium ignores for ImageBitmap uploads).
 	screenUv.y = 1.0 - screenUv.y;
-	vec2 uv = (screenUv - 0.5) * (screenDev / (uTexRes * cover)) + 0.5;
+	vec2 uv = (screenUv - 0.5) * fitScale + 0.5;
+	// Position and mirror, both part of the per-wallpaper property sheet.
+	uv += (vec2(0.5) - uPan) * fitScale;
+	if (uFlip.x > 0.5) uv.x = 1.0 - uv.x;
+	if (uFlip.y > 0.5) uv.y = 1.0 - uv.y;
 
 	float t = uTime;
 	vec2 p = uv * vec2(uTexRes.x / uTexRes.y, 1.0) * 2.0;
@@ -3303,16 +3462,20 @@ void main() {
 			let fast = 0;
 			let scaleIndex = 1;
 			let mouse = { x: 0.5, y: 0.5 };
-			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0 };
+			const params = { flow: 0.9, sat: 1.4, dim: 0.08, tint: 0.55, blur: 0, fit: 0, pan: [0.5, 0.5], flip: [0, 0] };
 			const perf = { targetFps: 30, autoScale: true, idle: false, paused: new Set(), frames: 0, ms: 0 };
-			const uniforms = new Float32Array(20);
+			// 28 floats = 112 B: the original 17 plus fit / pan / flip, padded so the
+			// buffer keeps the 16-byte alignment WebGPU requires.
+			const uniforms = new Float32Array(28);
 			const vertexShader = `
 struct Uniforms {
   time: f32, mx: f32, my: f32, scrW: f32,
   scrH: f32, winX: f32, winY: f32, texW: f32,
   texH: f32, flow: f32, sat: f32, dim: f32,
   tint: f32, dpr: f32, vpW: f32, vpH: f32,
-  beat: f32, pad0: f32, pad1: f32, pad2: f32,
+  beat: f32, fit: f32, panX: f32, panY: f32,
+  flipX: f32, flipY: f32, pad0: f32, pad1: f32,
+  pad2: f32, pad3: f32, pad4: f32, pad5: f32,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var samp: sampler;
@@ -3347,8 +3510,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let fragCss = in.frag * vec2<f32>(u.vpW, u.vpH);
   let screenUv = (vec2<f32>(u.winX, u.winY) + fragCss) / vec2<f32>(u.scrW, u.scrH);
   let screenDev = vec2<f32>(u.scrW, u.scrH) * u.dpr;
-  let cover = max(screenDev.x / u.texW, screenDev.y / u.texH);
-  var uv = (screenUv - vec2<f32>(0.5)) * (screenDev / (vec2<f32>(u.texW, u.texH) * cover)) + vec2<f32>(0.5);
+  // Same four alignment modes as the WebGL shader, plus the WE style
+  // position and mirroring knobs.
+  var fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * max(screenDev.x / u.texW, screenDev.y / u.texH));
+  if (u.fit > 0.5 && u.fit < 1.5) {
+    fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * min(screenDev.x / u.texW, screenDev.y / u.texH));
+  } else if (u.fit >= 1.5 && u.fit < 2.5) {
+    fitScale = vec2<f32>(1.0, 1.0);
+  } else if (u.fit >= 2.5) {
+    fitScale = screenDev / (vec2<f32>(u.texW, u.texH) * u.dpr);
+  }
+  var uv = (screenUv - vec2<f32>(0.5)) * fitScale + vec2<f32>(0.5);
+  uv = uv + (vec2<f32>(0.5, 0.5) - vec2<f32>(u.panX, u.panY)) * fitScale;
+  if (u.flipX > 0.5) { uv.x = 1.0 - uv.x; }
+  if (u.flipY > 0.5) { uv.y = 1.0 - uv.y; }
   uv.y = 1.0 - uv.y;
   let t = u.time;
   let w1 = noise(uv * 3.1 + vec2<f32>(t * 0.05, t * 0.04));
@@ -3536,6 +3711,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				if (paused() || !running) return;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
+				// A looping <video> decodes one near-black frame when it wraps to 0:00;
+				// uploading it blacks out the glass for ~110 ms. Same guard as WebGL.
+				const liveSample = measureInk(liveFrame);
+				if (liveSample && isBlackSwap(liveSample)) return;
 				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
 				blurKey = "";
 				draw(performance.now());
@@ -3585,6 +3764,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				uniforms[12] = params.tint; uniforms[13] = g.dpr;
 				uniforms[14] = window.innerWidth; uniforms[15] = window.innerHeight;
 				uniforms[16] = onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0;
+				uniforms[17] = params.fit;
+				uniforms[18] = params.pan[0]; uniforms[19] = params.pan[1];
+				uniforms[20] = params.flip[0]; uniforms[21] = params.flip[1];
 				device.queue.writeBuffer(uniformBuffer, 0, uniforms);
 				const encoder = device.createCommandEncoder();
 				if (texture) {
@@ -3798,6 +3980,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.tint === "number") params.tint = next.tint;
+					if (typeof next.fit === "number") params.fit = next.fit;
+					if (Array.isArray(next.pan)) params.pan = next.pan;
+					if (Array.isArray(next.flip)) params.flip = next.flip;
 					if (typeof next.blur === "number" && next.blur !== params.blur) {
 						params.blur = next.blur;
 						blurKey = "";
@@ -3955,7 +4140,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				flow: gl.getUniformLocation(program, "uFlow"),
 				beat: gl.getUniformLocation(program, "uBeat"),
 				ripple: gl.getUniformLocation(program, "uRipple"),
-				mouse: gl.getUniformLocation(program, "uMouse")
+				mouse: gl.getUniformLocation(program, "uMouse"),
+				fit: gl.getUniformLocation(program, "uFit"),
+				pan: gl.getUniformLocation(program, "uPan"),
+				flip: gl.getUniformLocation(program, "uFlip")
 			};
 
 			// Blur prepass program: the whole point is that the compositor never
@@ -4003,7 +4191,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const clock = { start: performance.now() };
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
-			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10 };
+			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10, fit: 0, pan: [0.5, 0.5], flip: [0, 0] };
 			// The wallpaper is blurred by the prepass anyway, so above DPR_CAP
 			// rendering costs DPR² fragments that cannot be seen. Both backends
 			// share the same cap so switching engines never changes sharpness.
@@ -4092,6 +4280,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				if (perf.paused.size || !running) return;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
+				// A looping <video> decodes one near-black frame when it wraps to 0:00.
+				// Uploading it paints the whole glass black for ~110 ms — the "blink" on
+				// every loop. Skip that single frame; isBlackSwap() only fires on a dark
+				// frame right after a lit one and gives up after two tries, so a genuinely
+				// dark wallpaper is never stuck.
+				const liveSample = measureInk(liveFrame);
+				if (liveSample && isBlackSwap(liveSample)) return;
 				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
 				gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
@@ -4230,6 +4425,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				gl.uniform1f(uniforms.sat, params.sat);
 				gl.uniform1f(uniforms.dim, params.dim);
 				gl.uniform1f(uniforms.flow, params.flow);
+			gl.uniform1f(uniforms.fit, params.fit);
+			gl.uniform2f(uniforms.pan, params.pan[0], params.pan[1]);
+			gl.uniform2f(uniforms.flip, params.flip[0], params.flip[1]);
 				gl.uniform1f(uniforms.beat, onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0);
 				// Ripple only while the pointer is actually moving: a parked cursor
 				// skips the sin/exp pair for the whole screen.
@@ -4531,6 +4729,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.flow === "number") params.flow = next.flow;
+				if (typeof next.fit === "number") params.fit = next.fit;
+				if (Array.isArray(next.pan)) params.pan = next.pan;
+				if (Array.isArray(next.flip)) params.flip = next.flip;
 					if (typeof next.blur === "number" && next.blur !== params.blur) {
 						params.blur = next.blur;
 						renderBlur();
@@ -5168,7 +5369,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// parameters (no extra blur, no saturation push, no flow).
 				const glassParams = () => {
 					const off = value.module === "wallpaper" && value.weGlass === false;
-					return { sat: off ? 1 : value.saturation, dim: value.dim, flow: off ? 0 : value.flow, blur: off ? 0 : value.blur };
+					const wp = value.wp && typeof value.wp === "object" ? value.wp : DEFAULT_SETTINGS.wp;
+					return {
+						sat: off ? 1 : value.saturation,
+						dim: value.dim,
+						flow: off ? 0 : value.flow,
+						blur: off ? 0 : value.blur,
+						// Wallpaper Engine properties: alignment, position, mirroring.
+						fit: Math.max(0, FIT_IDS.indexOf(wp.fit)),
+						pan: [wp.panX / 100, wp.panY / 100],
+						flip: [wp.flipX ? 1 : 0, wp.flipY ? 1 : 0]
+					};
 				};
 				useEffect(() => {
 					const root = document.documentElement;
@@ -5281,7 +5492,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// without it the blur slider only takes effect on the next reload.
 				useEffect(() => {
 					liquidRef.current?.setParams(glassParams());
-				}, [value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass]);
+				}, [
+					value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass,
+					value.wp.fit, value.wp.panX, value.wp.panY, value.wp.flipX, value.wp.flipY
+				]);
+
+				// Playback speed, volume and mute belong to the property sheet, not to the
+				// shader, so they travel through the capture module instead.
+				useEffect(() => {
+					setLivePrefs({ rate: value.wp.rate, volume: value.wp.volume, muted: value.wp.muted });
+				}, [value.wp.rate, value.wp.volume, value.wp.muted]);
 
 				// (Re)load the wallpaper texture whenever the fingerprint advances.
 				useEffect(() => {
@@ -6309,6 +6529,9 @@ h(
 			const [search, setSearch] = useState("");
 			const [filter, setFilter] = useState("all");
 			const [browser, setBrowser] = useState(false);
+			const [notice, setNotice] = useState("");
+			const [presetName, setPresetName] = useState("");
+			const [share, setShare] = useState("");
 			const load = useCallback((force) => {
 				setLoading(true);
 				setError("");
@@ -6335,25 +6558,182 @@ h(
 				if (filter !== "all" && item.type !== filter) return false;
 				return !needle || String(item.title || "").toLowerCase().includes(needle);
 			});
-			const apply = (item) => {
+			const wp = value.wp || DEFAULT_SETTINGS.wp;
+			const presets = Array.isArray(value.wpPresets) ? value.wpPresets : [];
+			const patchWp = (patchValue) => setSettings({ wp: { ...wp, ...patchValue } });
+
+			/*
+			 * Applying a library entry. A video is readable on disk, so it becomes the
+			 * texture directly. Scenes and web wallpapers have no frame we can sample, so
+			 * WE is asked to play the item and the glass falls back to the live desktop
+			 * capture underneath it; the panel says so instead of silently doing nothing.
+			 */
+			const applyItem = (item) => {
 				if (!item) return;
 				if (item.type === "video") {
 					setSettings({ module: "wallpaper", source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
-				} else {
-					setSettings({ module: "wallpaper", source: "desktop", weId: item.id, wallpaper: true });
+					setNotice(t("weApplied"));
+					return;
 				}
+				setSettings({ module: "wallpaper", source: "desktop", weId: item.id, wallpaper: true });
+				fetch(`${API}/we/open?id=${encodeURIComponent(item.id)}`).catch(() => {});
+				setNotice(t("weLiveHint"));
 			};
 			const pickFile = (file) => {
 				if (!file || !file.path) return;
 				setSettings({ module: "wallpaper", source: "file", filePath: file.path, wallpaper: true });
 				setBrowser(false);
 			};
-			const chip = (id) =>
+			const savePreset = () => {
+				const name = presetName.trim() || `${t("wePresets")} ${presets.length + 1}`;
+				setSettings({
+					wpPresets: [...presets.filter((entry) => entry.name !== name), { name, value: { ...wp } }].slice(-24)
+				});
+				setPresetName("");
+				setNotice(t("wePresetSaved"));
+			};
+			const loadPreset = (preset) => {
+				if (!preset || !preset.value) return;
+				setSettings({ wp: { ...wp, ...preset.value } });
+				setNotice(t("wePresetLoaded"));
+			};
+			const removePreset = (name) => setSettings({ wpPresets: presets.filter((entry) => entry.name !== name) });
+			const exportPreset = () => setShare(JSON.stringify({ wp }, null, 2));
+			const importPreset = () => {
+				try {
+					const parsed = JSON.parse(share);
+					const next = parsed && typeof parsed === "object" && parsed.wp ? parsed.wp : parsed;
+					if (!next || typeof next !== "object") throw new Error("no wp");
+					setSettings({ wp: { ...wp, ...next } });
+					setNotice(t("wePresetLoaded"));
+				} catch {
+					setNotice(t("weJsonBad"));
+				}
+			};
+
+			/* The property sheet mirrors Wallpaper Engine's own panel. */
+			const sheet = h(
+				"div",
+				{ className: "lg-wp-sheet" },
+				h("h3", { className: "lg-group-title" }, t("weProps")),
 				h(
-					"button",
-					{ key: id, type: "button", className: "lg-chip", "data-on": filter === id ? "on" : undefined, onClick: () => setFilter(id) },
-					t(`weFilter_${id}`)
-				);
+					Row,
+					{ label: t("wePropAlign"), hint: t("weHintAlign") },
+					h(
+						"select",
+						{ className: "lg-select", value: wp.fit, onChange: (event) => patchWp({ fit: event.target.value }) },
+						h("option", { value: "cover" }, t("weAlignCover")),
+						h("option", { value: "contain" }, t("weAlignContain")),
+						h("option", { value: "stretch" }, t("weAlignStretch")),
+						h("option", { value: "pixel" }, t("weAlignPixel"))
+					)
+				),
+				h(Slider, {
+					label: `${t("wePropOffset")} X`,
+					value: wp.panX,
+					min: 0,
+					max: 100,
+					step: 1,
+					display: `${Math.round(wp.panX)}%`,
+					onChange: (next) => patchWp({ panX: next })
+				}),
+				h(Slider, {
+					label: `${t("wePropOffset")} Y`,
+					value: wp.panY,
+					min: 0,
+					max: 100,
+					step: 1,
+					display: `${Math.round(wp.panY)}%`,
+					onChange: (next) => patchWp({ panY: next })
+				}),
+				h(
+					Row,
+					{ label: t("wePropFlip") },
+					h(
+						"div",
+						{ className: "lg-actions" },
+						h(Switch, { on: wp.flipX, onChange: (next) => patchWp({ flipX: next }), label: `${t("wePropFlip")} X` }),
+						h("span", { className: "lg-hint" }, "X"),
+						h(Switch, { on: wp.flipY, onChange: (next) => patchWp({ flipY: next }), label: `${t("wePropFlip")} Y` }),
+						h("span", { className: "lg-hint" }, "Y")
+					)
+				),
+				h(Slider, {
+					label: t("wePropSpeed"),
+					value: wp.rate,
+					min: 0.25,
+					max: 2,
+					step: 0.05,
+					display: `${Math.round(wp.rate * 100)}%`,
+					onChange: (next) => patchWp({ rate: next })
+				}),
+				h(Slider, {
+					label: t("wePropVolume"),
+					value: wp.volume,
+					min: 0,
+					max: 1,
+					step: 0.01,
+					display: `${Math.round(wp.volume * 100)}`,
+					onChange: (next) => patchWp({ volume: next, muted: next > 0 ? false : true })
+				}),
+				h(
+					Row,
+					{ label: t("wePropMute"), hint: t("wePropMuteHint") },
+					h(Switch, { on: wp.muted, onChange: (next) => patchWp({ muted: next }), label: t("wePropMute") })
+				),
+				h(
+					"div",
+					{ className: "lg-actions" },
+					h(
+						"button",
+						{ type: "button", className: "lg-button", onClick: () => setSettings({ wp: { ...DEFAULT_SETTINGS.wp } }) },
+						t("wePropReset")
+					)
+				)
+			);
+
+			const presetsBlock = h(
+				"div",
+				{ className: "lg-wp-sheet" },
+				h("h3", { className: "lg-group-title" }, t("wePresets")),
+				h(
+					"div",
+					{ className: "lg-wp-saverow" },
+					h("input", {
+						className: "lg-input",
+						type: "text",
+						placeholder: t("wePresetName"),
+						value: presetName,
+						onChange: (event) => setPresetName(event.target.value)
+					}),
+					h("button", { type: "button", className: "lg-button", onClick: savePreset }, t("wePresetSave")),
+					h("button", { type: "button", className: "lg-button", onClick: exportPreset }, t("weShare")),
+					h("button", { type: "button", className: "lg-button", onClick: importPreset }, t("weImport"))
+				),
+				h("textarea", {
+					className: "lg-textarea",
+					rows: 3,
+					placeholder: t("weShareHint"),
+					value: share,
+					onChange: (event) => setShare(event.target.value)
+				}),
+				presets.length
+					? h(
+							"div",
+							{ className: "lg-wp-presets" },
+							presets.map((preset) =>
+								h(
+									"div",
+									{ key: preset.name, className: "lg-wp-preset" },
+									h("span", { className: "lg-wp-preset-name" }, preset.name),
+									h("button", { type: "button", className: "lg-button", onClick: () => loadPreset(preset) }, t("wePresetLoad")),
+									h("button", { type: "button", className: "lg-button", onClick: () => removePreset(preset.name) }, t("wePresetDelete"))
+								)
+							)
+						)
+					: h("p", { className: "lg-group-hint" }, t("wePresetEmpty"))
+			);
+
 			return h(
 				"section",
 				{ className: "lg-group" },
@@ -6366,31 +6746,54 @@ h(
 					h("span", null, installed ? (library.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")),
 					current && current.title ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
 				),
-				h(
-					"div",
-					{ className: "lg-we-tools" },
-					h("input", {
-						className: "lg-input lg-we-search",
-						type: "search",
-						placeholder: t("weSearch"),
-						value: search,
-						onChange: (event) => setSearch(event.target.value)
-					}),
-					h("div", { className: "lg-chips" }, chip("all"), chip("video"), chip("scene"), chip("web")),
-					h("button", { type: "button", className: "lg-button", disabled: loading, onClick: () => load(true) }, loading ? t("weLoading") : t("weRefresh")),
-					h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
-					h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
-					h(
-						"a",
-						{
-							className: "lg-button",
-							href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
-							target: "_blank",
-							rel: "noreferrer"
-						},
-						t("weStore")
-					)
-				),
+				installed ? null : h("p", { className: "lg-group-hint" }, t("weNoEngine")),
+				installed
+					? h(
+							"div",
+							{ className: "lg-we-tools" },
+							h("input", {
+								className: "lg-input lg-we-search",
+								type: "search",
+								placeholder: t("weSearch"),
+								value: search,
+								onChange: (event) => setSearch(event.target.value)
+							}),
+							h(
+								"div",
+								{ className: "lg-chips" },
+								["all", "video", "scene", "web"].map((id) =>
+									h(
+										"button",
+										{
+											key: id,
+											type: "button",
+											className: "lg-chip",
+											"data-on": filter === id ? "on" : undefined,
+											onClick: () => setFilter(id)
+										},
+										t(`weFilter_${id}`)
+									)
+								)
+							),
+							h("button", { type: "button", className: "lg-button", disabled: loading, onClick: () => load(true) }, loading ? t("weLoading") : t("weRefresh")),
+							h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
+							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam"))
+						)
+					: h(
+							"div",
+							{ className: "lg-we-tools" },
+							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
+							h(
+								"a",
+								{
+									className: "lg-button",
+									href: "https://store.steampowered.com/app/431960/Wallpaper_Engine/",
+									target: "_blank",
+									rel: "noreferrer"
+								},
+								t("weStorePage")
+							)
+						),
 				installed && shown.length
 					? h(
 							"div",
@@ -6404,7 +6807,7 @@ h(
 										className: "lg-we-card",
 										title: item.title,
 										"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
-										onClick: () => apply(item)
+										onClick: () => applyItem(item)
 									},
 									h(
 										"span",
@@ -6421,6 +6824,7 @@ h(
 					: installed
 						? h("p", { className: "lg-group-hint" }, t("weEmpty"))
 						: null,
+				sheet,
 				h(
 					"div",
 					{ className: "lg-row" },
@@ -6435,19 +6839,16 @@ h(
 						{ className: "lg-actions" },
 						h("button", { type: "button", className: "lg-button", onClick: () => setBrowser((open) => !open) }, t("weBrowse")),
 						value.filePath
-							? h(
-									"button",
-									{ type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "", wallpaper: true }) },
-									t("weClear")
-								)
+							? h("button", { type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "", wallpaper: true }) }, t("weClear"))
 							: null
 					)
 				),
 				browser ? h(WeFileBrowser, { path: value.filePath || "", kind: "media", onPick: pickFile, onClose: () => setBrowser(false) }) : null,
+				presetsBlock,
+				notice ? h("p", { className: "lg-group-hint" }, notice) : null,
 				error ? h("p", { className: "lg-group-hint", "data-warn": "on" }, error) : null
 			);
 		}
-
 		function AppearanceModes() {
 			const value = useSettings();
 			const lang = useLang();

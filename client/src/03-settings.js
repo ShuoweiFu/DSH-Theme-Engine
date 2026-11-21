@@ -15,6 +15,13 @@
 				customColor: pickColor(bucket.customColor, fallback.customColor),
 				autoInvert: bucket.autoInvert === undefined ? fallback.autoInvert : bucket.autoInvert !== false
 			});
+			const wpRaw = source.wp && typeof source.wp === "object" ? source.wp : {};
+			const wpPresets = Array.isArray(source.wpPresets)
+				? source.wpPresets
+						.filter((entry) => entry && typeof entry === "object" && typeof entry.name === "string" && entry.value && typeof entry.value === "object")
+						.slice(0, 24)
+						.map((entry) => ({ name: entry.name.slice(0, 40), value: entry.value }))
+				: [];
 			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
 			const audioList = Array.isArray(audioRaw.list)
 				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
@@ -109,6 +116,17 @@
 				autoInvert: activeMode.autoInvert,
 				modeValues: activeModule.modeValues,
 				moduleValues,
+				wp: {
+					fit: FIT_IDS.includes(wpRaw.fit) ? wpRaw.fit : DEFAULT_SETTINGS.wp.fit,
+					panX: Math.round(num(wpRaw.panX, DEFAULT_SETTINGS.wp.panX, 0, 100)),
+					panY: Math.round(num(wpRaw.panY, DEFAULT_SETTINGS.wp.panY, 0, 100)),
+					flipX: wpRaw.flipX === true,
+					flipY: wpRaw.flipY === true,
+					rate: Math.round(num(wpRaw.rate, DEFAULT_SETTINGS.wp.rate, 0.25, 2) * 100) / 100,
+					volume: num(wpRaw.volume, DEFAULT_SETTINGS.wp.volume, 0, 1),
+					muted: wpRaw.muted !== false
+				},
+				wpPresets,
 				audio: {
 					enabled: audioRaw.enabled === true,
 					list: audioList,

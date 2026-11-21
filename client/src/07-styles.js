@@ -1017,7 +1017,65 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	letter-spacing: 0.02em;
 }
 
+.lg-wp-sheet {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border-radius: 14px;
+	background: var(--lg-surface, rgba(255, 255, 255, 0.05));
+	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
+}
+
+.lg-wp-saverow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+
+.lg-wp-saverow .lg-input {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+.lg-textarea {
+	width: 100%;
+	box-sizing: border-box;
+	resize: vertical;
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.5;
+	padding: 8px 10px;
+	border-radius: 10px;
+	color: inherit;
+	background: var(--lg-field, rgba(127, 127, 127, 0.12));
+	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
+}
+
+.lg-wp-presets {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.lg-wp-preset {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.lg-wp-preset-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+
 .lg-browser {
+
 	margin-top: 12px;
 	padding: 10px;
 	border: 0.5px solid var(--dsw-alias-border-l2);

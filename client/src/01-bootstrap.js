@@ -6,7 +6,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.173500";
+		const CLIENT_BUILD = "v.26.11.21.174500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -23,6 +23,8 @@
 		 * inherits the other module's look.
 		 */
 		const MODULE_IDS = Object.freeze(["glass", "wallpaper", "elysia"]);
+		/** Wallpaper Engine alignment ids, in the order the shader branches on. */
+		const FIT_IDS = Object.freeze(["cover", "contain", "stretch", "pixel"]);
 		const APPEARANCE_SCALARS = Object.freeze(["blur", "saturation", "flow", "colorMode", "customColor", "autoInvert", "ink"]);
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -51,6 +53,10 @@
 			module: "glass",
 			island: false,
 			weGlass: true,
+			// Wallpaper property sheet: per-wallpaper playback and framing, the same
+			// knobs Wallpaper Engine exposes in its own properties panel.
+			wp: { fit: "cover", panX: 50, panY: 50, flipX: false, flipY: false, rate: 1, volume: 0, muted: true },
+			wpPresets: [],
 			modeValues: Object.fromEntries(MODE_IDS.map((id) => [id, { ...MODE_DEFAULTS }])),
 			moduleValues: Object.fromEntries(
 				MODULE_IDS.map((id) => [

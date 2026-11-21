@@ -458,7 +458,17 @@
 				// parameters (no extra blur, no saturation push, no flow).
 				const glassParams = () => {
 					const off = value.module === "wallpaper" && value.weGlass === false;
-					return { sat: off ? 1 : value.saturation, dim: value.dim, flow: off ? 0 : value.flow, blur: off ? 0 : value.blur };
+					const wp = value.wp && typeof value.wp === "object" ? value.wp : DEFAULT_SETTINGS.wp;
+					return {
+						sat: off ? 1 : value.saturation,
+						dim: value.dim,
+						flow: off ? 0 : value.flow,
+						blur: off ? 0 : value.blur,
+						// Wallpaper Engine properties: alignment, position, mirroring.
+						fit: Math.max(0, FIT_IDS.indexOf(wp.fit)),
+						pan: [wp.panX / 100, wp.panY / 100],
+						flip: [wp.flipX ? 1 : 0, wp.flipY ? 1 : 0]
+					};
 				};
 				useEffect(() => {
 					const root = document.documentElement;
@@ -571,7 +581,16 @@
 				// without it the blur slider only takes effect on the next reload.
 				useEffect(() => {
 					liquidRef.current?.setParams(glassParams());
-				}, [value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass]);
+				}, [
+					value.saturation, value.dim, value.flow, value.blur, value.module, value.weGlass,
+					value.wp.fit, value.wp.panX, value.wp.panY, value.wp.flipX, value.wp.flipY
+				]);
+
+				// Playback speed, volume and mute belong to the property sheet, not to the
+				// shader, so they travel through the capture module instead.
+				useEffect(() => {
+					setLivePrefs({ rate: value.wp.rate, volume: value.wp.volume, muted: value.wp.muted });
+				}, [value.wp.rate, value.wp.volume, value.wp.muted]);
 
 				// (Re)load the wallpaper texture whenever the fingerprint advances.
 				useEffect(() => {

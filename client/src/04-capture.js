@@ -241,6 +241,33 @@
 		}
 
 		/**
+		 * Playback properties of the wallpaper video: the "playback speed",
+		 * "volume" and "mute" rows of the property sheet. Applied to every live
+		 * element, including ones created before the user touched a slider.
+		 */
+		const livePrefs = { rate: 1, volume: 0, muted: true };
+		const liveElements = new Set();
+
+		function applyLivePrefs(element) {
+			if (!element || !("playbackRate" in element)) return;
+			const rate = Math.min(2, Math.max(0.25, Number(livePrefs.rate) || 1));
+			const volume = Math.min(1, Math.max(0, Number(livePrefs.volume) || 0));
+			element.playbackRate = rate;
+			element.volume = volume;
+			// Muted by default: a wallpaper that talks over the user is worse than
+			// a silent one, so audio has to be switched on explicitly.
+			element.muted = livePrefs.muted !== false || volume === 0;
+		}
+
+		function setLivePrefs(next) {
+			if (!next) return;
+			if (typeof next.rate === "number") livePrefs.rate = next.rate;
+			if (typeof next.volume === "number") livePrefs.volume = next.volume;
+			if (typeof next.muted === "boolean") livePrefs.muted = next.muted;
+			for (const element of liveElements) applyLivePrefs(element);
+		}
+
+		/**
 		 * Task 8: a live wallpaper source. Local videos decode off-screen and
 		 * animated images are drawn from a hidden <img>; both feed the shared
 		 * canvas returned by liveWallpaperFrame() on a short timer.
@@ -257,6 +284,8 @@
 				element.loop = true;
 				element.playsInline = true;
 				element.preload = "auto";
+				liveElements.add(element);
+				applyLivePrefs(element);
 			}
 			const ready = new Promise((resolve) => {
 				let settled = false;
@@ -286,6 +315,7 @@
 				dispose() {
 					try {
 						element.pause?.();
+					liveElements.delete(element);
 						element.removeAttribute("src");
 						element.remove();
 					} catch {

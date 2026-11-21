@@ -18,6 +18,9 @@ uniform float uFlow;
 uniform float uBeat;
 uniform float uRipple;
 uniform vec2 uMouse;
+uniform float uFit;
+uniform vec2 uPan;
+uniform vec2 uFlip;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -52,12 +55,28 @@ void main() {
 	vec2 fragCss = frag / uScale;
 	vec2 screenUv = (uWin + fragCss) / uScreen;
 	vec2 screenDev = uScreen * uDpr;
-	float cover = max(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y);
+	// Wallpaper Engine's alignment property: 0 cover, 1 contain, 2 stretch,
+	// 3 pixel exact. cover stays the default, the glass is designed around a
+	// wallpaper that bleeds past the window on every side.
+	vec2 fitScale;
+	if (uFit < 0.5) {
+		fitScale = screenDev / (uTexRes * max(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y));
+	} else if (uFit < 1.5) {
+		fitScale = screenDev / (uTexRes * min(screenDev.x / uTexRes.x, screenDev.y / uTexRes.y));
+	} else if (uFit < 2.5) {
+		fitScale = vec2(1.0);
+	} else {
+		fitScale = screenDev / (uTexRes * uDpr);
+	}
 	// gl_FragCoord counts upwards from the bottom; texture rows count from the
 	// top, so flip V here instead of relying on UNPACK_FLIP_Y_WEBGL (which
 	// Chromium ignores for ImageBitmap uploads).
 	screenUv.y = 1.0 - screenUv.y;
-	vec2 uv = (screenUv - 0.5) * (screenDev / (uTexRes * cover)) + 0.5;
+	vec2 uv = (screenUv - 0.5) * fitScale + 0.5;
+	// Position and mirror, both part of the per-wallpaper property sheet.
+	uv += (vec2(0.5) - uPan) * fitScale;
+	if (uFlip.x > 0.5) uv.x = 1.0 - uv.x;
+	if (uFlip.y > 0.5) uv.y = 1.0 - uv.y;
 
 	float t = uTime;
 	vec2 p = uv * vec2(uTexRes.x / uTexRes.y, 1.0) * 2.0;

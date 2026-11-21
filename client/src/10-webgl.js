@@ -97,7 +97,10 @@
 				flow: gl.getUniformLocation(program, "uFlow"),
 				beat: gl.getUniformLocation(program, "uBeat"),
 				ripple: gl.getUniformLocation(program, "uRipple"),
-				mouse: gl.getUniformLocation(program, "uMouse")
+				mouse: gl.getUniformLocation(program, "uMouse"),
+				fit: gl.getUniformLocation(program, "uFit"),
+				pan: gl.getUniformLocation(program, "uPan"),
+				flip: gl.getUniformLocation(program, "uFlip")
 			};
 
 			// Blur prepass program: the whole point is that the compositor never
@@ -145,7 +148,7 @@
 			const clock = { start: performance.now() };
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
-			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10 };
+			const params = { sat: 1.6, dim: 0.08, flow: 0.85, blur: 10, fit: 0, pan: [0.5, 0.5], flip: [0, 0] };
 			// The wallpaper is blurred by the prepass anyway, so above DPR_CAP
 			// rendering costs DPR² fragments that cannot be seen. Both backends
 			// share the same cap so switching engines never changes sharpness.
@@ -234,6 +237,13 @@
 				if (perf.paused.size || !running) return;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
+				// A looping <video> decodes one near-black frame when it wraps to 0:00.
+				// Uploading it paints the whole glass black for ~110 ms — the "blink" on
+				// every loop. Skip that single frame; isBlackSwap() only fires on a dark
+				// frame right after a lit one and gives up after two tries, so a genuinely
+				// dark wallpaper is never stuck.
+				const liveSample = measureInk(liveFrame);
+				if (liveSample && isBlackSwap(liveSample)) return;
 				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
 				gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 				gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, liveFrame);
@@ -372,6 +382,9 @@
 				gl.uniform1f(uniforms.sat, params.sat);
 				gl.uniform1f(uniforms.dim, params.dim);
 				gl.uniform1f(uniforms.flow, params.flow);
+			gl.uniform1f(uniforms.fit, params.fit);
+			gl.uniform2f(uniforms.pan, params.pan[0], params.pan[1]);
+			gl.uniform2f(uniforms.flip, params.flip[0], params.flip[1]);
 				gl.uniform1f(uniforms.beat, onBeat ? Math.max(0, Math.min(1, Number(onBeat()) || 0)) : 0);
 				// Ripple only while the pointer is actually moving: a parked cursor
 				// skips the sin/exp pair for the whole screen.
@@ -673,6 +686,9 @@
 					if (typeof next.sat === "number") params.sat = next.sat;
 					if (typeof next.dim === "number") params.dim = next.dim;
 					if (typeof next.flow === "number") params.flow = next.flow;
+				if (typeof next.fit === "number") params.fit = next.fit;
+				if (Array.isArray(next.pan)) params.pan = next.pan;
+				if (Array.isArray(next.flip)) params.flip = next.flip;
 					if (typeof next.blur === "number" && next.blur !== params.blur) {
 						params.blur = next.blur;
 						renderBlur();

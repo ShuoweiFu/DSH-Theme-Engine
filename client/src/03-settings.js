@@ -37,7 +37,9 @@
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
-				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto"
+				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
+				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
+				island: source.island === true
 			};
 		}
 

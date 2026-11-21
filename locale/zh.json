@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "液态玻璃",
-    "description": "让 DeepSeek Harness 的背景与桌面壁纸同步，并把界面变成半透明磨砂玻璃质感。",
+    "title": "主题引擎",
+    "description": "一个总插件，三种背景模块：内置液态玻璃、Wallpaper Engine、elysia395 兼容；灵动岛可独立开启。",
     "detail": "docs/DETAIL.md"
   }
 }

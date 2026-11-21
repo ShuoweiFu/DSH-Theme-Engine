@@ -225,6 +225,31 @@ async function readProject(dir) {
  * install; the result is cached because the page only needs it for the grid.
  * @param {readonly string[]} roots
  */
+export async function elysiaEngineStatus() {
+	const profile = process.env.DSH_PROFILE_DIR || '';
+	if (!profile) return { installed: false, name: '' };
+	try {
+		const pkg = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
+		const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+		for (const key of Object.keys(deps)) {
+			if (key === 'dsh-theme-engine') continue;
+			if (/wallpaper|elysia/i.test(key)) return { installed: true, name: key };
+		}
+	} catch {
+		// A missing or unreadable profile just means "not detected".
+	}
+	try {
+		const entries = await readdir(join(profile, 'node_modules'));
+		for (const name of entries) {
+			if (name === 'dsh-theme-engine' || name.startsWith('.')) continue;
+			if (/wallpaper|elysia/i.test(name)) return { installed: true, name };
+		}
+	} catch {
+		// No node_modules: fall through to not-detected.
+	}
+	return { installed: false, name: '' };
+}
+
 export async function scanLibrary(roots) {
   /** @type {any[]} */
   const items = [];

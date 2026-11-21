@@ -86,7 +86,7 @@
 				true
 			);
 
-			let wallpaper = { status: "idle", url: "", kind: "image", name: "", mtime: 0, bytes: 0, error: "", appsBehind: false, bench: 0 };
+			let wallpaper = { status: "idle", url: "", kind: "image", name: "", mtime: 0, bytes: 0, error: "", appsBehind: false, bench: 0, elysia: { installed: false, name: "" } };
 			const wallpaperListeners = new Set();
 			const getWallpaper = () => wallpaper;
 			const setWallpaper = (patch) => {
@@ -547,6 +547,7 @@
 									bytes: typeof data.bytes === "number" ? data.bytes : 0,
 									appsBehind: data.appsBehind === true,
 									bench: Number(data.bench) || 0,
+									...(data.elysia && typeof data.elysia === "object" ? { elysia: data.elysia } : {}),
 									error: ""
 								});
 							}
@@ -842,6 +843,29 @@
 						? `${t("updateAvailable")} · ${info.latest}`
 						: `${t("updateUpToDate")} · ${info.latest}`;
 				};
+				const moduleValue = value.module ?? "glass";
+				const chooseModule = (next) => {
+					if (next === moduleValue) return;
+					const patchValue = { module: next };
+					// Only one background module may run at a time: switching modules
+					// also points the wallpaper source at that module's engine.
+					if (next === "wallpaper") patchValue.source = "we";
+					if (next === "glass") patchValue.source = "desktop";
+					setSettings(patchValue);
+				};
+				const moduleOption = (id, name, hint) =>
+					h(
+						"button",
+						{
+							type: "button",
+							className: "lg-module",
+							"data-on": moduleValue === id ? "on" : undefined,
+							onClick: () => chooseModule(id)
+						},
+						h("span", { className: "lg-module-name" }, name),
+						h("span", { className: "lg-module-hint" }, hint),
+						h("i", { className: "lg-module-dot", "aria-hidden": "true" })
+					);
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -877,6 +901,30 @@
 							"section",
 							{ className: "lg-group" },
 							h("h2", { className: "lg-group-title" }, t("perf")),
+							h("h3", { className: "lg-group-subtitle" }, t("moduleTitle")),
+							h(
+								"div",
+								{ className: "lg-module-grid" },
+								moduleOption("glass", t("moduleGlass"), t("moduleGlassHint")),
+								moduleOption("wallpaper", t("moduleWallpaper"), t("moduleWallpaperHint")),
+								state.elysia && state.elysia.installed
+									? moduleOption("elysia", t("moduleElysia"), `${t("moduleElysiaHint")} · ${state.elysia.name}`)
+									: null,
+								h(
+									"button",
+									{
+										type: "button",
+										className: "lg-module",
+										"data-on": value.island ? "on" : undefined,
+										onClick: () => setSettings({ island: !value.island })
+									},
+									h("span", { className: "lg-module-name" }, t("moduleIsland")),
+									h("span", { className: "lg-module-hint" }, t("moduleIslandHint")),
+									h("i", { className: "lg-module-dot", "aria-hidden": "true" })
+								)
+							),
+							h("p", { className: "lg-group-hint" }, t("moduleHint")),
+							state.elysia && state.elysia.installed ? null : h("p", { className: "lg-group-hint" }, t("moduleLocked")),
 							h(
 								"div",
 								{ className: "lg-row" },

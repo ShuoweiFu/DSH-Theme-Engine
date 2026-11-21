@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Liquid Glass",
-    "description": "Mirror the desktop wallpaper behind DeepSeek Harness and turn the UI into translucent frosted glass.",
+    "title": "Theme Engine",
+    "description": "One plugin, three background modules: built-in Liquid Glass, Wallpaper Engine and elysia395 compatibility; Dynamic Island is independent.",
     "detail": "docs/DETAIL.md"
   }
 }

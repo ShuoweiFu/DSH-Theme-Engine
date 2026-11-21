@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.154805";
+		const CLIENT_BUILD = "v.26.11.21.160317";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -34,7 +34,9 @@
 			renderMode: "webgl",
 			behind: true,
 			ink: "auto",
-			preset: "auto"
+			preset: "auto",
+			module: "glass",
+			island: false
 		});
 
 		/**
@@ -120,12 +122,66 @@
 			return HW;
 		}
 		const zh = {
-			section: "液态玻璃",
-			title: "液态玻璃",
+			section: "主题引擎",
+			title: "主题引擎",
 			look: "外观",
 			renderGroup: "渲染与状态",
-			intro: "把桌面壁纸同步为 DSH 的背景，并让界面变成一层会流动的液态玻璃：面板与文字像悬空在壁纸上。",
-			enable: "启用液态玻璃",
+			intro: "一个总插件，三种背景模块：内置液态玻璃、Wallpaper Engine、elysia395 兼容。三者互斥，灵动岛可独立开启。",
+			enable: "启用主题引擎",
+			weTabInstalled: "已安装",
+			weTabDiscover: "发现",
+			weTabWorkshop: "创意工坊",
+			weTabDisabled: "此版本只展示已安装的壁纸",
+			weFilterResults: "筛选结果",
+			weProps: "属性",
+			wePropColor: "主题配色",
+			wePropColorAuto: "跟随壁纸",
+			wePropVolume: "音量",
+			wePropSpeed: "播放速度",
+			wePropAlign: "对齐方式",
+			wePropOffset: "位置",
+			wePropFlip: "翻转",
+			wePropFilter: "图片筛选器",
+			wePropColorOptions: "显示颜色选项",
+			wePresets: "您的预设",
+			wePresetLoad: "加载",
+			wePresetSave: "保存",
+			wePresetSaved: "预设已保存到本机。",
+			wePresetLoaded: "已加载本机预设。",
+			weApplyAll: "应用到所有壁纸",
+			weShare: "分享 JSON",
+			weShareDone: "已生成分享 JSON（界面演示）。",
+			weSelectHint: "先在左侧选择一张壁纸，右侧会显示它的属性。",
+			wePlaylist: "播放列表",
+			wePlaylistHint: "播放列表由 Wallpaper Engine 接管。",
+			weRead: "读取",
+			weReadHint: "读取功能由 Wallpaper Engine 接管。",
+			weSave: "保存",
+			weConfig: "配置",
+			weConfigHint: "更多配置请打开 Wallpaper Engine。",
+			weAdd: "添加壁纸",
+			weEditor: "打开壁纸编辑器",
+			weOpenWallpaper: "打开壁纸",
+			weConfirm: "确认",
+			weCancel: "取消",
+			weAlignCover: "覆盖",
+			weAlignContain: "包含",
+			weAlignStretch: "拉伸",
+			weAlignCenter: "居中",
+			weFilterNone: "无",
+			weFilterMono: "黑白",
+			weFilterWarm: "暖色",
+			moduleTitle: "背景模块",
+			moduleHint: "液态玻璃背景、壁纸引擎、elysia395 兼容三者互斥，只能开启一个；灵动岛独立，可与任意模块同时开启。",
+			moduleGlass: "液态玻璃背景",
+			moduleGlassHint: "内置渲染：桌面实时捕获 + 13-tap 高斯液态玻璃",
+			moduleWallpaper: "壁纸引擎",
+			moduleWallpaperHint: "读取 Wallpaper Engine 壁纸库并实时播放",
+			moduleElysia: "elysia395 壁纸引擎兼容",
+			moduleElysiaHint: "已检测到，可接管其设置",
+			moduleIsland: "灵动岛",
+			moduleIslandHint: "独立模块，可与其他模块同时开启",
+			moduleLocked: "安装 elysia395 壁纸引擎后，这里会出现兼容选项。",
 			wallpaper: "同步桌面壁纸",
 			wallpaperHint: "抓取当前桌面（含 Wallpaper Engine 动态壁纸）；窗口后面压着别的应用时，会把那个应用被遮住的部分一起合成进来。",
 			blur: "背景模糊",
@@ -279,12 +335,66 @@
 
 		};
 		const en = {
-			section: "Liquid Glass",
-			title: "Liquid Glass",
+			section: "Theme Engine",
+			title: "Theme Engine",
 			look: "Appearance",
 			renderGroup: "Rendering & status",
-			intro: "Mirror the desktop wallpaper behind DeepSeek Harness and turn every surface into flowing liquid glass, so panels and text appear to float on the wallpaper.",
-			enable: "Enable Liquid Glass",
+			intro: "One plugin, three background modules: built-in Liquid Glass, Wallpaper Engine and elysia395 compatibility. Pick exactly one; Dynamic Island is independent.",
+			enable: "Enable Theme Engine",
+			weTabInstalled: "Installed",
+			weTabDiscover: "Discover",
+			weTabWorkshop: "Workshop",
+			weTabDisabled: "Only installed wallpapers are shown here",
+			weFilterResults: "Filtered",
+			weProps: "Properties",
+			wePropColor: "Color theme",
+			wePropColorAuto: "Follow wallpaper",
+			wePropVolume: "Volume",
+			wePropSpeed: "Playback speed",
+			wePropAlign: "Alignment",
+			wePropOffset: "Position",
+			wePropFlip: "Flip",
+			wePropFilter: "Image filter",
+			wePropColorOptions: "Show color options",
+			wePresets: "Your presets",
+			wePresetLoad: "Load",
+			wePresetSave: "Save",
+			wePresetSaved: "Preset saved locally.",
+			wePresetLoaded: "Local preset loaded.",
+			weApplyAll: "Apply to all wallpapers",
+			weShare: "Share JSON",
+			weShareDone: "Share JSON generated (UI demo).",
+			weSelectHint: "Pick a wallpaper on the left to see its properties here.",
+			wePlaylist: "Playlist",
+			wePlaylistHint: "The playlist is handled by Wallpaper Engine.",
+			weRead: "Read",
+			weReadHint: "Reading is handled by Wallpaper Engine.",
+			weSave: "Save",
+			weConfig: "Config",
+			weConfigHint: "Open Wallpaper Engine for the full configuration.",
+			weAdd: "Add wallpaper",
+			weEditor: "Open wallpaper editor",
+			weOpenWallpaper: "Open wallpaper",
+			weConfirm: "Confirm",
+			weCancel: "Cancel",
+			weAlignCover: "Cover",
+			weAlignContain: "Contain",
+			weAlignStretch: "Stretch",
+			weAlignCenter: "Center",
+			weFilterNone: "None",
+			weFilterMono: "Monochrome",
+			weFilterWarm: "Warm",
+			moduleTitle: "Background module",
+			moduleHint: "Liquid Glass, Wallpaper Engine and elysia395 compatibility are mutually exclusive: pick one. Dynamic Island is independent and can run alongside any module.",
+			moduleGlass: "Liquid Glass background",
+			moduleGlassHint: "Built-in renderer: live desktop capture + 13-tap Gaussian glass",
+			moduleWallpaper: "Wallpaper Engine",
+			moduleWallpaperHint: "Reads the Wallpaper Engine library and plays it live",
+			moduleElysia: "elysia395 engine compatibility",
+			moduleElysiaHint: "Detected here; can take over its settings",
+			moduleIsland: "Dynamic Island",
+			moduleIslandHint: "Independent module, runs with any other module",
+			moduleLocked: "Install the elysia395 wallpaper engine to unlock the compatibility option.",
 			wallpaper: "Sync desktop wallpaper",
 			wallpaperHint: "Captures the live desktop (Wallpaper Engine included); when another app sits behind this window, the occluded part of that app is composited in too.",
 			blur: "Background blur",
@@ -485,7 +595,9 @@
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
-				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto"
+				preset: PRESET_IDS.includes(source.preset) ? source.preset : "auto",
+				module: ["glass", "wallpaper", "elysia"].includes(source.module) ? source.module : "glass",
+				island: source.island === true
 			};
 		}
 
@@ -1147,7 +1259,7 @@
 				return h(
 					"section",
 					{ className: "lg-group", "data-liquid-glass": "crash" },
-					h("h2", { className: "lg-group-title" }, "液态玻璃：界面渲染出错"),
+					h("h2", { className: "lg-group-title" }, "主题引擎：界面渲染出错"),
 					h("p", { className: "lg-hint", "data-warn": "on" }, this.state.error),
 					h("p", { className: "lg-hint" }, "请把上面这段错误文字发给项目经理，我会按堆栈修复。")
 				);
@@ -2323,6 +2435,396 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 
 html[data-lg-mode="dark"] [class*="_triggerEffort"] {
 	color: #93a7ff !important;
+}
+
+/* ---- background module chooser ---- */
+.lg-group-subtitle {
+	margin: 14px 0 8px;
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-module-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	margin: 0 0 10px;
+}
+
+.lg-module {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 16px;
+	text-align: left;
+	border-radius: 12px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 55%, transparent);
+	color: inherit;
+	cursor: pointer;
+	transition:
+		border-color 0.16s ease,
+		background 0.16s ease,
+		transform 0.16s ease;
+}
+
+.lg-module:hover {
+	border-color: var(--dsw-alias-border-l4);
+}
+
+.lg-module:active {
+	transform: scale(0.99);
+}
+
+.lg-module[data-on="on"] {
+	border-color: var(--dsw-alias-brand-primary);
+	background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
+}
+
+.lg-module-name {
+	font-size: 14px;
+	font-weight: 500;
+}
+
+.lg-module-hint {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--dsw-alias-label-secondary);
+	padding-right: 14px;
+}
+
+.lg-module-dot {
+	position: absolute;
+	top: 14px;
+	right: 14px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--dsw-alias-border-l4);
+}
+
+.lg-module[data-on="on"] .lg-module-dot {
+	background: var(--dsw-alias-brand-primary);
+}
+
+@media (max-width: 720px) {
+	.lg-module-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ---- Wallpaper Engine style settings panel ---- */
+.lg-we-app {
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 16px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 42%, transparent);
+	-webkit-backdrop-filter: blur(22px) saturate(1.22);
+	backdrop-filter: blur(22px) saturate(1.22);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 14px 34px rgba(8, 12, 20, 0.1);
+}
+
+html[data-lg-mode="dark"] .lg-we-app {
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 38%, transparent);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 16px 38px rgba(0, 0, 0, 0.4);
+}
+
+.lg-we-topbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 52%, transparent);
+	-webkit-backdrop-filter: blur(18px) saturate(1.2);
+	backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.lg-we-tabs {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.lg-we-tab {
+	padding: 6px 12px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--dsw-alias-label-secondary);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.lg-we-tab:hover:not(:disabled) {
+	color: var(--dsw-alias-label-primary);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 60%, transparent);
+}
+
+.lg-we-tab[data-on="on"] {
+	color: var(--dsw-alias-brand-primary);
+	background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
+	font-weight: 500;
+}
+
+.lg-we-tab:disabled {
+	opacity: 0.42;
+	cursor: default;
+}
+
+.lg-we-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 220px;
+}
+
+.lg-we-search {
+	flex: 1;
+	min-width: 120px;
+	height: 30px;
+}
+
+.lg-we-toolcount {
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+	white-space: nowrap;
+}
+
+.lg-we-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 58%, transparent);
+	color: var(--dsw-alias-label-secondary);
+	font-size: 12px;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.lg-we-icon:hover {
+	color: var(--dsw-alias-label-primary);
+	border-color: var(--dsw-alias-border-l4);
+}
+
+.lg-we-current {
+	margin-left: auto;
+	max-width: 46%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-we-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 268px;
+	min-height: 320px;
+}
+
+.lg-we-left {
+	padding: 12px;
+	overflow-y: auto;
+	max-height: 520px;
+}
+
+.lg-we-grid-lg {
+	grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+	gap: 8px;
+	max-height: none;
+	padding: 0;
+}
+
+.lg-we-card[data-applied="on"] {
+	outline: 2px solid var(--dsw-alias-brand-primary);
+	outline-offset: -1px;
+}
+
+.lg-we-side {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	border-left: 0.5px solid var(--dsw-alias-border-l2);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 48%, transparent);
+	-webkit-backdrop-filter: blur(20px) saturate(1.2);
+	backdrop-filter: blur(20px) saturate(1.2);
+	overflow-y: auto;
+	max-height: 520px;
+}
+
+.lg-we-side-empty {
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+}
+
+.lg-we-side-hero {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.lg-we-side-thumb {
+	position: relative;
+	width: 76px;
+	height: 48px;
+	flex: none;
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--dsw-alias-bg-layer-3);
+}
+
+.lg-we-side-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.lg-we-side-title {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.lg-we-side-title strong {
+	font-size: 13px;
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lg-we-side-section {
+	margin-top: 4px;
+	padding-top: 8px;
+	border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.lg-we-side-section h3 {
+	margin: 0 0 6px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-we-prop {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 5px 0;
+}
+
+.lg-we-prop-label {
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+	white-space: nowrap;
+}
+
+.lg-we-prop-control {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex: 1;
+	min-width: 0;
+}
+
+.lg-we-prop-control .lg-range {
+	width: 120px;
+}
+
+.lg-we-prop-control .lg-input {
+	height: 26px;
+	max-width: 118px;
+	font-size: 12px;
+}
+
+.lg-we-prop-value {
+	font-size: 12px;
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-we-side-actions {
+	margin-top: 6px;
+}
+
+.lg-we-footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border-top: 0.5px solid var(--dsw-alias-border-l2);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 56%, transparent);
+	-webkit-backdrop-filter: blur(18px) saturate(1.2);
+	backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.lg-we-footer-group {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.lg-we-footer-group:last-child {
+	margin-left: auto;
+}
+
+.lg-we-foot {
+	padding: 5px 8px;
+	border: 0;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--dsw-alias-label-secondary);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.lg-we-foot:hover {
+	color: var(--dsw-alias-label-primary);
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 60%, transparent);
+}
+
+.lg-we-sep {
+	width: 0.5px;
+	height: 14px;
+	background: var(--dsw-alias-border-l2);
+	margin: 0 2px;
+}
+
+.lg-we-primary {
+	color: var(--dsw-alias-on-brand, #fff);
+	background: var(--dsw-alias-brand-primary);
+	border-color: transparent;
+}
+
+.lg-we-primary[disabled] {
+	opacity: 0.5;
+	cursor: default;
+}
+
+@media (max-width: 860px) {
+	.lg-we-body {
+		grid-template-columns: 1fr;
+	}
+	.lg-we-side {
+		border-left: 0;
+		border-top: 0.5px solid var(--dsw-alias-border-l2);
+		max-height: 360px;
+	}
 }
 
 `;
@@ -4050,7 +4552,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				true
 			);
 
-			let wallpaper = { status: "idle", url: "", kind: "image", name: "", mtime: 0, bytes: 0, error: "", appsBehind: false, bench: 0 };
+			let wallpaper = { status: "idle", url: "", kind: "image", name: "", mtime: 0, bytes: 0, error: "", appsBehind: false, bench: 0, elysia: { installed: false, name: "" } };
 			const wallpaperListeners = new Set();
 			const getWallpaper = () => wallpaper;
 			const setWallpaper = (patch) => {
@@ -4511,6 +5013,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									bytes: typeof data.bytes === "number" ? data.bytes : 0,
 									appsBehind: data.appsBehind === true,
 									bench: Number(data.bench) || 0,
+									...(data.elysia && typeof data.elysia === "object" ? { elysia: data.elysia } : {}),
 									error: ""
 								});
 							}
@@ -4806,6 +5309,29 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						? `${t("updateAvailable")} · ${info.latest}`
 						: `${t("updateUpToDate")} · ${info.latest}`;
 				};
+				const moduleValue = value.module ?? "glass";
+				const chooseModule = (next) => {
+					if (next === moduleValue) return;
+					const patchValue = { module: next };
+					// Only one background module may run at a time: switching modules
+					// also points the wallpaper source at that module's engine.
+					if (next === "wallpaper") patchValue.source = "we";
+					if (next === "glass") patchValue.source = "desktop";
+					setSettings(patchValue);
+				};
+				const moduleOption = (id, name, hint) =>
+					h(
+						"button",
+						{
+							type: "button",
+							className: "lg-module",
+							"data-on": moduleValue === id ? "on" : undefined,
+							onClick: () => chooseModule(id)
+						},
+						h("span", { className: "lg-module-name" }, name),
+						h("span", { className: "lg-module-hint" }, hint),
+						h("i", { className: "lg-module-dot", "aria-hidden": "true" })
+					);
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -4841,6 +5367,30 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							"section",
 							{ className: "lg-group" },
 							h("h2", { className: "lg-group-title" }, t("perf")),
+							h("h3", { className: "lg-group-subtitle" }, t("moduleTitle")),
+							h(
+								"div",
+								{ className: "lg-module-grid" },
+								moduleOption("glass", t("moduleGlass"), t("moduleGlassHint")),
+								moduleOption("wallpaper", t("moduleWallpaper"), t("moduleWallpaperHint")),
+								state.elysia && state.elysia.installed
+									? moduleOption("elysia", t("moduleElysia"), `${t("moduleElysiaHint")} · ${state.elysia.name}`)
+									: null,
+								h(
+									"button",
+									{
+										type: "button",
+										className: "lg-module",
+										"data-on": value.island ? "on" : undefined,
+										onClick: () => setSettings({ island: !value.island })
+									},
+									h("span", { className: "lg-module-name" }, t("moduleIsland")),
+									h("span", { className: "lg-module-hint" }, t("moduleIslandHint")),
+									h("i", { className: "lg-module-dot", "aria-hidden": "true" })
+								)
+							),
+							h("p", { className: "lg-group-hint" }, t("moduleHint")),
+							state.elysia && state.elysia.installed ? null : h("p", { className: "lg-group-hint" }, t("moduleLocked")),
 							h(
 								"div",
 								{ className: "lg-row" },
@@ -5276,10 +5826,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			const t = makeTranslate(lang);
 			const [we, setWe] = useState(null);
 			const [loading, setLoading] = useState(false);
-			const [filter, setFilter] = useState("all");
 			const [search, setSearch] = useState("");
 			const [hint, setHint] = useState("");
 			const [browser, setBrowser] = useState("");
+			const [selected, setSelected] = useState(null);
+			const [tab, setTab] = useState("installed");
+			const [props, setProps] = useState({ volume: 50, speed: 100, align: "cover", offset: 50, flip: false, filter: "none", showColor: false });
+			const [presetMsg, setPresetMsg] = useState("");
 
 			const load = useCallback((force) => {
 				setLoading(true);
@@ -5305,12 +5858,148 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				setSettings({ source: "desktop", wallpaper: true });
 				setHint(t("weLiveHint"));
 			};
+			const setProp = (patch) => setProps(Object.assign({}, props, patch));
+
 			const installed = Boolean(we && we.installed);
-			const items = (we && we.items ? we.items : []).filter(
-				(item) => (filter === "all" || item.type === filter) && (!search || String(item.title).toLowerCase().includes(search.toLowerCase()))
-			);
-			const shown = items.slice(0, 160);
+			const seen = {};
+			const all = (we && we.items ? we.items : []).filter((item) => {
+				if (!item || seen[item.id]) return false;
+				seen[item.id] = true;
+				return true;
+			});
+			const shown = all
+				.filter((item) => !search || String(item.title).toLowerCase().includes(search.toLowerCase()))
+				.slice(0, 120);
 			const current = we && we.current ? we.current : null;
+
+			const alignOptions = [
+				["cover", "weAlignCover"],
+				["contain", "weAlignContain"],
+				["stretch", "weAlignStretch"],
+				["center", "weAlignCenter"]
+			];
+			const filterOptions = [
+				["none", "weFilterNone"],
+				["mono", "weFilterMono"],
+				["warm", "weFilterWarm"]
+			];
+			const propRow = (label, control) =>
+				h(
+					"div",
+					{ className: "lg-we-prop" },
+					h("span", { className: "lg-we-prop-label" }, label),
+					h("div", { className: "lg-we-prop-control" }, control)
+				);
+
+			const side = selected
+				? h(
+						"aside",
+						{ className: "lg-we-side" },
+						h(
+							"div",
+							{ className: "lg-we-side-hero" },
+							h(
+								"span",
+								{ className: "lg-we-side-thumb" },
+								selected.preview
+									? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(selected.id)}`, alt: "" })
+									: h("span", { className: "lg-we-fallback" }, "WE")
+							),
+							h(
+								"div",
+								{ className: "lg-we-side-title" },
+								h("strong", null, selected.title),
+								h("span", { className: "lg-hint" }, `${h(WeTypeLabel, { t, type: selected.type })} · ${formatBytes(selected.size)}`)
+							)
+						),
+						h("div", { className: "lg-we-side-section" }, h("h3", null, t("weProps"))),
+						propRow(t("wePropColor"), h("span", { className: "lg-we-prop-value" }, t("wePropColorAuto"))),
+						propRow(
+							t("wePropVolume"),
+							h("input", { className: "lg-range", type: "range", min: 0, max: 100, step: 1, value: props.volume, onChange: (event) => setProp({ volume: Number(event.target.value) }) })
+						),
+						propRow(
+							t("wePropSpeed"),
+							h("input", { className: "lg-range", type: "range", min: 50, max: 200, step: 5, value: props.speed, onChange: (event) => setProp({ speed: Number(event.target.value) }) })
+						),
+						propRow(
+							t("wePropAlign"),
+							h(
+								"select",
+								{ className: "lg-input", value: props.align, onChange: (event) => setProp({ align: event.target.value }) },
+								alignOptions.map(([id, key]) => h("option", { key: id, value: id }, t(key)))
+							)
+						),
+						propRow(
+							t("wePropOffset"),
+							h("input", { className: "lg-range", type: "range", min: 0, max: 100, step: 1, value: props.offset, onChange: (event) => setProp({ offset: Number(event.target.value) }) })
+						),
+						propRow(t("wePropFlip"), h(Switch, { on: props.flip, label: "", onChange: (next) => setProp({ flip: next }) })),
+						propRow(
+							t("wePropFilter"),
+							h(
+								"select",
+								{ className: "lg-input", value: props.filter, onChange: (event) => setProp({ filter: event.target.value }) },
+								filterOptions.map(([id, key]) => h("option", { key: id, value: id }, t(key)))
+							)
+						),
+						propRow(t("wePropColorOptions"), h(Switch, { on: props.showColor, label: "", onChange: (next) => setProp({ showColor: next }) })),
+						h("div", { className: "lg-we-side-section" }, h("h3", null, t("wePresets"))),
+						h(
+							"div",
+							{ className: "lg-actions" },
+							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("wePresetLoaded")) }, t("wePresetLoad")),
+							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("wePresetSaved")) }, t("wePresetSave"))
+						),
+						presetMsg ? h("p", { className: "lg-group-hint" }, presetMsg) : null,
+						h(
+							"div",
+							{ className: "lg-actions lg-we-side-actions" },
+							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("weApplied")) }, t("weApplyAll")),
+							h("button", { type: "button", className: "lg-button", onClick: () => setPresetMsg(t("weShareDone")) }, t("weShare"))
+						)
+					)
+				: h("aside", { className: "lg-we-side lg-we-side-empty" }, h("p", { className: "lg-group-hint" }, t("weSelectHint")));
+
+			const footer = h(
+				"div",
+				{ className: "lg-we-footer" },
+				h(
+					"div",
+					{ className: "lg-we-footer-group" },
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("wePlaylistHint")) }, t("wePlaylist")),
+					h("span", { className: "lg-we-sep" }),
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("weReadHint")) }, t("weRead")),
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("wePresetSaved")) }, t("weSave")),
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => setPresetMsg(t("weConfigHint")) }, t("weConfig"))
+				),
+				h(
+					"div",
+					{ className: "lg-we-footer-group" },
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => setBrowser(browser === "wallpaper" ? "" : "wallpaper") }, t("weAdd")),
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => launch("we") }, t("weEditor")),
+					h("button", { type: "button", className: "lg-we-foot", onClick: () => launch("we") }, t("weOpenWallpaper"))
+				),
+				h(
+					"div",
+					{ className: "lg-we-footer-group" },
+					h(
+						"button",
+						{
+							type: "button",
+							className: "lg-button lg-we-primary",
+							disabled: !selected,
+							onClick: () => {
+								if (!selected) return;
+								apply(selected);
+								setPresetMsg("");
+							}
+						},
+						t("weConfirm")
+					),
+					h("button", { type: "button", className: "lg-button", onClick: () => setSelected(null) }, t("weCancel"))
+				)
+			);
 
 			return h(
 				"section",
@@ -5319,32 +6008,20 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				h("p", { className: "lg-group-hint" }, t("weHint")),
 				h(
 					"div",
-					{ className: "lg-we-status" },
-					h("span", { className: "lg-dot", "data-state": we && we.running ? "ready" : "off" }),
-					h("span", null, installed ? (we.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")),
-					current ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
-				),
-				h(
-					"div",
-					{ className: "lg-actions" },
-					h("button", { type: "button", className: "lg-button", onClick: () => load(true), disabled: loading }, loading ? t("weLoading") : t("weRefresh")),
-					h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
-					h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
+					{ className: "lg-we-app" },
 					h(
-						"a",
-						{
-							className: "lg-button",
-							href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
-							target: "_blank",
-							rel: "noreferrer"
-						},
-						t("weStore")
-					)
-				),
-				installed
-					? h(
+						"div",
+						{ className: "lg-we-topbar" },
+						h(
 							"div",
-							{ className: "lg-we-tools" },
+							{ className: "lg-we-tabs" },
+							h("button", { type: "button", className: "lg-we-tab", "data-on": tab === "installed" ? "on" : undefined, onClick: () => setTab("installed") }, t("weTabInstalled")),
+							h("button", { type: "button", className: "lg-we-tab", disabled: true, title: t("weTabDisabled") }, t("weTabDiscover")),
+							h("button", { type: "button", className: "lg-we-tab", disabled: true, title: t("weTabDisabled") }, t("weTabWorkshop"))
+						),
+						h(
+							"div",
+							{ className: "lg-we-toolbar" },
 							h("input", {
 								className: "lg-input lg-we-search",
 								type: "search",
@@ -5352,50 +6029,71 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								placeholder: t("weSearch"),
 								onChange: (event) => setSearch(event.target.value)
 							}),
+							h("span", { className: "lg-we-toolcount" }, t("weFilterResults")),
+							h("button", { type: "button", className: "lg-we-icon", title: t("weRefresh"), onClick: () => load(true), disabled: loading }, "⟳"),
+							h("button", { type: "button", className: "lg-we-icon", title: t("weOpen"), onClick: () => launch("we") }, "WE"),
+							h("button", { type: "button", className: "lg-we-icon", title: t("weSteam"), onClick: () => launch("steam") }, "S"),
 							h(
+								"a",
+								{
+									className: "lg-we-icon",
+									href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
+									target: "_blank",
+									rel: "noreferrer",
+									title: t("weStore")
+								},
+								"⤓"
+							)
+						),
+						h(
+							"span",
+							{ className: "lg-we-current" },
+							current ? `${t("weCurrent")} ${current.title}` : installed ? (we.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")
+						)
+					),
+					installed
+						? h(
 								"div",
-								{ className: "lg-chips" },
-								["all", "video", "scene", "web"].map((id) =>
-									h("button", { key: id, type: "button", className: "lg-chip", "data-on": filter === id || undefined, onClick: () => setFilter(id) }, t(`weFilter_${id}`))
-								)
-							)
-						)
-					: null,
-				installed && shown.length
-					? h(
-							"div",
-							{ className: "lg-we-grid" },
-							shown.map((item) =>
+								{ className: "lg-we-body" },
 								h(
-									"button",
-									{
-										key: item.id,
-										type: "button",
-										className: "lg-we-card",
-										"data-active": value.source === "we" && value.weId === item.id ? "on" : undefined,
-										title: item.title,
-										onClick: () => apply(item)
-									},
-									h(
-										"span",
-										{ className: "lg-we-thumb" },
-										item.preview
-											? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(item.id)}`, alt: "", loading: "lazy" })
-											: h("span", { className: "lg-we-fallback" }, String(item.type).toUpperCase())
-									),
-									h("span", { className: "lg-we-name" }, item.title),
-									h(
-										"span",
-										{ className: "lg-we-meta" },
-										h(WeTypeLabel, { t, type: item.type }),
-										` · ${formatBytes(item.size)}`
-									)
-								)
+									"div",
+									{ className: "lg-we-left" },
+									shown.length
+										? h(
+												"div",
+												{ className: "lg-we-grid lg-we-grid-lg" },
+												shown.map((item) =>
+													h(
+														"button",
+														{
+															key: item.id,
+															type: "button",
+															className: "lg-we-card",
+															title: item.title,
+															"data-active": selected && selected.id === item.id ? "on" : undefined,
+															"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
+															onClick: () => setSelected(item),
+															onDoubleClick: () => apply(item)
+														},
+														h(
+															"span",
+															{ className: "lg-we-thumb" },
+															item.preview
+																? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(item.id)}`, alt: "", loading: "lazy" })
+																: h("span", { className: "lg-we-fallback" }, String(item.type).toUpperCase())
+														),
+														h("span", { className: "lg-we-name" }, item.title),
+														h("span", { className: "lg-we-meta" }, h(WeTypeLabel, { t, type: item.type }))
+													)
+												)
+											)
+										: h("p", { className: "lg-group-hint" }, t("weEmpty"))
+								),
+								side
 							)
-						)
-					: installed
-						? h("p", { className: "lg-group-hint" }, t("weEmpty"))
-						: null,
+						: h("p", { className: "lg-group-hint" }, t("weMissing")),
+					installed ? footer : null
+				),
 				h(
 					"div",
 					{ className: "lg-row" },
@@ -5409,9 +6107,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						"div",
 						{ className: "lg-actions" },
 						h("button", { type: "button", className: "lg-button", onClick: () => setBrowser(browser === "wallpaper" ? "" : "wallpaper") }, t("weBrowse")),
-						value.filePath
-							? h("button", { type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "" }) }, t("weClear"))
-							: null
+						value.filePath ? h("button", { type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "" }) }, t("weClear")) : null
 					)
 				),
 				browser === "wallpaper"

@@ -47,7 +47,7 @@ import {
 } from './host/helper.js';
 import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
-import { launchUri, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
+import { elysiaEngineStatus, launchUri, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
 import { CACHE_DIR, GATE_SCRIPT_PATH } from './host/paths.js';
@@ -431,6 +431,7 @@ export function apply(ctx, config) {
           clientHardware: lastHardware,
           bench: Number(options.bench) || 0,
           clientBench: lastClientBench,
+          elysia: await elysiaEngineStatus(),
         });
       } catch (error) {
         return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);

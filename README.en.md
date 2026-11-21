@@ -27,7 +27,7 @@ Blur runs on the GPU: both backends (WebGL / WebGPU) share the same **13-tap Poi
 
 The plugin registers no agent tools and injects no prompt text, so it adds **zero model token cost**.
 
-Current version **v.26.11.21.154805**.
+Current version **v.26.11.21.160317**.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ Current version **v.26.11.21.154805**.
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>Version: <code>v.26.11.21.154805</code></li>
+        <li>Version: <code>v.26.11.21.160317</code></li>
         <li>Platform: Windows 10 20348+ / Windows 11</li>
         <li>Host: DeepSeek Harness desktop</li>
         <li>License: <a href="LICENSE">Apache-2.0</a></li>
@@ -60,7 +60,8 @@ Current version **v.26.11.21.154805**.
 - **Adaptive ink**: switches between black and white text based on background luminance (WCAG 7:1 target); manual choices are never overridden.
 - **Dual backends**: WebGL (best compatibility) / WebGPU (experimental). If WebGPU is unavailable it falls back to WebGL automatically — no error toast, no black screen.
 - **Performance guard**: three presets (iGPU-safe / discrete-balanced / overkill); frame budget exceeded → lower resolution → disable occlusion compositing → static translucent scrim → auto-disable. Five layers, each one safer than the last.
-- **Wallpaper centre**: reads the local Steam / Wallpaper Engine library (video, scene and web projects), applies a video wallpaper as the glass backdrop in one click, or picks a local image / video / animated image. Live sources upload frames at ~9 fps, so the picture behind the glass keeps moving. Scene and web wallpapers are played by WE and captured live from the desktop.
+- **Wallpaper centre**: reads the local Steam / Wallpaper Engine library (video, scene and web projects), applies a video wallpaper as the glass backdrop in one click, or picks a local image / video / animated image. Live sources upload frames at ~9 fps, so the picture behind the glass keeps moving. Scene and web wallpapers are played by WE and captured live from the desktop. The "Wallpaper Engine" settings panel mirrors WE's Installed page: thumbnail grid on the left, a properties rail on the right (colour theme / volume / playback speed / alignment / position / flip / image filter) and a footer with playlist and open-wallpaper actions.
+- **Four modules**: one plugin = built-in Liquid Glass background + Wallpaper Engine + elysia395 compatibility (only shown when detected) + Dynamic Island; the three background modules are mutually exclusive, the island is independent. The sidebar entry is now "Theme Engine".
 - **Sound**: a local audio playlist (mp3 / flac / wav / ogg / m4a / aac / opus, 1.0–2.0× rate), or capture what the system is playing. Audio energy drives the shader so the liquid breathes with the beat.
 - **Four colour modes**: light / dark / custom colour / intelligent. Intelligent samples the dominant colour of the wallpaper behind the glass; auto-invert keeps text readable on bright or dark backdrops.
 - **Native main view**: the sidebar gains a single row, **Liquid Glass**. Clicking it renders the settings page full-page in the right main workspace, exactly like the native Plugins page. Reloading returns to the conversation.
@@ -142,6 +143,7 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe (main
 | Performance | Dynamic resolution | On | Over budget → 1.0 → 0.8 → 0.65 → 0.5 |
 | Performance | Composite occluded windows | By tier | Turning it off saves 0.02–0.06 s per capture |
 | Performance | Wallpaper refresh | Auto | Persistent stream (8 fps): encode only on change; digest check every 0.22 s; 420 ms cross-fade |
+| Performance | Background module | Liquid Glass | Liquid Glass / Wallpaper Engine / elysia395 compatibility (one at a time); Dynamic Island is independent |
 
 ## Performance baseline
 

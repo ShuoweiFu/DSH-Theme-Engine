@@ -47,6 +47,7 @@ import {
 } from './host/helper.js';
 import { detectWallpaper, jsonResponse, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
+import { launchUri, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
 import { CACHE_DIR, GATE_SCRIPT_PATH } from './host/paths.js';
@@ -231,8 +232,8 @@ export function apply(ctx, config) {
   /** @type {Map<string, { at: number, value: any }>} */
   const stateCache = new Map();
 
-  async function state(force, mode = 'desktop', behind = true) {
-    const cacheKey = `${mode}:${behind ? 1 : 0}`;
+  async function state(force, mode = 'desktop', behind = true, custom = '') {
+    const cacheKey = `${mode}:${behind ? 1 : 0}:${custom}`;
     const cached = stateCache.get(cacheKey);
     // While the helper streams, the served JPEG changes every ~125 ms, so the
     // state has to be re-read far more often than the idle TTL allows.
@@ -243,7 +244,23 @@ export function apply(ctx, config) {
     /** @type {any} */
     let value = { available: false, path: '', name: '', mtime: 0, bytes: 0, source: 'none', kind: 'image' };
 
-    if (configured) {
+    // The settings page can pin an exact media file (a Wallpaper Engine video
+    // project or a hand-picked image/video). Serve it directly instead of
+    // capturing the desktop; hashing a multi-hundred-MB video is not worth it,
+    // so the digest is derived from mtime and size.
+    const pinned = custom ? await mediaFile(custom) : null;
+    if (pinned) {
+      value = {
+        available: true,
+        path: pinned.path,
+        name: pinned.name,
+        mtime: Math.round(pinned.mtime),
+        bytes: pinned.size,
+        digest: `m${Math.round(pinned.mtime)}-${pinned.size}`,
+        source: 'file',
+        kind: pinned.kind === 'video' ? 'video' : 'image',
+      };
+    } else if (configured) {
       value = (await valueFor({ path: configured, source: 'config' })) ?? value;
       value.kind = /\.(mp4|webm)$/i.test(configured) ? 'video' : 'image';
     } else if (process.platform === 'win32') {
@@ -372,14 +389,16 @@ export function apply(ctx, config) {
       try {
         let mode = 'desktop';
         let behind = true;
+        let custom = '';
         try {
           const params = new URL(request.url, 'http://127.0.0.1').searchParams;
           mode = params.get('source') === 'wallpaper' ? 'wallpaper' : 'desktop';
           behind = params.get('behind') !== '0';
+          custom = params.get('path') ?? '';
         } catch {
           // Default mode wins when the query string is unreadable.
         }
-        const value = await state(false, mode, behind);
+        const value = await state(false, mode, behind, custom);
         return jsonResponse({
           ok: true,
           available: value.available,
@@ -447,14 +466,16 @@ export function apply(ctx, config) {
     resource: async (request) => {
       let mode = 'desktop';
       let behind = true;
+      let custom = '';
       try {
         const params = new URL(request.url, 'http://127.0.0.1').searchParams;
         mode = params.get('source') === 'wallpaper' ? 'wallpaper' : 'desktop';
         behind = params.get('behind') !== '0';
+        custom = params.get('path') ?? '';
       } catch {
         // Default mode wins when the query string is unreadable.
       }
-      const value = await state(false, mode, behind);
+      const value = await state(false, mode, behind, custom);
       if (!value.available) {
         return new Response('wallpaper unavailable', {
           status: 404,
@@ -476,6 +497,119 @@ export function apply(ctx, config) {
           status: 500,
           headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
         });
+      }
+    },
+  }));
+
+  /**
+   * Serve a local media file: range-capable for video/audio, whole-file for
+   * images. Shared by the wallpaper, preview and generic media routes.
+   * @param {{ path: string, kind: string, mtime: number }} media
+   * @param {Request} request
+   */
+  async function serveMedia(media, request) {
+    if (media.kind === 'video' || media.kind === 'audio') {
+      return streamFile(media.path, mimeOf(null, media.path), String(media.mtime), request);
+    }
+    const data = await readFile(media.path);
+    return new Response(new Uint8Array(data), {
+      headers: {
+        'content-type': mimeOf(data, media.path),
+        'cache-control': 'no-store',
+        'x-liquid-glass-mtime': String(media.mtime),
+      },
+    });
+  }
+
+  // ---- Wallpaper Engine bridge + custom media -----------------------------
+  // The settings page browses the real Wallpaper Engine library and can pin any
+  // image / video / audio file, so the host exposes a small read-only bridge.
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/we',
+    resource: async (request) => {
+      try {
+        let force = false;
+        try {
+          force = new URL(request.url, 'http://127.0.0.1').searchParams.get('force') === '1';
+        } catch {
+          // Unreadable query string: use the cache.
+        }
+        return jsonResponse(await weState(force));
+      } catch (error) {
+        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
+      }
+    },
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/we/preview',
+    resource: async (request) => {
+      try {
+        const id = new URL(request.url, 'http://127.0.0.1').searchParams.get('id') ?? '';
+        const media = await previewFor(id);
+        if (!media) {
+          return new Response('preview unavailable', {
+            status: 404,
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+          });
+        }
+        return serveMedia(media, request);
+      } catch (error) {
+        return new Response(`preview failed: ${String(error instanceof Error ? error.message : error)}`, {
+          status: 500,
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+        });
+      }
+    },
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/fs',
+    resource: async (request) => {
+      try {
+        const target = new URL(request.url, 'http://127.0.0.1').searchParams.get('path') ?? '';
+        return jsonResponse(await listDirectory(target));
+      } catch (error) {
+        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
+      }
+    },
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/media',
+    resource: async (request) => {
+      try {
+        const media = await mediaFile(new URL(request.url, 'http://127.0.0.1').searchParams.get('path') ?? '');
+        if (!media) {
+          return new Response('media unavailable', {
+            status: 404,
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+          });
+        }
+        return serveMedia(media, request);
+      } catch (error) {
+        return new Response(`media failed: ${String(error instanceof Error ? error.message : error)}`, {
+          status: 500,
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+        });
+      }
+    },
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/launch',
+    resource: async (request) => {
+      try {
+        const target = new URL(request.url, 'http://127.0.0.1').searchParams.get('target') ?? '';
+        const uri = target === 'steam' ? 'steam://open/main' : 'steam://rungameid/431960';
+        return jsonResponse({ ok: await launchUri(uri) });
+      } catch (error) {
+        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
       }
     },
   }));

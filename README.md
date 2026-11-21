@@ -27,7 +27,7 @@
 
 插件不向 agent 注册工具、不注入提示文本，**不增加模型 token 开销**。
 
-当前版本 **v.26.11.21.142500**。
+当前版本 **v.26.11.21.151500**。
 
 ## 目录
 
@@ -43,7 +43,7 @@
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>授时版本：<code>v.26.11.21.142500</code></li>
+        <li>授时版本：<code>v.26.11.21.151500</code></li>
         <li>平台：Windows 10 20348+ / Windows 11</li>
         <li>宿主：DeepSeek Harness 桌面版</li>
         <li>许可：<a href="LICENSE">Apache-2.0</a></li>
@@ -61,6 +61,7 @@
 - **双后端**：WebGL（兼容最好）/ WebGPU（实验）；WebGPU 不可用时自动回落 WebGL，不弹错、不黑屏。
 - **性能保护**：核显保命 / 独显均衡 / 火神狂暴三档预设；帧时间超预算 → 降分辨率 → 关遮挡合成 → 静态半透明遮罩 → 自动关闭，五层逐级保命。
 - **原生主视图**：侧边栏只多一行「液态玻璃」，点开后设置页像原生「插件」页一样整页铺在右侧主工作区；刷新后回到会话。
+- **壁纸中枢**：读取本机 Steam / Wallpaper Engine 壁纸库（自动识别视频、场景、网页项目），视频壁纸一键铺成玻璃背景；也可直接选本机图片 / 视频。场景与网页壁纸由 WE 播放后走实时桌面捕获。
 
 ## 硬件档位
 
@@ -136,6 +137,8 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅
 | 性能 | 自动降分辨率 | 开 | 帧时间超预算 → 1.0 → 0.8 → 0.65 → 0.5 |
 | 性能 | 合成被遮挡的窗口 | 按档位 | 关掉可省每次截图 0.02–0.06 s |
 | 性能 | 壁纸刷新 | 自动 | 常驻捕获流（默认 8 fps）：变化才编码；页面 0.22 s 一次 digest 检查；换图交叉淡入 420 ms |
+| 壁纸中枢 | WE 壁纸库 | 自动读取 | 扫描 Steam `libraryfolders.vdf` 与 `workshop/431960/*/project.json`；视频壁纸直接作背景 |
+| 壁纸中枢 | 本机文件 | — | 图片 / 视频；视频走 Range 流式读取，不整段读入内存 |
 
 ## 性能基线
 
@@ -186,8 +189,8 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅
 | 路径 | 作用 |
 | --- | --- |
 | `index.js` | 宿主插件入口：`/liquid-glass/*` 本地路由、捕获调度与状态缓存 |
-| `host/` | 宿主能力：壁纸识别、常驻捕获助手、PowerShell 回退、运行封装 |
-| `client/src/` | 前端源码，`01` → `12` 按序拼接 |
+| `host/` | 宿主能力：壁纸识别、WE 桥、常驻捕获助手、PowerShell 回退、运行封装 |
+| `client/src/` | 前端源码，`01` → `13` 按序拼接 |
 | `client/client.js` | 构建产物，DSH 通过 `exports["./client"]` 加载 |
 | `tools/capture/lg-capture.cpp` | 原生捕获/合成助手（WGC + GDI+） |
 | `bin/lg-capture.exe` | 预编译助手，随插件分发 |

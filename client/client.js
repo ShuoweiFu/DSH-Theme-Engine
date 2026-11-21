@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.142500";
+		const CLIENT_BUILD = "v.26.11.21.151500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -24,6 +24,13 @@
 			fps: 30,
 			autoScale: true,
 			source: "desktop",
+			wePath: "",
+			weId: "",
+			filePath: "",
+			colorMode: "auto",
+			customColor: "#8ab4ff",
+			autoInvert: true,
+			audio: { enabled: false, list: [], rate: 1, volume: 0.6, reactive: true },
 			renderMode: "webgl",
 			behind: true,
 			ink: "auto",
@@ -46,7 +53,7 @@
 		/**
 		 * Hardware profiles. A preset only writes the knobs that keep the machine
 		 * alive (engine, frame cap, dynamic resolution, occluded-window
-		 * compositing) 鈥?never the wallpaper, the look or the capture cadence the
+		 * compositing) —never the wallpaper, the look or the capture cadence the
 		 * user picked, so switching profile cannot repaint their glass.
 		 */
 		const PRESETS = Object.freeze({
@@ -64,7 +71,7 @@
 		/**
 		 * Latest quantised wallpaper sample, shared with the settings panel so it
 		 * can show the measured brightness. 0.11 kept this in a useState scoped to
-		 * the overlay and then *used it in the panel's scope* 鈥?a ReferenceError on
+		 * the overlay and then *used it in the panel's scope* —a ReferenceError on
 		 * every panel render. A plain object fixes that without adding a store.
 		 */
 		const inkProbe = { sample: null };
@@ -202,6 +209,54 @@
 			updateUnreachable: "无法访问",
 			download: "下载",
 			updateInstallHint: "其他电脑安装：插件管理器 → 安装 → dsh-theme-engine。",
+			sourceWe: "Wallpaper Engine 项目",
+			sourceFile: "本地文件",
+			weGroup: "壁纸中枢（Wallpaper Engine）",
+			weHint: "读取本机 Steam 与 Wallpaper Engine 的壁纸库：视频壁纸可直接成为玻璃背景；场景/网页壁纸由 WE 播放，经实时桌面捕获进入玻璃。",
+			weMissing: "未检测到 Wallpaper Engine",
+			weRunning: "Wallpaper Engine 运行中",
+			weNotRunning: "Wallpaper Engine 未运行",
+			weCurrent: "当前：",
+			weRefresh: "刷新壁纸库",
+			weLoading: "读取中…",
+			weOpen: "打开 Wallpaper Engine",
+			weSteam: "打开 Steam",
+			weStore: "瓦特加速器（微软商店）",
+			weSearch: "搜索壁纸…",
+			weFilter_all: "全部",
+			weFilter_video: "视频",
+			weFilter_scene: "场景",
+			weFilter_web: "网页",
+			weType_video: "视频",
+			weType_scene: "场景",
+			weType_web: "网页",
+			weType_other: "其他",
+			weType_app: "应用",
+			weEmpty: "没有符合筛选条件的壁纸。",
+			weCustom: "自定义壁纸文件",
+			weCustomHint: "也可以直接选择本机的图片 / 视频文件作为玻璃背景",
+			weBrowse: "浏览文件",
+			weClear: "清除",
+			weApplied: "已应用为该玻璃背景。",
+			weLiveHint: "场景/网页壁纸无法直接读取，已切换到实时桌面捕获；请先在 Wallpaper Engine 中播放它。",
+			modesGroup: "外观模式（四象）",
+			modesHint: "让玻璃颜色跟随壁纸或手动指定；只覆盖玻璃面板底色，不改 DSH 自身主题设置。",
+			mode_auto: "跟随主题",
+			mode_light: "浅色",
+			mode_dark: "深色",
+			mode_custom: "自定义颜色",
+			mode_intelligent: "智能取色",
+			modeHint_auto: "玻璃底色跟随 DSH 深浅主题（当前行为）。",
+			modeHint_light: "始终使用浅色玻璃。",
+			modeHint_dark: "始终使用深色玻璃。",
+			modeHint_custom: "从下方颜色生成整套玻璃底色。",
+			modeHint_intelligent: "从当前壁纸主色生成玻璃底色。",
+			modeCustomColor: "玻璃主色",
+			modeAutoInvert: "按壁纸自动深浅",
+			modeAutoInvertHint: "壁纸偏暗时自动切深色玻璃、偏亮时切浅色玻璃。",
+			browserRoots: "磁盘",
+			browserUp: "上一级",
+			browserEmpty: "这里没有可用的媒体文件。",
 		};
 		const en = {
 			section: "Liquid Glass",
@@ -293,6 +348,54 @@
 			updateUnreachable: "Unreachable",
 			download: "Download",
 			updateInstallHint: "Install on another machine: plugin manager → install → dsh-theme-engine.",
+			sourceWe: "Wallpaper Engine project",
+			sourceFile: "Local file",
+			weGroup: "Wallpaper centre (Wallpaper Engine)",
+			weHint: "Reads the local Steam / Wallpaper Engine library: video wallpapers can back the glass directly; scenes and web wallpapers are played by WE and arrive through the live desktop capture.",
+			weMissing: "Wallpaper Engine not detected",
+			weRunning: "Wallpaper Engine is running",
+			weNotRunning: "Wallpaper Engine is not running",
+			weCurrent: "Current:",
+			weRefresh: "Refresh library",
+			weLoading: "Reading…",
+			weOpen: "Open Wallpaper Engine",
+			weSteam: "Open Steam",
+			weStore: "Watt accelerator (Microsoft Store)",
+			weSearch: "Search wallpapers…",
+			weFilter_all: "All",
+			weFilter_video: "Video",
+			weFilter_scene: "Scene",
+			weFilter_web: "Web",
+			weType_video: "Video",
+			weType_scene: "Scene",
+			weType_web: "Web",
+			weType_other: "Other",
+			weType_app: "App",
+			weEmpty: "No wallpaper matches the current filter.",
+			weCustom: "Custom wallpaper file",
+			weCustomHint: "Or pick a local image / video file as the glass background",
+			weBrowse: "Browse files",
+			weClear: "Clear",
+			weApplied: "Applied as the glass background.",
+			weLiveHint: "Scenes and web wallpapers cannot be read directly, so the live desktop capture was selected — play it in Wallpaper Engine first.",
+			modesGroup: "Appearance modes",
+			modesHint: "Let the glass follow the wallpaper or pin a colour; this only overrides the glass surfaces, not the DSH theme itself.",
+			mode_auto: "Follow theme",
+			mode_light: "Light",
+			mode_dark: "Dark",
+			mode_custom: "Custom colour",
+			mode_intelligent: "Smart sampling",
+			modeHint_auto: "Glass follows the DSH light/dark theme (current behaviour).",
+			modeHint_light: "Always light glass.",
+			modeHint_dark: "Always dark glass.",
+			modeHint_custom: "Build the glass palette from the colour below.",
+			modeHint_intelligent: "Buid the glass palette from the current wallpaper's dominant colour.",
+			modeCustomColor: "Glass colour",
+			modeAutoInvert: "Auto light / dark",
+			modeAutoInvertHint: "Switch to dark glass on dark wallpapers and light glass on bright ones.",
+			browserRoots: "Drives",
+			browserUp: "Up",
+			browserEmpty: "No usable media file here.",
 		};
 
 		function dictFor(lang) {
@@ -309,6 +412,10 @@
 				const parsed = typeof value === "number" ? value : Number.parseFloat(value);
 				return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 			};
+			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
+			const audioList = Array.isArray(audioRaw.list)
+				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
+				: [];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
@@ -321,7 +428,20 @@
 				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
-				source: source.source === "wallpaper" ? "wallpaper" : "desktop",
+				source: ["wallpaper", "we", "file"].includes(source.source) ? source.source : "desktop",
+				wePath: typeof source.wePath === "string" ? source.wePath : "",
+				weId: typeof source.weId === "string" ? source.weId : "",
+				filePath: typeof source.filePath === "string" ? source.filePath : "",
+				colorMode: ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto",
+				customColor: /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor,
+				autoInvert: source.autoInvert !== false,
+				audio: {
+					enabled: audioRaw.enabled === true,
+					list: audioList,
+					rate: Math.round(num(audioRaw.rate, 1, 0.5, 2) * 100) / 100,
+					volume: num(audioRaw.volume, 0.6, 0, 1),
+					reactive: audioRaw.reactive !== false
+				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",
@@ -1509,6 +1629,262 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 
 .lg-warn-text {
 	flex: 1;
+}
+
+/* ---- Wallpaper Engine centre / file browser ---------------------------- */
+
+.lg-we-status {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px;
+	padding: 12px 0 0;
+	font-size: 13px;
+	line-height: 20px;
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-we-tools {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.lg-input {
+	height: 34px;
+	padding: 0 10px;
+	border: 0.5px solid var(--dsw-alias-border-l4);
+	border-radius: 8px;
+	background: var(--dsw-alias-bg-layer-3);
+	color: var(--dsw-alias-label-primary);
+	font-size: 13px;
+	line-height: 20px;
+}
+
+.lg-input:focus-visible {
+	outline: 2px solid var(--dsw-alias-brand-primary);
+	outline-offset: 1px;
+}
+
+.lg-we-search {
+	max-width: 340px;
+}
+
+.lg-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.lg-chip {
+	height: 26px;
+	padding: 0 10px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--dsw-alias-label-secondary);
+	font-size: 12px;
+	line-height: 24px;
+	cursor: pointer;
+}
+
+.lg-chip[data-on] {
+	border-color: transparent;
+	background: color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-chip:hover {
+	color: var(--dsw-alias-label-primary);
+}
+
+.lg-we-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 12px;
+	max-height: 440px;
+	overflow-y: auto;
+	padding: 4px 2px 8px;
+	margin-top: 12px;
+}
+
+.lg-we-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 6px;
+	border: 0.5px solid var(--dsw-alias-border-l1);
+	border-radius: 12px;
+	background: var(--dsw-alias-bg-layer-2);
+	color: var(--dsw-alias-label-primary);
+	text-align: left;
+	cursor: pointer;
+}
+
+.lg-we-card:hover {
+	border-color: var(--dsw-alias-brand-primary);
+}
+
+.lg-we-card[data-active="on"] {
+	border-color: var(--dsw-alias-brand-primary);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);
+}
+
+.lg-we-thumb {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 16 / 10;
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--dsw-alias-bg-layer-3);
+}
+
+.lg-we-thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.lg-we-fallback {
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-we-name {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	font-size: 12.5px;
+	line-height: 17px;
+}
+
+.lg-we-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	line-height: 16px;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-we-type {
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: var(--dsw-alias-bg-layer-3);
+	font-size: 10px;
+	line-height: 18px;
+	letter-spacing: 0.02em;
+}
+
+.lg-browser {
+	margin-top: 12px;
+	padding: 10px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 72%, transparent);
+}
+
+.lg-browser-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.lg-browser-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-browser-list {
+	display: flex;
+	flex-direction: column;
+	max-height: 260px;
+	overflow-y: auto;
+	margin-top: 8px;
+}
+
+.lg-browser-row {
+	padding: 7px 10px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--dsw-alias-label-primary);
+	font-size: 12.5px;
+	line-height: 19px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.lg-browser-row:hover {
+	background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.lg-modes {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	margin-top: 10px;
+}
+
+.lg-mode {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 12px;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 12px;
+	background: var(--dsw-alias-bg-layer-1);
+	color: var(--dsw-alias-label-primary);
+	text-align: left;
+	cursor: pointer;
+}
+
+.lg-mode[data-on] {
+	border-color: var(--dsw-alias-brand-primary);
+	background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, var(--dsw-alias-bg-layer-1));
+}
+
+.lg-mode strong {
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 20px;
+}
+
+.lg-mode span {
+	font-size: 11.5px;
+	line-height: 16px;
+	color: var(--dsw-alias-label-secondary);
+}
+
+.lg-color {
+	width: 46px;
+	height: 30px;
+	padding: 0;
+	border: 0.5px solid var(--dsw-alias-border-l2);
+	border-radius: 8px;
+	background: transparent;
+	cursor: pointer;
+}
+
+@media (max-width: 720px) {
+	.lg-modes {
+		grid-template-columns: 1fr;
+	}
+
+	.lg-we-grid {
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	}
 }
 `;
 
@@ -3454,7 +3830,11 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				const tick = async () => {
 					if (!alive) return;
 					try {
-						const query = `source=${encodeURIComponent(value.source)}&behind=${value.behind ? 1 : 0}`;
+						// Source "we" pins one Wallpaper Engine project; source "file"
+						// pins a local video/image. Sources "desktop"/"wallpaper" never
+						// carry a path and always resolve from the live desktop.
+						const pinned = value.source === "we" ? value.wePath : value.source === "file" ? value.filePath : "";
+						const query = `source=${encodeURIComponent(value.source)}&behind=${value.behind ? 1 : 0}${pinned ? `&path=${encodeURIComponent(pinned)}` : ""}`;
 						const response = await fetch(`${API}/state?${query}`, { cache: "no-store", credentials: "same-origin" });
 						if (!alive) return;
 						if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -3514,7 +3894,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					document.removeEventListener("visibilitychange", onVisible);
 					window.removeEventListener("focus", onFocus);
 				};
-			}, [value.enabled, value.wallpaper, value.source, value.behind]);
+			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
 
 				// Report guard-state transitions (mode/scale/fps/pause set) so the
 				// host's lastClientError doubles as a live perf log during testing.
@@ -3858,7 +4238,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 									"select",
 									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },
 									h("option", { value: "desktop" }, t("sourceDesktop")),
-									h("option", { value: "wallpaper" }, t("sourceWallpaper"))
+									h("option", { value: "wallpaper" }, t("sourceWallpaper")),
+									h("option", { value: "we" }, t("sourceWe")),
+									h("option", { value: "file" }, t("sourceFile"))
 								)
 							),
 							h(Slider, {
@@ -3919,6 +4301,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 							h("p", { className: "lg-group-hint" }, t("flowHint")),
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
+						h(WallpaperCenter, null),
 						h(
 							"section",
 							{ className: "lg-group" },
@@ -4119,6 +4502,294 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						label: () => makeTranslate(snapshotLocale())("section")
 					},
 					LiquidGlassIcon
+				)
+			);
+		}
+		/* ---- Wallpaper Engine center (task 7 / task 10) --------------------- */
+		/*
+		 * A read-only bridge to the local Steam / Wallpaper Engine installation:
+		 * the grid lists the real workshop projects, the apply buttons pin a video
+		 * file as the glass wallpaper (the only kind we can read directly), and the
+		 * remaining buttons launch Steam / Wallpaper Engine for everything else.
+		 * Scenes and web wallpapers have no readable file, so applying one falls
+		 * back to the live desktop capture and tells the user to play it in WE.
+		 */
+
+		function WeTypeLabel(props) {
+			const t = props.t;
+			return h("span", { className: "lg-we-type", "data-type": props.type }, t(`weType_${props.type}`));
+		}
+
+		function WeFileBrowser(props) {
+			const lang = useLang();
+			const t = makeTranslate(lang);
+			const [path, setPath] = useState(props.path || "");
+			const [data, setData] = useState(null);
+			useEffect(() => {
+				let alive = true;
+				fetch(`${API}/fs?path=${encodeURIComponent(path)}`, { cache: "no-store" })
+					.then((response) => response.json())
+					.then((value) => {
+						if (alive) setData(value);
+					})
+					.catch(() => {
+						if (alive) setData({ ok: false, roots: [], dirs: [], files: [] });
+					});
+				return () => {
+					alive = false;
+				};
+			}, [path]);
+			const audioOnly = props.kind === "audio";
+			const files = (data && data.files ? data.files : []).filter((file) => (audioOnly ? file.kind === "audio" : file.kind !== "audio"));
+			const dirs = data && data.dirs ? data.dirs : [];
+			const roots = data && data.roots ? data.roots : [];
+			return h(
+				"div",
+				{ className: "lg-browser" },
+				h(
+					"div",
+					{ className: "lg-browser-bar" },
+					h("button", { type: "button", className: "lg-button", onClick: () => setPath("") }, t("browserRoots")),
+					data && data.path ? h("button", { type: "button", className: "lg-button", onClick: () => setPath(data.parent || "") }, t("browserUp")) : null,
+					h("span", { className: "lg-browser-path", title: (data && data.path) || "" }, (data && data.path) || t("browserRoots")),
+					h("button", { type: "button", className: "lg-button", onClick: props.onClose }, t("noticeClose"))
+				),
+				roots.length
+					? h("div", { className: "lg-chips" }, roots.map((root) => h("button", { key: root, type: "button", className: "lg-chip", onClick: () => setPath(root) }, root)))
+					: null,
+				dirs.length
+					? h(
+							"div",
+							{ className: "lg-browser-list" },
+							dirs.map((dir) =>
+								h("button", { key: dir.path, type: "button", className: "lg-browser-row", onClick: () => setPath(dir.path) }, `📁 ${dir.name}`)
+							)
+						)
+					: null,
+				files.length
+					? h(
+							"div",
+							{ className: "lg-browser-list" },
+							files.map((file) =>
+								h(
+									"button",
+									{ key: file.path, type: "button", className: "lg-browser-row", onClick: () => props.onPick(file) },
+									`${file.kind === "audio" ? "🎵" : "🎞"} ${file.name} · ${formatBytes(file.size)}`
+								)
+							)
+						)
+					: null,
+				!roots.length && !dirs.length && !files.length ? h("p", { className: "lg-group-hint" }, t("browserEmpty")) : null
+			);
+		}
+
+		function WallpaperCenter() {
+			const value = useSettings();
+			const lang = useLang();
+			const t = makeTranslate(lang);
+			const [we, setWe] = useState(null);
+			const [loading, setLoading] = useState(false);
+			const [filter, setFilter] = useState("all");
+			const [search, setSearch] = useState("");
+			const [hint, setHint] = useState("");
+			const [browser, setBrowser] = useState("");
+
+			const load = useCallback((force) => {
+				setLoading(true);
+				fetch(`${API}/we${force ? "?force=1" : ""}`, { cache: "no-store" })
+					.then((response) => response.json())
+					.then((data) => setWe(data))
+					.catch(() => setWe({ ok: false, installed: false, items: [], current: null }))
+					.finally(() => setLoading(false));
+			}, []);
+			useEffect(() => {
+				load(false);
+			}, [load]);
+
+			const launch = (target) => {
+				fetch(`${API}/launch?target=${target}`, { cache: "no-store" }).catch(() => {});
+			};
+			const apply = (item) => {
+				if (item.type === "video") {
+					setSettings({ source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
+					setHint(t("weApplied"));
+					return;
+				}
+				setSettings({ source: "desktop", wallpaper: true });
+				setHint(t("weLiveHint"));
+			};
+			const installed = Boolean(we && we.installed);
+			const items = (we && we.items ? we.items : []).filter(
+				(item) => (filter === "all" || item.type === filter) && (!search || String(item.title).toLowerCase().includes(search.toLowerCase()))
+			);
+			const shown = items.slice(0, 160);
+			const current = we && we.current ? we.current : null;
+
+			return h(
+				"section",
+				{ className: "lg-group" },
+				h("h2", { className: "lg-group-title" }, t("weGroup")),
+				h("p", { className: "lg-group-hint" }, t("weHint")),
+				h(
+					"div",
+					{ className: "lg-we-status" },
+					h("span", { className: "lg-dot", "data-state": we && we.running ? "ready" : "off" }),
+					h("span", null, installed ? (we.running ? t("weRunning") : t("weNotRunning")) : t("weMissing")),
+					current ? h("span", { className: "lg-hint" }, `${t("weCurrent")} ${current.title}`) : null
+				),
+				h(
+					"div",
+					{ className: "lg-actions" },
+					h("button", { type: "button", className: "lg-button", onClick: () => load(true), disabled: loading }, loading ? t("weLoading") : t("weRefresh")),
+					h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
+					h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
+					h(
+						"a",
+						{
+							className: "lg-button",
+							href: "https://apps.microsoft.com/search?query=%E7%93%A6%E7%89%B9%E5%8A%A0%E9%80%9F%E5%99%A8",
+							target: "_blank",
+							rel: "noreferrer"
+						},
+						t("weStore")
+					)
+				),
+				installed
+					? h(
+							"div",
+							{ className: "lg-we-tools" },
+							h("input", {
+								className: "lg-input lg-we-search",
+								type: "search",
+								value: search,
+								placeholder: t("weSearch"),
+								onChange: (event) => setSearch(event.target.value)
+							}),
+							h(
+								"div",
+								{ className: "lg-chips" },
+								["all", "video", "scene", "web"].map((id) =>
+									h("button", { key: id, type: "button", className: "lg-chip", "data-on": filter === id || undefined, onClick: () => setFilter(id) }, t(`weFilter_${id}`))
+								)
+							)
+						)
+					: null,
+				installed && shown.length
+					? h(
+							"div",
+							{ className: "lg-we-grid" },
+							shown.map((item) =>
+								h(
+									"button",
+									{
+										key: item.id,
+										type: "button",
+										className: "lg-we-card",
+										"data-active": value.source === "we" && value.weId === item.id ? "on" : undefined,
+										title: item.title,
+										onClick: () => apply(item)
+									},
+									h(
+										"span",
+										{ className: "lg-we-thumb" },
+										item.preview
+											? h("img", { src: `${API}/we/preview?id=${encodeURIComponent(item.id)}`, alt: "", loading: "lazy" })
+											: h("span", { className: "lg-we-fallback" }, String(item.type).toUpperCase())
+									),
+									h("span", { className: "lg-we-name" }, item.title),
+									h(
+										"span",
+										{ className: "lg-we-meta" },
+										h(WeTypeLabel, { t, type: item.type }),
+										` · ${formatBytes(item.size)}`
+									)
+								)
+							)
+						)
+					: installed
+						? h("p", { className: "lg-group-hint" }, t("weEmpty"))
+						: null,
+				h(
+					"div",
+					{ className: "lg-row" },
+					h(
+						"div",
+						{ className: "lg-label" },
+						h("span", null, t("weCustom")),
+						h("span", { className: "lg-hint" }, value.filePath || t("weCustomHint"))
+					),
+					h(
+						"div",
+						{ className: "lg-actions" },
+						h("button", { type: "button", className: "lg-button", onClick: () => setBrowser(browser === "wallpaper" ? "" : "wallpaper") }, t("weBrowse")),
+						value.filePath
+							? h("button", { type: "button", className: "lg-button", onClick: () => setSettings({ source: "desktop", filePath: "" }) }, t("weClear"))
+							: null
+					)
+				),
+				browser === "wallpaper"
+					? h(WeFileBrowser, {
+							path: value.filePath || "",
+							kind: "media",
+							onPick: (file) => {
+								setSettings({ source: "file", filePath: file.path, wallpaper: true });
+								setBrowser("");
+								setHint(t("weApplied"));
+							},
+							onClose: () => setBrowser("")
+						})
+					: null,
+				hint ? h("p", { className: "lg-group-hint" }, hint) : null
+			);
+		}
+
+		/* ---- Appearance modes (task 12 / task 14 / task 15) ----------------- */
+
+		function AppearanceModes() {
+			const value = useSettings();
+			const lang = useLang();
+			const t = makeTranslate(lang);
+			const modes = ["auto", "light", "dark", "custom", "intelligent"];
+			return h(
+				"section",
+				{ className: "lg-group" },
+				h("h2", { className: "lg-group-title" }, t("modesGroup")),
+				h("p", { className: "lg-group-hint" }, t("modesHint")),
+				h(
+					"div",
+					{ className: "lg-modes" },
+					modes.map((id) =>
+						h(
+							"button",
+							{
+								key: id,
+								type: "button",
+								className: "lg-mode",
+								"data-on": value.colorMode === id || undefined,
+								onClick: () => setSettings({ colorMode: id })
+							},
+							h("strong", null, t(`mode_${id}`)),
+							h("span", null, t(`modeHint_${id}`))
+						)
+					)
+				),
+				value.colorMode === "custom"
+					? h(
+							"div",
+							{ className: "lg-row" },
+							h("div", { className: "lg-label" }, h("span", null, t("modeCustomColor")), h("span", { className: "lg-hint" }, value.customColor)),
+							h("input", {
+								className: "lg-color",
+								type: "color",
+								value: value.customColor,
+								onChange: (event) => setSettings({ customColor: event.target.value })
+							})
+						)
+					: null,
+				h(
+					Row,
+					{ label: t("modeAutoInvert"), hint: t("modeAutoInvertHint") },
+					h(Switch, { on: value.autoInvert, onChange: (next) => setSettings({ autoInvert: next }), label: t("modeAutoInvert") })
 				)
 			);
 		}

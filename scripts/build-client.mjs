@@ -35,6 +35,7 @@ const PARTS = [
   "10-webgl.js",
   "11-ui.js",
   "12-apply.js",
+  "13-we.js",
   "_epilogue.js",
 ];
 

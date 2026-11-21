@@ -465,7 +465,11 @@
 				const tick = async () => {
 					if (!alive) return;
 					try {
-						const query = `source=${encodeURIComponent(value.source)}&behind=${value.behind ? 1 : 0}`;
+						// Source "we" pins one Wallpaper Engine project; source "file"
+						// pins a local video/image. Sources "desktop"/"wallpaper" never
+						// carry a path and always resolve from the live desktop.
+						const pinned = value.source === "we" ? value.wePath : value.source === "file" ? value.filePath : "";
+						const query = `source=${encodeURIComponent(value.source)}&behind=${value.behind ? 1 : 0}${pinned ? `&path=${encodeURIComponent(pinned)}` : ""}`;
 						const response = await fetch(`${API}/state?${query}`, { cache: "no-store", credentials: "same-origin" });
 						if (!alive) return;
 						if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -525,7 +529,7 @@
 					document.removeEventListener("visibilitychange", onVisible);
 					window.removeEventListener("focus", onFocus);
 				};
-			}, [value.enabled, value.wallpaper, value.source, value.behind]);
+			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
 
 				// Report guard-state transitions (mode/scale/fps/pause set) so the
 				// host's lastClientError doubles as a live perf log during testing.
@@ -869,7 +873,9 @@
 									"select",
 									{ className: "lg-select", value: value.source, onChange: (event) => setSettings({ source: event.target.value }) },
 									h("option", { value: "desktop" }, t("sourceDesktop")),
-									h("option", { value: "wallpaper" }, t("sourceWallpaper"))
+									h("option", { value: "wallpaper" }, t("sourceWallpaper")),
+									h("option", { value: "we" }, t("sourceWe")),
+									h("option", { value: "file" }, t("sourceFile"))
 								)
 							),
 							h(Slider, {
@@ -930,6 +936,7 @@
 							h("p", { className: "lg-group-hint" }, t("flowHint")),
 							h("p", { className: "lg-group-hint" }, t("moveHint"))
 						),
+						h(WallpaperCenter, null),
 						h(
 							"section",
 							{ className: "lg-group" },

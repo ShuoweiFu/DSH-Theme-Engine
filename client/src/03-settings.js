@@ -4,6 +4,10 @@
 				const parsed = typeof value === "number" ? value : Number.parseFloat(value);
 				return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 			};
+			const audioRaw = source.audio && typeof source.audio === "object" ? source.audio : {};
+			const audioList = Array.isArray(audioRaw.list)
+				? audioRaw.list.filter((entry) => typeof entry === "string" && entry.length > 0).slice(0, 200)
+				: [];
 			return {
 				enabled: source.enabled !== false,
 				wallpaper: source.wallpaper !== false,
@@ -16,7 +20,20 @@
 				flow: num(source.flow, DEFAULT_SETTINGS.flow, 0, 1.5),
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
-				source: source.source === "wallpaper" ? "wallpaper" : "desktop",
+				source: ["wallpaper", "we", "file"].includes(source.source) ? source.source : "desktop",
+				wePath: typeof source.wePath === "string" ? source.wePath : "",
+				weId: typeof source.weId === "string" ? source.weId : "",
+				filePath: typeof source.filePath === "string" ? source.filePath : "",
+				colorMode: ["light", "dark", "custom", "intelligent"].includes(source.colorMode) ? source.colorMode : "auto",
+				customColor: /^#[0-9a-f]{6}$/i.test(source.customColor) ? source.customColor : DEFAULT_SETTINGS.customColor,
+				autoInvert: source.autoInvert !== false,
+				audio: {
+					enabled: audioRaw.enabled === true,
+					list: audioList,
+					rate: Math.round(num(audioRaw.rate, 1, 0.5, 2) * 100) / 100,
+					volume: num(audioRaw.volume, 0.6, 0, 1),
+					reactive: audioRaw.reactive !== false
+				},
 				renderMode: source.renderMode === "webgpu" ? "webgpu" : "webgl",
 				behind: source.behind !== false,
 				ink: source.ink === "dark" || source.ink === "light" ? source.ink : "auto",

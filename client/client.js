@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.175000";
+		const CLIENT_BUILD = "v.26.11.21.181500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1060,9 +1060,12 @@
 		 * `content` measures the column where the chat text lives; `busy` is the
 		 * standard deviation of the whole frame.
 		 */
-		function measureInk(source) {
+		// One persistent probe canvas: a fresh canvas + 2D context for every video
+		// frame (30-60 a second) cost more than the measurement itself.
+		let inkProbe = null;
+		function measureInk(source, sizeHint = 24) {
 			try {
-				const size = 24;
+				const size = Math.max(4, Math.min(64, Math.round(sizeHint) || 24));
 				// The sidebar can be collapsed, icon-rail or expanded, so a fixed
 				// 24% cut sampled the wrong pixels in two of those states. Measure
 				// the real scrollport; fall back to the old 24% when it is hidden.
@@ -1071,7 +1074,7 @@
 				const viewport = window.innerWidth || 0;
 				const contentStart =
 					viewport > 0 && sidebarWidth > 0 ? Math.min(0.45, Math.max(0.16, sidebarWidth / viewport)) : 0.24;
-				const probe = document.createElement("canvas");
+				const probe = inkProbe || (inkProbe = document.createElement("canvas"));
 				probe.width = size;
 				probe.height = size;
 				const ctx = probe.getContext("2d", { willReadFrequently: true });
@@ -1296,13 +1299,44 @@
 				element.addEventListener("error", () => finish(false), { once: true });
 				setTimeout(check, 4000);
 			});
+			// Frame cadence: requestVideoFrameCallback fires once per decoded video frame,
+			// so the texture follows the video instead of a fixed 110 ms timer (~9 fps),
+			// which is exactly what made video wallpapers look like a slideshow.
+			let frameHandle = 0;
+			let frameCallback = null;
+			let frameStopped = false;
+			const pump = () => {
+				frameHandle = 0;
+				if (frameStopped || !frameCallback) return;
+				frameCallback();
+				if (frameStopped || !frameCallback) return;
+				frameHandle = element.requestVideoFrameCallback(pump);
+			};
 			element.src = url;
 			document.body.appendChild(element);
 			return {
 				kind,
 				element,
 				ready,
+				/** True when the element can drive uploads off its own frame clock. */
+				onFrame(callback) {
+					if (animated || typeof element.requestVideoFrameCallback !== "function") return false;
+					frameCallback = callback;
+					frameStopped = false;
+					if (!frameHandle) frameHandle = element.requestVideoFrameCallback(pump);
+					return true;
+				},
+				stopFrames() {
+					frameStopped = true;
+					frameCallback = null;
+					if (frameHandle && typeof element.cancelVideoFrameCallback === "function") {
+						element.cancelVideoFrameCallback(frameHandle);
+					}
+					frameHandle = 0;
+				},
 				dispose() {
+					frameStopped = true;
+					frameCallback = null;
 					try {
 						element.pause?.();
 					liveElements.delete(element);
@@ -3449,6 +3483,8 @@ void main() {
 			// Task 8: a live wallpaper re-uploads its texture on a timer.
 			let liveSource = null;
 			let liveTimer = 0;
+			let lastUploadAt = 0;
+			let lastLiveTime = -1;
 			let liveCanvas = null;
 			const LIVE_INTERVAL = 110;
 			let running = false;
@@ -3700,6 +3736,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function stopLiveWallpaper() {
 				if (liveTimer) clearInterval(liveTimer);
 				liveTimer = 0;
+				if (liveSource) liveSource.stopFrames?.();
 				if (liveSource) liveSource.dispose();
 				liveSource = null;
 				liveCanvas = null;
@@ -3709,23 +3746,35 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function uploadLiveWallpaper() {
 				if (!device || !texture || !liveSource || !liveCanvas) return;
 				if (paused() || !running) return;
+				const now = performance.now();
+				const interval = frameInterval();
+				if (interval && now - lastUploadAt < interval * 0.9) return;
+				const element = liveSource.element;
+				if (element && typeof element.currentTime === "number") {
+					if (element.currentTime === lastLiveTime) return;
+					lastLiveTime = element.currentTime;
+				}
+				lastUploadAt = now;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
 				// A looping <video> decodes one near-black frame when it wraps to 0:00;
 				// uploading it blacks out the glass for ~110 ms. Same guard as WebGL.
-				const liveSample = measureInk(liveFrame);
+				const liveSample = measureInk(liveFrame, 10);
 				if (liveSample && isBlackSwap(liveSample)) return;
 				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
 				blurKey = "";
 				draw(performance.now());
 			}
 
-			/** Start uploading a decoded live source at ~9 fps. */
+			/** Start uploading a decoded live source, driven by its own frame clock. */
 			function startLiveWallpaper(source, canvas) {
 				stopLiveWallpaper();
 				liveSource = source;
 				liveCanvas = canvas;
+				lastUploadAt = 0;
+				lastLiveTime = -1;
 				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
+				if (source.onFrame) source.onFrame(uploadLiveWallpaper);
 			}
 
 			function paused() {
@@ -4187,7 +4236,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			let liveSource = null;
 			let liveTimer = 0;
 			let liveCanvas = null;
-			const LIVE_INTERVAL = 110;
+			let lastUploadAt = 0;
+			let lastLiveTime = -1;
+			// Fallback cadence only: sources with a frame clock drive their own uploads.
+			const LIVE_INTERVAL = 33;
 			const clock = { start: performance.now() };
 			const mouse = { x: 0, y: 0 };
 			let lastMouseAt = 0;
@@ -4269,6 +4321,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function stopLiveWallpaper() {
 				if (liveTimer) clearInterval(liveTimer);
 				liveTimer = 0;
+				if (liveSource) liveSource.stopFrames?.();
 				if (liveSource) liveSource.dispose();
 				liveSource = null;
 				liveCanvas = null;
@@ -4278,6 +4331,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function uploadLiveWallpaper() {
 				if (!texture || !liveSource || !liveCanvas) return;
 				if (perf.paused.size || !running) return;
+				// Never upload faster than the renderer draws: a 60 fps video on a 30 fps
+				// loop would pay for half its frames and show none of them.
+				const now = performance.now();
+				const interval = frameInterval();
+				if (interval && now - lastUploadAt < interval * 0.9) return;
+				// A paused or stalled decoder keeps handing back the same frame; uploading
+				// it again costs a full texture copy and changes nothing on screen.
+				const element = liveSource.element;
+				if (element && typeof element.currentTime === "number") {
+					if (element.currentTime === lastLiveTime) return;
+					lastLiveTime = element.currentTime;
+				}
+				lastUploadAt = now;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
 				// A looping <video> decodes one near-black frame when it wraps to 0:00.
@@ -4285,7 +4351,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// every loop. Skip that single frame; isBlackSwap() only fires on a dark
 				// frame right after a lit one and gives up after two tries, so a genuinely
 				// dark wallpaper is never stuck.
-				const liveSample = measureInk(liveFrame);
+				const liveSample = measureInk(liveFrame, 10);
 				if (liveSample && isBlackSwap(liveSample)) return;
 				gl.bindTexture(gl.TEXTURE_2D, texture.handle);
 				gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -4295,12 +4361,18 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				schedule(true);
 			}
 
-			/** Start uploading a decoded live source at ~9 fps. */
+			/** Start uploading a decoded live source, driven by its own frame clock. */
 			function startLiveWallpaper(source, canvas) {
 				stopLiveWallpaper();
 				liveSource = source;
 				liveCanvas = canvas;
+				lastUploadAt = 0;
+				lastLiveTime = -1;
+				// The interval is the safety net: requestVideoFrameCallback only fires while
+				// the compositor keeps presenting the (off-screen) video, which is not
+				// guaranteed. Both paths land in the same throttled upload.
 				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
+				if (source.onFrame) source.onFrame(uploadLiveWallpaper);
 			}
 
 			/** Free one blur target (idempotent). */

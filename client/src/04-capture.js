@@ -70,9 +70,12 @@
 		 * `content` measures the column where the chat text lives; `busy` is the
 		 * standard deviation of the whole frame.
 		 */
-		function measureInk(source) {
+		// One persistent probe canvas: a fresh canvas + 2D context for every video
+		// frame (30-60 a second) cost more than the measurement itself.
+		let inkProbe = null;
+		function measureInk(source, sizeHint = 24) {
 			try {
-				const size = 24;
+				const size = Math.max(4, Math.min(64, Math.round(sizeHint) || 24));
 				// The sidebar can be collapsed, icon-rail or expanded, so a fixed
 				// 24% cut sampled the wrong pixels in two of those states. Measure
 				// the real scrollport; fall back to the old 24% when it is hidden.
@@ -81,7 +84,7 @@
 				const viewport = window.innerWidth || 0;
 				const contentStart =
 					viewport > 0 && sidebarWidth > 0 ? Math.min(0.45, Math.max(0.16, sidebarWidth / viewport)) : 0.24;
-				const probe = document.createElement("canvas");
+				const probe = inkProbe || (inkProbe = document.createElement("canvas"));
 				probe.width = size;
 				probe.height = size;
 				const ctx = probe.getContext("2d", { willReadFrequently: true });
@@ -306,13 +309,44 @@
 				element.addEventListener("error", () => finish(false), { once: true });
 				setTimeout(check, 4000);
 			});
+			// Frame cadence: requestVideoFrameCallback fires once per decoded video frame,
+			// so the texture follows the video instead of a fixed 110 ms timer (~9 fps),
+			// which is exactly what made video wallpapers look like a slideshow.
+			let frameHandle = 0;
+			let frameCallback = null;
+			let frameStopped = false;
+			const pump = () => {
+				frameHandle = 0;
+				if (frameStopped || !frameCallback) return;
+				frameCallback();
+				if (frameStopped || !frameCallback) return;
+				frameHandle = element.requestVideoFrameCallback(pump);
+			};
 			element.src = url;
 			document.body.appendChild(element);
 			return {
 				kind,
 				element,
 				ready,
+				/** True when the element can drive uploads off its own frame clock. */
+				onFrame(callback) {
+					if (animated || typeof element.requestVideoFrameCallback !== "function") return false;
+					frameCallback = callback;
+					frameStopped = false;
+					if (!frameHandle) frameHandle = element.requestVideoFrameCallback(pump);
+					return true;
+				},
+				stopFrames() {
+					frameStopped = true;
+					frameCallback = null;
+					if (frameHandle && typeof element.cancelVideoFrameCallback === "function") {
+						element.cancelVideoFrameCallback(frameHandle);
+					}
+					frameHandle = 0;
+				},
 				dispose() {
+					frameStopped = true;
+					frameCallback = null;
 					try {
 						element.pause?.();
 					liveElements.delete(element);

@@ -52,6 +52,8 @@
 			// Task 8: a live wallpaper re-uploads its texture on a timer.
 			let liveSource = null;
 			let liveTimer = 0;
+			let lastUploadAt = 0;
+			let lastLiveTime = -1;
 			let liveCanvas = null;
 			const LIVE_INTERVAL = 110;
 			let running = false;
@@ -303,6 +305,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function stopLiveWallpaper() {
 				if (liveTimer) clearInterval(liveTimer);
 				liveTimer = 0;
+				if (liveSource) liveSource.stopFrames?.();
 				if (liveSource) liveSource.dispose();
 				liveSource = null;
 				liveCanvas = null;
@@ -312,23 +315,35 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			function uploadLiveWallpaper() {
 				if (!device || !texture || !liveSource || !liveCanvas) return;
 				if (paused() || !running) return;
+				const now = performance.now();
+				const interval = frameInterval();
+				if (interval && now - lastUploadAt < interval * 0.9) return;
+				const element = liveSource.element;
+				if (element && typeof element.currentTime === "number") {
+					if (element.currentTime === lastLiveTime) return;
+					lastLiveTime = element.currentTime;
+				}
+				lastUploadAt = now;
 				const liveFrame = liveWallpaperFrame(liveSource, liveCanvas);
 				if (!liveFrame) return;
 				// A looping <video> decodes one near-black frame when it wraps to 0:00;
 				// uploading it blacks out the glass for ~110 ms. Same guard as WebGL.
-				const liveSample = measureInk(liveFrame);
+				const liveSample = measureInk(liveFrame, 10);
 				if (liveSample && isBlackSwap(liveSample)) return;
 				device.queue.copyExternalImageToTexture({ source: liveFrame }, { texture }, [texture.width, texture.height]);
 				blurKey = "";
 				draw(performance.now());
 			}
 
-			/** Start uploading a decoded live source at ~9 fps. */
+			/** Start uploading a decoded live source, driven by its own frame clock. */
 			function startLiveWallpaper(source, canvas) {
 				stopLiveWallpaper();
 				liveSource = source;
 				liveCanvas = canvas;
+				lastUploadAt = 0;
+				lastLiveTime = -1;
 				liveTimer = setInterval(uploadLiveWallpaper, LIVE_INTERVAL);
+				if (source.onFrame) source.onFrame(uploadLiveWallpaper);
 			}
 
 			function paused() {

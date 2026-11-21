@@ -27,7 +27,7 @@ Blur runs on the GPU: both backends (WebGL / WebGPU) share the same **13-tap Poi
 
 The plugin registers no agent tools and injects no prompt text, so it adds **zero model token cost**.
 
-Current version **v.26.11.21.011937**.
+Current version **v.26.11.21.142500**.
 
 ## Table of contents
 
@@ -43,7 +43,7 @@ Current version **v.26.11.21.011937**.
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>Version: <code>v.26.11.21.011937</code></li>
+        <li>Version: <code>v.26.11.21.142500</code></li>
         <li>Platform: Windows 10 20348+ / Windows 11</li>
         <li>Host: DeepSeek Harness desktop</li>
         <li>License: <a href="LICENSE">Apache-2.0</a></li>
@@ -79,6 +79,14 @@ On startup the GPU string is read locally (`WEBGL_debug_renderer_info`, never up
 
 Requirements: **Windows 10 20348+ / Windows 11** and the **DSH desktop app**. Building the client needs only Node.js (no third-party deps); building the native helper needs `clang++` from MSYS2 UCRT64.
 
+**Install from npm (recommended for other machines)**
+
+```
+plugin_manager install_bundle target="dsh-theme-engine"
+```
+
+An npm install needs no git and no compiler: `bin/lg-capture.exe` ships inside the package. Reload the page afterwards.
+
 **Install from source**
 
 ```powershell
@@ -108,6 +116,7 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe (main
 1. Click **Liquid Glass** in the sidebar; the settings page fills the right main workspace.
 2. Pick a preset, or tune background blur, saturation, frost density, ink color and liquid flow.
 3. Changes apply instantly and persist. Reloading or restarting returns you to the conversation; settings are kept.
+4. **Check for updates** at the bottom of the settings page queries npm, GitHub and git at once, with a Download link per channel.
 
 ## Settings
 

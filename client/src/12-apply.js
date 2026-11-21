@@ -700,6 +700,19 @@
 				const translate = makeTranslate(lang);
 				const t = (key) => translate(key);
 				const [perf, setPerf] = useState(null);
+				const [update, setUpdate] = useState(null);
+				const checkUpdates = useCallback((force) => {
+					setUpdate((prev) => ({ ...(prev ?? {}), loading: true, error: "" }));
+					fetch(`${API}/update${force ? "?force=1" : ""}`)
+						.then((response) => response.json())
+						.then((data) =>
+							setUpdate({ loading: false, data, error: data && data.ok === false ? String(data.error ?? "failed") : "" })
+						)
+						.catch((error) => setUpdate({ loading: false, data: null, error: String((error && error.message) || error) }));
+				}, []);
+				useEffect(() => {
+					checkUpdates(false);
+				}, [checkUpdates]);
 				useEffect(() => {
 					let timer = null;
 					const stop = () => {
@@ -744,6 +757,31 @@
 					: t("frozen");
 				const statusText =
 					state.status === "ready" ? t("ready") : state.status === "off" ? t("off") : state.status === "error" ? t("error") : t("missing");
+				const currentBuild = (update && update.data && update.data.current) || CLIENT_BUILD;
+				const compareBuild = (left, right) => {
+					const parse = (value) => {
+						const match = String(value ?? "").match(/(\d{2})\.(\d{1,2})\.(\d{1,2})[.\-](\d+)/);
+						return match ? match.slice(1).map(Number) : null;
+					};
+					const a = parse(left);
+					const b = parse(right);
+					if (!a || !b) return 0;
+					for (let index = 0; index < 4; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+					return 0;
+				};
+				const channelState = (channel) => {
+					const info = update && update.data && update.data.channels ? update.data.channels[channel] : null;
+					if (!info) return t("checking");
+					if (info.error) {
+						if (info.error === "not-found") return t("updateNotPublished");
+						if (info.error === "timeout") return t("updateTimeout");
+						if (info.error === "unreachable") return t("updateUnreachable");
+						return t("updateFailed");
+					}
+					return compareBuild(info.latest, currentBuild) > 0
+						? `${t("updateAvailable")} · ${info.latest}`
+						: `${t("updateUpToDate")} · ${info.latest}`;
+				};
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -962,6 +1000,52 @@
 								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
 							)
+						),
+						h(
+							"section",
+							{ className: "lg-group" },
+							h("h2", { className: "lg-group-title" }, t("updateGroup")),
+							h("p", { className: "lg-group-hint" }, t("updateHint")),
+							h(
+								"div",
+								{ className: "lg-actions" },
+								h(
+									"button",
+									{
+										type: "button",
+										className: "lg-button",
+										disabled: Boolean(update && update.loading),
+										onClick: () => checkUpdates(true),
+									},
+									update && update.loading ? t("checking") : t("checkUpdate")
+								),
+								h("span", { className: "lg-hint" }, `${t("updateCurrent")} ${currentBuild}`)
+							),
+							["npm", "git", "github"].map((channel) =>
+								h(
+									"div",
+									{ className: "lg-row", key: channel },
+									h(
+										"div",
+										{ className: "lg-label" },
+										h("span", null, channel === "github" ? "GitHub" : channel),
+										h("span", { className: "lg-hint" }, channelState(channel))
+									),
+									update && update.data && update.data.channels && update.data.channels[channel] && update.data.channels[channel].url
+										? h(
+												"a",
+												{
+													className: "lg-button",
+													href: update.data.channels[channel].url,
+													target: "_blank",
+													rel: "noreferrer",
+												},
+												t("download")
+											)
+										: null
+								)
+							),
+							h("p", { className: "lg-group-hint" }, t("updateInstallHint"))
 						),
 						h(
 							"section",

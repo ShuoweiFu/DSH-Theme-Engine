@@ -46,6 +46,7 @@ import {
   setStreamFps,
 } from './host/helper.js';
 import { detectWallpaper, jsonResponse, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
+import { checkForUpdates } from './host/update-check.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
 import { CACHE_DIR, GATE_SCRIPT_PATH } from './host/paths.js';
@@ -418,6 +419,26 @@ export function apply(ctx, config) {
     kind: 'exact',
     path: '/liquid-glass/gate',
     resource: async () => jsonResponse(await gate()),
+  }));
+
+  // Update checks for the three distribution channels (npm / git tags /
+  // GitHub releases). Cached for ten minutes; ?force=1 bypasses the cache.
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/update',
+    resource: async (request) => {
+      try {
+        let force = false;
+        try {
+          force = new URL(request.url, 'http://127.0.0.1').searchParams.get('force') === '1';
+        } catch {
+          // Unreadable query string: use the cache.
+        }
+        return jsonResponse(await checkForUpdates({ force }));
+      } catch (error) {
+        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
+      }
+    },
   }));
 
   disposers.push(ctx.webServer.register({

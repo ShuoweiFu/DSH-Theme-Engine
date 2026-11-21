@@ -27,7 +27,7 @@
 
 插件不向 agent 注册工具、不注入提示文本，**不增加模型 token 开销**。
 
-当前版本 **v.26.11.21.011937**。
+当前版本 **v.26.11.21.142500**。
 
 ## 目录
 
@@ -43,7 +43,7 @@
     </td>
     <td width="50%" valign="top">
       <ul>
-        <li>授时版本：<code>v.26.11.21.011937</code></li>
+        <li>授时版本：<code>v.26.11.21.142500</code></li>
         <li>平台：Windows 10 20348+ / Windows 11</li>
         <li>宿主：DeepSeek Harness 桌面版</li>
         <li>许可：<a href="LICENSE">Apache-2.0</a></li>
@@ -79,6 +79,14 @@
 
 前置：**Windows 10 20348+ / Windows 11**、**DSH 桌面版**。构建客户端只需要 Node.js（无第三方依赖），编译原生助手需要 MSYS2 UCRT64 的 `clang++`。
 
+**安装（npm，推荐给其他电脑）**
+
+```
+plugin_manager install_bundle target="dsh-theme-engine"
+```
+
+从 npm 安装不需要 git、不需要编译，`bin/lg-capture.exe` 已随包发布。装完刷新页面即可。
+
 **安装（源码）**
 
 ```powershell
@@ -108,6 +116,7 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（仅
 1. 点击侧边栏 **液态玻璃**，设置页整页渲染在右侧主工作区。
 2. 在「智能预设」里选档位，或逐项调背景模糊、饱和度、霜面浓度、文字颜色、液态流动。
 3. 所有修改即时生效并保存；刷新或重启后回到会话页面，设置不丢。
+4. 设置页底部「检查更新」同时查询 npm、GitHub、git 三个渠道，每行给出「下载」入口。
 
 ## 设置项
 

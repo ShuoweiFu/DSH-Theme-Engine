@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.011937";
+		const CLIENT_BUILD = "v.26.11.21.142500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		const DEFAULT_SETTINGS = Object.freeze({
 			enabled: true,
@@ -189,6 +189,19 @@
 			inkAuto: "自动（按背景亮度）",
 			inkDark: "深色文字",
 			inkLight: "浅色文字",
+			updateGroup: "更新与下载",
+			updateHint: "从 npm、GitHub 和 git 三个渠道查询最新版本；「下载」会打开对应页面。",
+			checkUpdate: "检查更新",
+			checking: "检查中…",
+			updateCurrent: "当前版本",
+			updateUpToDate: "已是最新",
+			updateAvailable: "有新版本",
+			updateFailed: "检查失败",
+			updateNotPublished: "尚未发布",
+			updateTimeout: "网络超时",
+			updateUnreachable: "无法访问",
+			download: "下载",
+			updateInstallHint: "其他电脑安装：插件管理器 → 安装 → dsh-theme-engine。",
 		};
 		const en = {
 			section: "Liquid Glass",
@@ -267,6 +280,19 @@
 			inkAuto: "Auto (by background)",
 			inkDark: "Dark text",
 			inkLight: "Light text",
+			updateGroup: "Updates & downloads",
+			updateHint: "Queries npm, GitHub and git for the newest version; Download opens that channel's page.",
+			checkUpdate: "Check for updates",
+			checking: "Checking…",
+			updateCurrent: "Current version",
+			updateUpToDate: "Up to date",
+			updateAvailable: "Update available",
+			updateFailed: "Check failed",
+			updateNotPublished: "Not published yet",
+			updateTimeout: "Network timeout",
+			updateUnreachable: "Unreachable",
+			download: "Download",
+			updateInstallHint: "Install on another machine: plugin manager → install → dsh-theme-engine.",
 		};
 
 		function dictFor(lang) {
@@ -925,6 +951,34 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 		0 14px 36px rgba(0, 0, 0, 0.42);
 }
 
+/*
+ * DSH's native settings sheet is the last filled slab in the UI: SettingsRoot
+ * paints its 800x800 panel with --dsw-alias-bg-layer-2 and no backdrop blur, so
+ * it hides the wallpaper behind a milky card.  The panel root carries the
+ * stable data-shortcut-modal="settings" attribute (SettingsRoot.tsx); the
+ * module class names next to it are hashed.  Same recipe as the composer and
+ * the edited-files card: a translucent wash, a real blur, a hairline ring and
+ * a top-edge highlight, so the sheet reads as frosted glass without dimming
+ * the section text.
+ */
+div[data-shortcut-modal="settings"] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 78%, transparent);
+	-webkit-backdrop-filter: blur(28px) saturate(1.3);
+	backdrop-filter: blur(28px) saturate(1.3);
+	box-shadow:
+		var(--dsw-elevation-prominent),
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 75%, transparent);
+}
+
+html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 72%, transparent);
+	box-shadow:
+		var(--dsw-elevation-prominent),
+		inset 0 1px 0 rgba(255, 255, 255, 0.07),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 75%, transparent);
+}
+
 /* ---- main panel page (native plugin-page chrome) ---- */
 /*
  * The page itself is bare glass: the wallpaper, the liquid shader and the
@@ -1374,11 +1428,16 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 
 .lg-actions {
 	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: 10px;
 	padding-top: 16px;
 }
 
 .lg-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	height: 34px;
 	padding: 0 14px;
 	border: 0.5px solid var(--dsw-alias-border-l4);
@@ -1387,7 +1446,13 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 	color: var(--dsw-alias-label-primary);
 	font-size: 13px;
 	line-height: 20px;
+	text-decoration: none;
 	cursor: pointer;
+}
+
+.lg-button[disabled] {
+	opacity: 0.55;
+	cursor: default;
 }
 
 .lg-button:hover {
@@ -3624,6 +3689,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				const translate = makeTranslate(lang);
 				const t = (key) => translate(key);
 				const [perf, setPerf] = useState(null);
+				const [update, setUpdate] = useState(null);
+				const checkUpdates = useCallback((force) => {
+					setUpdate((prev) => ({ ...(prev ?? {}), loading: true, error: "" }));
+					fetch(`${API}/update${force ? "?force=1" : ""}`)
+						.then((response) => response.json())
+						.then((data) =>
+							setUpdate({ loading: false, data, error: data && data.ok === false ? String(data.error ?? "failed") : "" })
+						)
+						.catch((error) => setUpdate({ loading: false, data: null, error: String((error && error.message) || error) }));
+				}, []);
+				useEffect(() => {
+					checkUpdates(false);
+				}, [checkUpdates]);
 				useEffect(() => {
 					let timer = null;
 					const stop = () => {
@@ -3668,6 +3746,31 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					: t("frozen");
 				const statusText =
 					state.status === "ready" ? t("ready") : state.status === "off" ? t("off") : state.status === "error" ? t("error") : t("missing");
+				const currentBuild = (update && update.data && update.data.current) || CLIENT_BUILD;
+				const compareBuild = (left, right) => {
+					const parse = (value) => {
+						const match = String(value ?? "").match(/(\d{2})\.(\d{1,2})\.(\d{1,2})[.\-](\d+)/);
+						return match ? match.slice(1).map(Number) : null;
+					};
+					const a = parse(left);
+					const b = parse(right);
+					if (!a || !b) return 0;
+					for (let index = 0; index < 4; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+					return 0;
+				};
+				const channelState = (channel) => {
+					const info = update && update.data && update.data.channels ? update.data.channels[channel] : null;
+					if (!info) return t("checking");
+					if (info.error) {
+						if (info.error === "not-found") return t("updateNotPublished");
+						if (info.error === "timeout") return t("updateTimeout");
+						if (info.error === "unreachable") return t("updateUnreachable");
+						return t("updateFailed");
+					}
+					return compareBuild(info.latest, currentBuild) > 0
+						? `${t("updateAvailable")} · ${info.latest}`
+						: `${t("updateUpToDate")} · ${info.latest}`;
+				};
 				return h(
 					"section",
 					{ className: "lg-page" },
@@ -3886,6 +3989,52 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								h("div", { className: "lg-fact" }, h("dt", null, "gap"), h("dd", null, perf && typeof perf.frameGap === "number" ? `${perf.frameGap}` : "—")),
 								h("div", { className: "lg-fact" }, h("dt", null, t("version")), h("dd", null, CLIENT_BUILD))
 							)
+						),
+						h(
+							"section",
+							{ className: "lg-group" },
+							h("h2", { className: "lg-group-title" }, t("updateGroup")),
+							h("p", { className: "lg-group-hint" }, t("updateHint")),
+							h(
+								"div",
+								{ className: "lg-actions" },
+								h(
+									"button",
+									{
+										type: "button",
+										className: "lg-button",
+										disabled: Boolean(update && update.loading),
+										onClick: () => checkUpdates(true),
+									},
+									update && update.loading ? t("checking") : t("checkUpdate")
+								),
+								h("span", { className: "lg-hint" }, `${t("updateCurrent")} ${currentBuild}`)
+							),
+							["npm", "git", "github"].map((channel) =>
+								h(
+									"div",
+									{ className: "lg-row", key: channel },
+									h(
+										"div",
+										{ className: "lg-label" },
+										h("span", null, channel === "github" ? "GitHub" : channel),
+										h("span", { className: "lg-hint" }, channelState(channel))
+									),
+									update && update.data && update.data.channels && update.data.channels[channel] && update.data.channels[channel].url
+										? h(
+												"a",
+												{
+													className: "lg-button",
+													href: update.data.channels[channel].url,
+													target: "_blank",
+													rel: "noreferrer",
+												},
+												t("download")
+											)
+										: null
+								)
+							),
+							h("p", { className: "lg-group-hint" }, t("updateInstallHint"))
 						),
 						h(
 							"section",

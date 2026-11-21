@@ -215,6 +215,34 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 		0 14px 36px rgba(0, 0, 0, 0.42);
 }
 
+/*
+ * DSH's native settings sheet is the last filled slab in the UI: SettingsRoot
+ * paints its 800x800 panel with --dsw-alias-bg-layer-2 and no backdrop blur, so
+ * it hides the wallpaper behind a milky card.  The panel root carries the
+ * stable data-shortcut-modal="settings" attribute (SettingsRoot.tsx); the
+ * module class names next to it are hashed.  Same recipe as the composer and
+ * the edited-files card: a translucent wash, a real blur, a hairline ring and
+ * a top-edge highlight, so the sheet reads as frosted glass without dimming
+ * the section text.
+ */
+div[data-shortcut-modal="settings"] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 78%, transparent);
+	-webkit-backdrop-filter: blur(28px) saturate(1.3);
+	backdrop-filter: blur(28px) saturate(1.3);
+	box-shadow:
+		var(--dsw-elevation-prominent),
+		inset 0 1px 0 rgba(255, 255, 255, 0.3),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 75%, transparent);
+}
+
+html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
+	background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 72%, transparent);
+	box-shadow:
+		var(--dsw-elevation-prominent),
+		inset 0 1px 0 rgba(255, 255, 255, 0.07),
+		inset 0 0 0 0.5px color-mix(in srgb, var(--dsw-alias-border-l2) 75%, transparent);
+}
+
 /* ---- main panel page (native plugin-page chrome) ---- */
 /*
  * The page itself is bare glass: the wallpaper, the liquid shader and the
@@ -664,11 +692,16 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 
 .lg-actions {
 	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: 10px;
 	padding-top: 16px;
 }
 
 .lg-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	height: 34px;
 	padding: 0 14px;
 	border: 0.5px solid var(--dsw-alias-border-l4);
@@ -677,7 +710,13 @@ html[data-lg-mode="dark"] div[data-changed-files] {
 	color: var(--dsw-alias-label-primary);
 	font-size: 13px;
 	line-height: 20px;
+	text-decoration: none;
 	cursor: pointer;
+}
+
+.lg-button[disabled] {
+	opacity: 0.55;
+	cursor: default;
 }
 
 .lg-button:hover {

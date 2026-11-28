@@ -165,6 +165,26 @@ const SHIM = String.raw`(function () {
     while (spectrum.length < BINS) spectrum.push(0);
     realAudio = true;
   });
+  // The page knows its own backdrop; the engine cannot read it through an
+  // opaque origin. Report it so the ink pairs with what is really painted.
+  function surfaceColor() {
+    var els = [document.body, document.documentElement];
+    for (var i = 0; i < els.length; i += 1) {
+      if (!els[i]) continue;
+      var c = getComputedStyle(els[i]).backgroundColor;
+      if (!c || c === "transparent" || c === "rgba(0, 0, 0, 0)") continue;
+      return c;
+    }
+    return "";
+  }
+  function reportSurface() {
+    var c = surfaceColor();
+    if (!c) return;
+    try { parent.postMessage({ __lg: "frame", kind: "surface", text: c }, "*"); } catch (error) {}
+  }
+  setTimeout(reportSurface, 400);
+  setTimeout(reportSurface, 1600);
+  window.addEventListener("load", function () { setTimeout(reportSurface, 200); });
   var startedAt = (window.performance && performance.now()) || 0;
   function synth() {
     var t = (((window.performance && performance.now()) || 0) - startedAt) / 1000;

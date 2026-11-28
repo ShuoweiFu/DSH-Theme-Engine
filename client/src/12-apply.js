@@ -640,14 +640,22 @@
 						// wallpaper is the user's call, not ours. Only "auto" derives an
 						// ink from the sample.
 						let ink = value.ink;
-						const veil = display.veil;
+						let veil = display.veil;
 						if (ink !== "dark" && ink !== "light") {
-							// The text sits on the glass, not on the wallpaper behind it. A forced
-							// scheme flips the palette; without one the app theme paints the glass,
-							// so the ink has to follow that theme. Pairing the ink to the wallpaper
-							// sample instead was the white-on-white bug: a dark wallpaper derived
-							// light ink while the app kept painting its light glass.
-							ink = appliedMode === "dark" ? "light" : "dark";
+							if (inkInfo) {
+								// What the text really sits on is the frost *over* the wallpaper, so the
+								// decision has to see both: the sampled brightness and the glass colour
+								// that is actually painted (appliedMode). Feeding it the wallpaper alone
+								// put white text on white glass; feeding it the scheme alone puts dark
+								// text on a dark wallpaper at veil 0.
+								const decided = decideInk(inkInfo.content ?? inkInfo.lum, display.tint, display.veil, appliedMode === "dark");
+								ink = decided.ink;
+								veil = decided.veil;
+							} else {
+								// No sample yet: fall back to the painted scheme so the pair is at least
+								// consistent for the first frame.
+								ink = appliedMode === "dark" ? "light" : "dark";
+							}
 						}
 						// The composer is its own surface: the frosted card reads the overlay
 						// token, which glassTokens() already tints toward the ink in use.
@@ -854,12 +862,26 @@
 						}
 					};
 
+					// The page reports its own backdrop colour; that beats guessing from
+					// the desktop capture, which for a web wallpaper is somebody else.
+					const adoptSurface = (text) => {
+						if (value.source !== "web") return;
+						const match = /rgba?\(([^)]+)\)/.exec(String(text || ""));
+						if (!match) return;
+						const parts = match[1].split(",").map((n) => Number(n));
+						const alpha = parts.length > 3 ? parts[3] : 1;
+						if (!Number.isFinite(parts[0]) || alpha < 0.5) return;
+						const lum = relativeLum(parts[0], parts[1], parts[2]);
+						onInk({ lum, content: lum });
+						webLog(`ink sample <- page surface ${text} lum=${lum.toFixed(3)}`);
+					};
 					const onFrameMessage = (event) => {
 						if (!frame.contentWindow || event.source !== frame.contentWindow) return;
 						const data = event.data;
 						if (!data || data.__lg !== "frame") return;
 						webLog(`frame ${data.kind}: ${data.text}`);
 						if (data.kind === "audio") beginLoopback();
+						if (data.kind === "surface") adoptSurface(data.text);
 					};
 					window.addEventListener("message", onFrameMessage);
 					

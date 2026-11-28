@@ -865,6 +865,38 @@
 					};
 				}, [webActive, value.webPath, value.webPreview]);
 
+				// A web wallpaper renders in an opaque-origin frame, so neither the
+				// shader nor this page can read a single pixel of it. The wallpaper's
+				// own preview image is the only honest sample available, and it is
+				// what the automatic ink decision gets whenever the source is a page.
+				useEffect(() => {
+					if (!value.enabled || !value.wallpaper || value.source !== "web") return undefined;
+					const preview = String(value.webPreview || "");
+					if (!preview) return undefined;
+					let disposed = false;
+					(async () => {
+						try {
+							const url = `${API}/wallpaper?source=file&path=${encodeURIComponent(preview)}`;
+							const response = await fetch(url, { cache: "no-store" });
+							if (!response.ok) throw new Error(`HTTP ${response.status}`);
+							const bitmap = await createImageBitmap(await response.blob());
+							if (disposed) {
+								bitmap.close?.();
+								return;
+							}
+							const sample = measureInk(bitmap);
+							bitmap.close?.();
+							if (sample && !isBlackSwap(sample)) onInk(sample);
+							webLog(`ink sample <- preview ${sample ? Math.round(sample.lum * 100) : 0}%`);
+						} catch (error) {
+							webLog(`ink preview failed: ${String((error && error.message) || error)}`);
+						}
+					})();
+					return () => {
+						disposed = true;
+					};
+				}, [value.enabled, value.wallpaper, value.source, value.webPreview, onInk]);
+
 				// The playlist lives in settings; the audio bus owns the <audio> element
 				// so it keeps playing while the settings page is closed.
 				useEffect(() => {

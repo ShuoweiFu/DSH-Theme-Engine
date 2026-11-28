@@ -462,6 +462,33 @@
 									onChange: (next) => setSettings({ flow: next })
 								}),
 								h("p", { className: "lg-group-hint" }, t("flowHint")),
+								// The ink colour is a per-module setting, so it belongs next to the
+								// sliders that decide what the glass looks like, not only in the glass tab.
+								h(
+									"div",
+									{ className: "lg-row" },
+									h(
+										"div",
+										{ className: "lg-label" },
+										h("span", null, t("ink")),
+										h(
+											"span",
+											{ className: "lg-hint" },
+											value.source === "web"
+												? t("inkHintWeb")
+												: inkProbe.sample
+													? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
+													: t("inkHint")
+										)
+									),
+									h(
+										"select",
+										{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
+										h("option", { value: "auto" }, t("inkAuto")),
+										h("option", { value: "dark" }, t("inkDark")),
+										h("option", { value: "light" }, t("inkLight"))
+									)
+								),
 								h(AppearanceModes, { key: "modes" })
 							)
 							: null

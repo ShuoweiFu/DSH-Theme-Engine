@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.203000";
+		const CLIENT_BUILD = "v.26.11.21.204500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -304,6 +304,7 @@
 			behindHint: "开启后，窗口后面压着的应用会被一起拍进背景，玻璃里能透出它们（每次抓取多花 0.3–0.8 秒）；关掉只保留桌面底图。",
 			ink: "文字颜色",
 			inkHint: "按背景亮度自动切换黑/白文字；手动选择会被尊重，不再被改写",
+			inkHintWeb: "取样自壁纸缩略图（网页内容读不到像素）",
 			inkAuto: "自动（按背景亮度）",
 			inkDark: "深色文字",
 			inkLight: "浅色文字",
@@ -552,6 +553,7 @@
 			behindHint: "When on, apps sitting behind the window are captured into the background too, so the glass shows them (+0.3–0.8 s per capture); off keeps only the desktop.",
 			ink: "Text colour",
 			inkHint: "Picks black or white text from the background; a manual choice is respected and never rewritten",
+			inkHintWeb: "Sampled from the wallpaper preview (page pixels are unreadable)",
 			inkAuto: "Auto (by background)",
 			inkDark: "Dark text",
 			inkLight: "Light text",
@@ -1442,12 +1444,22 @@
 				const needLum = wantDarkInk ? target * (inkLum + 0.05) - 0.05 : (inkLum + 0.05) / target - 0.05;
 				const needEnc = encodeLum(needLum);
 				if (!Number.isFinite(needEnc)) return 1;
+				// Legibility is one-sided: dark ink only improves as the backdrop
+				// brightens, light ink only as it darkens. Once the wallpaper already
+				// sits on the good side of the requirement no frost is needed — the
+				// old interpolation kept thickening in that direction and then clamped
+				// to 0.9, which is how a black wallpaper asked for 100% fog.
+				if (wantDarkInk ? contentLum >= needEnc : contentLum <= needEnc) return 0;
 				const span = surfaceEnc - contentLum;
 				if (Math.abs(span) < 0.02) return 0.85;
-				// The frost can only push the backdrop towards the surface colour:
-				// white ink over a bright wallpaper is unreachable no matter how
-				// dense the veil gets, so that option is reported as infeasible.
-				if (wantDarkInk ? span < 0 : span > 0) return 1;
+				// The frost can only push the backdrop towards the surface colour,
+				// so an option is feasible only when that surface already lies past
+				// the luminance the ink needs. Checking the *sign* of the span was
+				// not enough: on a near-black wallpaper in the dark theme the span
+				// is positive (0.10 - 0.06), yet black ink needs an encoded 0.62
+				// backdrop that the frost can never reach — and the old test let it
+				// win with alpha 0.9, i.e. dark text on dark glass.
+				if (wantDarkInk ? surfaceEnc < needEnc : surfaceEnc > needEnc) return 1;
 				return Math.min(0.9, Math.max(0, (needEnc - contentLum) / span));
 			};
 			const darkAlpha = alphaFor(blackInk, true);
@@ -5981,6 +5993,38 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					};
 				}, [webActive, value.webPath, value.webPreview]);
 
+				// A web wallpaper renders in an opaque-origin frame, so neither the
+				// shader nor this page can read a single pixel of it. The wallpaper's
+				// own preview image is the only honest sample available, and it is
+				// what the automatic ink decision gets whenever the source is a page.
+				useEffect(() => {
+					if (!value.enabled || !value.wallpaper || value.source !== "web") return undefined;
+					const preview = String(value.webPreview || "");
+					if (!preview) return undefined;
+					let disposed = false;
+					(async () => {
+						try {
+							const url = `${API}/wallpaper?source=file&path=${encodeURIComponent(preview)}`;
+							const response = await fetch(url, { cache: "no-store" });
+							if (!response.ok) throw new Error(`HTTP ${response.status}`);
+							const bitmap = await createImageBitmap(await response.blob());
+							if (disposed) {
+								bitmap.close?.();
+								return;
+							}
+							const sample = measureInk(bitmap);
+							bitmap.close?.();
+							if (sample && !isBlackSwap(sample)) onInk(sample);
+							webLog(`ink sample <- preview ${sample ? Math.round(sample.lum * 100) : 0}%`);
+						} catch (error) {
+							webLog(`ink preview failed: ${String((error && error.message) || error)}`);
+						}
+					})();
+					return () => {
+						disposed = true;
+					};
+				}, [value.enabled, value.wallpaper, value.source, value.webPreview, onInk]);
+
 				// The playlist lives in settings; the audio bus owns the <audio> element
 				// so it keeps playing while the settings page is closed.
 				useEffect(() => {
@@ -7181,6 +7225,33 @@ h(
 									onChange: (next) => setSettings({ flow: next })
 								}),
 								h("p", { className: "lg-group-hint" }, t("flowHint")),
+								// The ink colour is a per-module setting, so it belongs next to the
+								// sliders that decide what the glass looks like, not only in the glass tab.
+								h(
+									"div",
+									{ className: "lg-row" },
+									h(
+										"div",
+										{ className: "lg-label" },
+										h("span", null, t("ink")),
+										h(
+											"span",
+											{ className: "lg-hint" },
+											value.source === "web"
+												? t("inkHintWeb")
+												: inkProbe.sample
+													? `${t("inkHint")} · ${Math.round((inkProbe.sample.content ?? inkProbe.sample.lum) * 100)}%`
+													: t("inkHint")
+										)
+									),
+									h(
+										"select",
+										{ className: "lg-select", value: value.ink, onChange: (event) => setSettings({ ink: event.target.value }) },
+										h("option", { value: "auto" }, t("inkAuto")),
+										h("option", { value: "dark" }, t("inkDark")),
+										h("option", { value: "light" }, t("inkLight"))
+									)
+								),
 								h(AppearanceModes, { key: "modes" })
 							)
 							: null

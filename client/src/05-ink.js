@@ -44,12 +44,22 @@
 				const needLum = wantDarkInk ? target * (inkLum + 0.05) - 0.05 : (inkLum + 0.05) / target - 0.05;
 				const needEnc = encodeLum(needLum);
 				if (!Number.isFinite(needEnc)) return 1;
+				// Legibility is one-sided: dark ink only improves as the backdrop
+				// brightens, light ink only as it darkens. Once the wallpaper already
+				// sits on the good side of the requirement no frost is needed — the
+				// old interpolation kept thickening in that direction and then clamped
+				// to 0.9, which is how a black wallpaper asked for 100% fog.
+				if (wantDarkInk ? contentLum >= needEnc : contentLum <= needEnc) return 0;
 				const span = surfaceEnc - contentLum;
 				if (Math.abs(span) < 0.02) return 0.85;
-				// The frost can only push the backdrop towards the surface colour:
-				// white ink over a bright wallpaper is unreachable no matter how
-				// dense the veil gets, so that option is reported as infeasible.
-				if (wantDarkInk ? span < 0 : span > 0) return 1;
+				// The frost can only push the backdrop towards the surface colour,
+				// so an option is feasible only when that surface already lies past
+				// the luminance the ink needs. Checking the *sign* of the span was
+				// not enough: on a near-black wallpaper in the dark theme the span
+				// is positive (0.10 - 0.06), yet black ink needs an encoded 0.62
+				// backdrop that the frost can never reach — and the old test let it
+				// win with alpha 0.9, i.e. dark text on dark glass.
+				if (wantDarkInk ? surfaceEnc < needEnc : surfaceEnc > needEnc) return 1;
 				return Math.min(0.9, Math.max(0, (needEnc - contentLum) / span));
 			};
 			const darkAlpha = alphaFor(blackInk, true);

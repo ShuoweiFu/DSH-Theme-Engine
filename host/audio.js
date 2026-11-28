@@ -8,20 +8,40 @@
  * audio at all. This module installs that answer: video is a screen source
  * (Chromium insists on one), audio is the system loopback.
  */
+import { createRequire } from 'node:module';
+
+const nativeRequire = createRequire(process.execPath);
 let installed = false;
 let lastError = null;
 
-async function loadElectron() {
-  const mod = await import('electron');
-  const api = mod && (mod.session ? mod : mod.default);
-  return api || null;
+function loadElectron() {
+  const tried = [];
+  const note = (label, error) => tried.push(label + ': ' + ((error && error.message) || String(error)));
+  // Inside Electron's main process the builtin wins, but a plain Node
+  // resolution of 'electron' returns the path shim (a string). Resolve from
+  // the executable first, then fall back to the bare import.
+  try {
+    const api = nativeRequire('electron');
+    if (api && api.session) return api;
+    tried.push('native: ' + (typeof api));
+  } catch (error) {
+    note('native', error);
+  }
+  try {
+    const api = require('electron');
+    if (api && api.session) return api;
+    tried.push('require: ' + (typeof api));
+  } catch (error) {
+    note('require', error);
+  }
+  throw new Error(tried.join(' | ') + ' | electron=' + (process.versions.electron || 'none'));
 }
 
 export async function installLoopback() {
   if (installed) return { ok: true, installed: true };
   let api = null;
   try {
-    api = await loadElectron();
+    api = loadElectron();
   } catch (error) {
     lastError = 'electron import: ' + ((error && error.message) || error);
     return { ok: false, installed: false, error: lastError };

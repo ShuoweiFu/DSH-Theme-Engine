@@ -83,6 +83,7 @@ html[data-lg-suppressed="on"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
+}
 
 /* Web wallpaper mode. The frame is an opaque-origin iframe, so no shader can
    sample it: here the frame *is* the backdrop and the compositor has to do the
@@ -113,7 +114,6 @@ html[data-lg-web="on"] canvas[data-liquid-glass] {
 html[data-lg-web="on"][data-lg-enabled="on"] #root {
 	-webkit-backdrop-filter: blur(18px) saturate(1.2);
 	backdrop-filter: blur(18px) saturate(1.2);
-}
 }
 
 /* The glass pane. Every GPU backend blurs the wallpaper in its own shader
@@ -1064,6 +1064,58 @@ html[data-lg-mode="dark"] .lg-we-flag {
 .lg-we-card[data-blocked="on"] .lg-we-thumb img {
 	filter: grayscale(0.7);
 	opacity: 0.6;
+}
+
+/* The glass sliders under the wallpaper switch live in here. Off means the
+   wallpaper is shown raw, so the accordion is not even rendered. */
+.lg-accordion {
+	border-radius: 12px;
+	background: var(--dsw-alias-bg-layer-2);
+	overflow: hidden;
+}
+
+.lg-accordion-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 10px 12px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 13px;
+	line-height: 20px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.lg-accordion-head:hover {
+	background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.lg-accordion-chevron {
+	display: inline-block;
+	transition: transform 160ms ease;
+}
+
+.lg-accordion-chevron[data-open="on"] {
+	transform: rotate(90deg);
+}
+
+.lg-accordion-body {
+	padding: 2px 12px 12px;
+	animation: lg-accordion-in 180ms ease;
+}
+
+@keyframes lg-accordion-in {
+	from { opacity: 0; transform: translateY(-4px); }
+	to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lg-accordion-body { animation: none; }
+	.lg-accordion-chevron { transition: none; }
 }
 
 .lg-we-type {

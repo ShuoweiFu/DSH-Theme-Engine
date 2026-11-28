@@ -9,6 +9,7 @@
  */
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
+import { homedir } from 'node:os';
 
 import { run } from './run.js';
 
@@ -228,29 +229,71 @@ async function readProject(dir) {
  * install; the result is cached because the page only needs it for the grid.
  * @param {readonly string[]} roots
  */
+function profileCandidates() {
+	const list = [];
+	if (process.env.DSH_PROFILE_DIR) list.push(process.env.DSH_PROFILE_DIR);
+	const root = join(homedir(), '.dsh', 'profiles');
+	if (process.env.DSH_PROFILE) list.push(join(root, process.env.DSH_PROFILE));
+	list.push(join(root, 'desktop'), join(root, 'web'));
+	const unique = [];
+	for (const item of list) {
+		if (!item) continue;
+		if (unique.some((seen) => normKey(seen) === normKey(item))) continue;
+		unique.push(item);
+	}
+	return unique;
+}
+
+/**
+ * Is a Wallpaper Engine style sibling plugin installed?
+ *
+ * The env var is only a hint: the desktop app does not always export
+ * DSH_PROFILE_DIR into the host process, so the profile directories are also
+ * probed directly. A plugin counts when it is named in the profile manifest or
+ * when its folder exists under node_modules — the second test is what catches a
+ * plugin that was added with `link:` and never listed in the manifest.
+ */
 export async function elysiaEngineStatus() {
-	const profile = process.env.DSH_PROFILE_DIR || '';
-	if (!profile) return { installed: false, name: '' };
-	try {
-		const pkg = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
-		const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-		for (const key of Object.keys(deps)) {
-			if (key === 'dsh-theme-engine') continue;
-			if (/wallpaper|elysia/i.test(key)) return { installed: true, name: key };
+	const checked = [];
+	for (const profile of profileCandidates()) {
+		let pkg = null;
+		try {
+			pkg = JSON.parse(await readFile(join(profile, 'package.json'), 'utf8'));
+		} catch {
+			pkg = null;
 		}
-	} catch {
-		// A missing or unreadable profile just means "not detected".
-	}
-	try {
-		const entries = await readdir(join(profile, 'node_modules'));
-		for (const name of entries) {
-			if (name === 'dsh-theme-engine' || name.startsWith('.')) continue;
-			if (/wallpaper|elysia/i.test(name)) return { installed: true, name };
+		const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) };
+		const bundles = Array.isArray(pkg?.dsh?.profile?.bundles) ? pkg.dsh.profile.bundles : [];
+		const named = [...Object.keys(deps), ...bundles].filter((name) => name !== 'dsh-theme-engine' && /wallpaper|elysia/i.test(name));
+		checked.push({ profile, manifest: Boolean(pkg), named });
+		for (const candidate of named) {
+			const real = await readPluginName(profile, candidate);
+			return { installed: true, name: real || candidate, profile, via: 'manifest' };
 		}
-	} catch {
-		// No node_modules: fall through to not-detected.
+		try {
+			const entries = await readdir(join(profile, 'node_modules'));
+			for (const entry of entries) {
+				if (entry === 'dsh-theme-engine' || entry.startsWith('.')) continue;
+				if (!/wallpaper|elysia/i.test(entry)) continue;
+				const real = await readPluginName(profile, entry);
+				return { installed: true, name: real || entry, profile, via: 'node_modules' };
+			}
+		} catch {
+			// No node_modules here: try the next candidate.
+		}
 	}
-	return { installed: false, name: '' };
+	return { installed: false, name: '', profile: '', via: '', checked };
+}
+
+/** The `name` field a packed plugin declares, or '' when it cannot be read. */
+async function readPluginName(profile, entry) {
+	try {
+		const raw = await readFile(join(profile, 'node_modules', entry, 'package.json'), 'utf8');
+		const pkg = JSON.parse(raw);
+		return typeof pkg.name === 'string' ? pkg.name : '';
+	} catch {
+		return '';
+	}
 }
 
 export async function scanLibrary(roots) {

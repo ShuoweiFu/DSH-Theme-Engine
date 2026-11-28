@@ -129,6 +129,7 @@
 			const [notice, setNotice] = useState("");
 			const [presetName, setPresetName] = useState("");
 			const [share, setShare] = useState("");
+			const [glassOpen, setGlassOpen] = useState(false);
 			const load = useCallback((force) => {
 				setLoading(true);
 				setError("");
@@ -384,6 +385,88 @@
 					{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
 					h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
 				),
+				// The glass sliders belong to this switch: off means the wallpaper is shown
+				// raw, so the controls that would do nothing are not even rendered.
+				value.weGlass
+					? h(
+						"div",
+						{ className: "lg-accordion", "data-open": glassOpen ? "on" : undefined },
+						h(
+							"button",
+							{
+								type: "button",
+								className: "lg-accordion-head",
+								"aria-expanded": glassOpen ? "true" : "false",
+								onClick: () => setGlassOpen((open) => !open)
+							},
+							h("span", null, t("weGlassGroup")),
+							h("span", { className: "lg-accordion-chevron", "data-open": glassOpen ? "on" : undefined }, "›")
+						),
+						glassOpen
+							? h(
+								"div",
+								{ className: "lg-accordion-body" },
+								h(Slider, {
+									label: t("blur"),
+									value: value.blur,
+									min: 0,
+									max: 48,
+									step: 1,
+									display: value.blur + " px",
+									onChange: (next) => setSettings({ blur: next })
+								}),
+								h(Slider, {
+									label: t("saturation"),
+									value: value.saturation,
+									min: 1,
+									max: 2.4,
+									step: 0.05,
+									display: value.saturation.toFixed(2),
+									onChange: (next) => setSettings({ saturation: next })
+								}),
+								h(Slider, {
+									label: t("tint"),
+									value: value.tint,
+									min: 0,
+									max: 1,
+									step: 0.01,
+									display: Math.round(value.tint * 100) + "%",
+									onChange: (next) => setSettings({ tint: next })
+								}),
+								h(Slider, {
+									label: t("veil"),
+									value: value.veil,
+									min: 0,
+									max: 1,
+									step: 0.01,
+									display: Math.round(value.veil * 100) + "%",
+									onChange: (next) => setSettings({ veil: next })
+								}),
+								h("p", { className: "lg-group-hint" }, t("veilHint")),
+								h(Slider, {
+									label: t("dim"),
+									value: value.dim,
+									min: 0,
+									max: 0.6,
+									step: 0.01,
+									display: Math.round(value.dim * 100) + "%",
+									onChange: (next) => setSettings({ dim: next })
+								}),
+								h(Slider, {
+									label: t("flow"),
+									value: value.flow,
+									min: 0,
+									max: 1.5,
+									step: 0.05,
+									display: value.flow.toFixed(2),
+									onChange: (next) => setSettings({ flow: next })
+								}),
+								h("p", { className: "lg-group-hint" }, t("flowHint")),
+								h(AppearanceModes, { key: "modes" })
+							)
+							: null
+					)
+					: null,
 				installed
 					? h(
 							"div",

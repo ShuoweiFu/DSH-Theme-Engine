@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.200000";
+		const CLIENT_BUILD = "v.26.11.21.203000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -222,6 +222,9 @@
 			moduleWallpaperHint: "读取 Wallpaper Engine 壁纸库并实时播放",
 			moduleElysia: "elysia395 壁纸引擎兼容",
 			moduleElysiaHint: "已检测到，可接管其设置",
+			elysiaProfile: "配置文件：",
+			elysiaRestart: "插件已安装，重启 DSH 后它的壁纸层才会加载；两者同时开启会各画一层。",
+			elysiaMissing: "没有在 profile 的依赖或 node_modules 里找到壁纸引擎插件。",
 			moduleIsland: "灵动岛",
 			moduleIslandHint: "独立模块，可与其他模块同时开启",
 			wallpaperGlassHint: "背景模糊、饱和度、玻璃着色、霜面浓度、压暗与液态流动属于玻璃层参数，壁纸引擎与液态玻璃共用同一层玻璃，统一在「液态玻璃背景」里调整。",
@@ -366,6 +369,7 @@
 			weWebOpening: "正在准备网页壁纸沙箱…",
 			weWebApplied: "网页壁纸已在沙箱里渲染，玻璃效果覆盖在它上面。",
 			weWebFailed: "网页壁纸打不开：这一项没有可用的 index.html，已回退。",
+			weGlassGroup: "玻璃外观",
 			modesGroup: "外观模式（四象）",
 			modesIndependentHint: "每个模式各自保存参数：切到浅色调的数值不会影响深色。",
 			modeResetColor: "恢复默认色",
@@ -466,6 +470,9 @@
 			moduleWallpaperHint: "Reads the Wallpaper Engine library and plays it live",
 			moduleElysia: "elysia395 engine compatibility",
 			moduleElysiaHint: "Detected here; can take over its settings",
+			elysiaProfile: "Profile:",
+			elysiaRestart: "The plugin is installed; its wallpaper layer only loads after DSH restarts. With both on, each paints its own layer.",
+			elysiaMissing: "No wallpaper engine plugin found in the profile dependencies or node_modules.",
 			moduleIsland: "Dynamic Island",
 			moduleIslandHint: "Independent module, runs with any other module",
 			wallpaperGlassHint: "Blur, saturation, tint, frost, dim and flow belong to the glass layer. Wallpaper Engine and Liquid Glass share the same layer, so they are tuned under \"Liquid Glass\".",
@@ -610,6 +617,7 @@
 			weWebOpening: "Preparing the web wallpaper sandbox…",
 			weWebApplied: "The web wallpaper runs in a sandbox; the glass renders above it.",
 			weWebFailed: "This web wallpaper could not be opened: no usable index.html. Reverted.",
+			weGlassGroup: "Glass look",
 			modesGroup: "Appearance modes",
 			modesIndependentHint: "Each mode keeps its own values — tweaking Light never changes Dark.",
 			modeResetColor: "Reset colour",
@@ -1628,6 +1636,7 @@ html[data-lg-suppressed="on"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
+}
 
 /* Web wallpaper mode. The frame is an opaque-origin iframe, so no shader can
    sample it: here the frame *is* the backdrop and the compositor has to do the
@@ -1658,7 +1667,6 @@ html[data-lg-web="on"] canvas[data-liquid-glass] {
 html[data-lg-web="on"][data-lg-enabled="on"] #root {
 	-webkit-backdrop-filter: blur(18px) saturate(1.2);
 	backdrop-filter: blur(18px) saturate(1.2);
-}
 }
 
 /* The glass pane. Every GPU backend blurs the wallpaper in its own shader
@@ -2609,6 +2617,58 @@ html[data-lg-mode="dark"] .lg-we-flag {
 .lg-we-card[data-blocked="on"] .lg-we-thumb img {
 	filter: grayscale(0.7);
 	opacity: 0.6;
+}
+
+/* The glass sliders under the wallpaper switch live in here. Off means the
+   wallpaper is shown raw, so the accordion is not even rendered. */
+.lg-accordion {
+	border-radius: 12px;
+	background: var(--dsw-alias-bg-layer-2);
+	overflow: hidden;
+}
+
+.lg-accordion-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 10px 12px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 13px;
+	line-height: 20px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.lg-accordion-head:hover {
+	background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.lg-accordion-chevron {
+	display: inline-block;
+	transition: transform 160ms ease;
+}
+
+.lg-accordion-chevron[data-open="on"] {
+	transform: rotate(90deg);
+}
+
+.lg-accordion-body {
+	padding: 2px 12px 12px;
+	animation: lg-accordion-in 180ms ease;
+}
+
+@keyframes lg-accordion-in {
+	from { opacity: 0; transform: translateY(-4px); }
+	to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lg-accordion-body { animation: none; }
+	.lg-accordion-chevron { transition: none; }
 }
 
 .lg-we-type {
@@ -5813,6 +5873,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// which folder it came from. All it can do is paint, script itself and ask for
 				// pointer lock, and everything it loads comes from the host's read-only mirror
 				// of one workshop folder.
+				// Everything the frame does is logged twice: into the page's own console via
+				// the shim, and back to the host ring buffer, which is how a wallpaper that
+				// fails inside an opaque origin can still explain itself.
+				const webLog = (text) => {
+					try {
+						fetch(`${API}/web/__log?level=client&msg=${encodeURIComponent(String(text).slice(0, 300))}`, { cache: "no-store" }).catch(() => {});
+					} catch {
+						// Logging must never be the reason a wallpaper fails.
+					}
+				};
+
 				const webActive = Boolean(value.enabled && value.wallpaper && value.source === "web" && value.webPath);
 				useEffect(() => {
 					document.documentElement.dataset.lgSource = value.source;
@@ -5822,6 +5893,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					if (!webActive) return;
 					const root = document.documentElement;
 					root.dataset.lgWeb = "on";
+					webLog(`mount dir=${value.webPath}`);
 					// The shader canvas is opaque and sits above the frame; here the frame *is*
 					// the wallpaper, so the renderer steps aside and the glass comes from the CSS
 					// backdrop-filter on the panels instead of from the shader.
@@ -5847,9 +5919,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						setSettings(preview ? { source: "file", filePath: preview, wallpaper: true } : { source: "desktop" });
 						setNotice(translate("weWebFailed"));
 						if (reason) reportClientError(`web wallpaper: ${reason}`);
+						webLog(`fail: ${reason}`);
 					};
-					watchdog = setTimeout(() => { if (!loaded) fail("no load event in 5 s"); }, 5000);
+					watchdog = setTimeout(() => { webLog("watchdog: no load event in 5 s"); if (!loaded) fail("no load event in 5 s"); }, 5000);
 					frame.addEventListener("load", () => {
+						webLog(`load event src=${frame.getAttribute("src") || ""}`);
+						try {
+							webLog(`frame location readable? ${frame.contentWindow.location.href}`);
+						} catch (error) {
+							// Expected: the frame is opaque-origin, so even reading this is refused.
+							webLog(`opaque origin confirmed: ${String((error && error.message) || error)}`);
+						}
 						if (disposed) return;
 						if (frame.getAttribute("src") === "about:blank") return;
 						loaded = true;
@@ -5858,6 +5938,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					fetch(`${API}/web/open?dir=${encodeURIComponent(value.webPath)}`, { cache: "no-store" })
 						.then((response) => response.json())
 						.then((data) => {
+							webLog(`open ${data && data.ok === true ? "ok" : "refused"} ${JSON.stringify(data && (data.error || data.root || ""))}`);
 							if (disposed) return;
 							if (!data || data.ok !== true) {
 								fail(String((data && data.error) || "open failed"));
@@ -5876,7 +5957,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						paused = hidden;
 						if (hidden) {
 							frame.src = "about:blank";
+							webLog("hidden: frame -> about:blank");
 						} else if (loaded) {
+							webLog("visible again: reloading the frame");
 							frame.src = source;
 						}
 					};
@@ -6428,7 +6511,6 @@ renderAppearance(),
 									"div",
 									{ className: "lg-branch-body" },
 									h(WallpaperCenter, { key: "we" }),
-									renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,
@@ -6442,7 +6524,10 @@ renderAppearance(),
 										{ className: "lg-group" },
 										h("h2", { className: "lg-group-title" }, t("moduleElysia")),
 										h("p", { className: "lg-group-hint" }, t("moduleElysiaHint")),
-										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null
+										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null,
+										state.elysia && state.elysia.profile ? h("p", { className: "lg-group-hint" }, `${translate("elysiaProfile")} ${state.elysia.profile}`) : null,
+										state.elysia && state.elysia.installed ? h("p", { className: "lg-group-hint" }, translate("elysiaRestart")) : null,
+										state.elysia && !state.elysia.installed ? h("p", { className: "lg-group-hint" }, translate("elysiaMissing")) : null
 									)
 								)
 							: null,
@@ -6763,6 +6848,7 @@ h(
 			const [notice, setNotice] = useState("");
 			const [presetName, setPresetName] = useState("");
 			const [share, setShare] = useState("");
+			const [glassOpen, setGlassOpen] = useState(false);
 			const load = useCallback((force) => {
 				setLoading(true);
 				setError("");
@@ -7018,6 +7104,88 @@ h(
 					{ label: t("moduleWeGlass"), hint: t("moduleWeGlassHint") },
 					h(Switch, { on: value.weGlass, onChange: (next) => setSettings({ weGlass: next }), label: t("moduleWeGlass") })
 				),
+				// The glass sliders belong to this switch: off means the wallpaper is shown
+				// raw, so the controls that would do nothing are not even rendered.
+				value.weGlass
+					? h(
+						"div",
+						{ className: "lg-accordion", "data-open": glassOpen ? "on" : undefined },
+						h(
+							"button",
+							{
+								type: "button",
+								className: "lg-accordion-head",
+								"aria-expanded": glassOpen ? "true" : "false",
+								onClick: () => setGlassOpen((open) => !open)
+							},
+							h("span", null, t("weGlassGroup")),
+							h("span", { className: "lg-accordion-chevron", "data-open": glassOpen ? "on" : undefined }, "›")
+						),
+						glassOpen
+							? h(
+								"div",
+								{ className: "lg-accordion-body" },
+								h(Slider, {
+									label: t("blur"),
+									value: value.blur,
+									min: 0,
+									max: 48,
+									step: 1,
+									display: value.blur + " px",
+									onChange: (next) => setSettings({ blur: next })
+								}),
+								h(Slider, {
+									label: t("saturation"),
+									value: value.saturation,
+									min: 1,
+									max: 2.4,
+									step: 0.05,
+									display: value.saturation.toFixed(2),
+									onChange: (next) => setSettings({ saturation: next })
+								}),
+								h(Slider, {
+									label: t("tint"),
+									value: value.tint,
+									min: 0,
+									max: 1,
+									step: 0.01,
+									display: Math.round(value.tint * 100) + "%",
+									onChange: (next) => setSettings({ tint: next })
+								}),
+								h(Slider, {
+									label: t("veil"),
+									value: value.veil,
+									min: 0,
+									max: 1,
+									step: 0.01,
+									display: Math.round(value.veil * 100) + "%",
+									onChange: (next) => setSettings({ veil: next })
+								}),
+								h("p", { className: "lg-group-hint" }, t("veilHint")),
+								h(Slider, {
+									label: t("dim"),
+									value: value.dim,
+									min: 0,
+									max: 0.6,
+									step: 0.01,
+									display: Math.round(value.dim * 100) + "%",
+									onChange: (next) => setSettings({ dim: next })
+								}),
+								h(Slider, {
+									label: t("flow"),
+									value: value.flow,
+									min: 0,
+									max: 1.5,
+									step: 0.05,
+									display: value.flow.toFixed(2),
+									onChange: (next) => setSettings({ flow: next })
+								}),
+								h("p", { className: "lg-group-hint" }, t("flowHint")),
+								h(AppearanceModes, { key: "modes" })
+							)
+							: null
+					)
+					: null,
 				installed
 					? h(
 							"div",

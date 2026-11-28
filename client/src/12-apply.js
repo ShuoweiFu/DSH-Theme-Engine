@@ -757,6 +757,17 @@
 				// which folder it came from. All it can do is paint, script itself and ask for
 				// pointer lock, and everything it loads comes from the host's read-only mirror
 				// of one workshop folder.
+				// Everything the frame does is logged twice: into the page's own console via
+				// the shim, and back to the host ring buffer, which is how a wallpaper that
+				// fails inside an opaque origin can still explain itself.
+				const webLog = (text) => {
+					try {
+						fetch(`${API}/web/__log?level=client&msg=${encodeURIComponent(String(text).slice(0, 300))}`, { cache: "no-store" }).catch(() => {});
+					} catch {
+						// Logging must never be the reason a wallpaper fails.
+					}
+				};
+
 				const webActive = Boolean(value.enabled && value.wallpaper && value.source === "web" && value.webPath);
 				useEffect(() => {
 					document.documentElement.dataset.lgSource = value.source;
@@ -766,6 +777,7 @@
 					if (!webActive) return;
 					const root = document.documentElement;
 					root.dataset.lgWeb = "on";
+					webLog(`mount dir=${value.webPath}`);
 					// The shader canvas is opaque and sits above the frame; here the frame *is*
 					// the wallpaper, so the renderer steps aside and the glass comes from the CSS
 					// backdrop-filter on the panels instead of from the shader.
@@ -791,9 +803,17 @@
 						setSettings(preview ? { source: "file", filePath: preview, wallpaper: true } : { source: "desktop" });
 						setNotice(translate("weWebFailed"));
 						if (reason) reportClientError(`web wallpaper: ${reason}`);
+						webLog(`fail: ${reason}`);
 					};
-					watchdog = setTimeout(() => { if (!loaded) fail("no load event in 5 s"); }, 5000);
+					watchdog = setTimeout(() => { webLog("watchdog: no load event in 5 s"); if (!loaded) fail("no load event in 5 s"); }, 5000);
 					frame.addEventListener("load", () => {
+						webLog(`load event src=${frame.getAttribute("src") || ""}`);
+						try {
+							webLog(`frame location readable? ${frame.contentWindow.location.href}`);
+						} catch (error) {
+							// Expected: the frame is opaque-origin, so even reading this is refused.
+							webLog(`opaque origin confirmed: ${String((error && error.message) || error)}`);
+						}
 						if (disposed) return;
 						if (frame.getAttribute("src") === "about:blank") return;
 						loaded = true;
@@ -802,6 +822,7 @@
 					fetch(`${API}/web/open?dir=${encodeURIComponent(value.webPath)}`, { cache: "no-store" })
 						.then((response) => response.json())
 						.then((data) => {
+							webLog(`open ${data && data.ok === true ? "ok" : "refused"} ${JSON.stringify(data && (data.error || data.root || ""))}`);
 							if (disposed) return;
 							if (!data || data.ok !== true) {
 								fail(String((data && data.error) || "open failed"));
@@ -820,7 +841,9 @@
 						paused = hidden;
 						if (hidden) {
 							frame.src = "about:blank";
+							webLog("hidden: frame -> about:blank");
 						} else if (loaded) {
+							webLog("visible again: reloading the frame");
 							frame.src = source;
 						}
 					};
@@ -1372,7 +1395,6 @@ renderAppearance(),
 									"div",
 									{ className: "lg-branch-body" },
 									h(WallpaperCenter, { key: "we" }),
-									renderAppearance(),
 									h(AudioPanel, { key: "audio" })
 								)
 							: null,
@@ -1386,7 +1408,10 @@ renderAppearance(),
 										{ className: "lg-group" },
 										h("h2", { className: "lg-group-title" }, t("moduleElysia")),
 										h("p", { className: "lg-group-hint" }, t("moduleElysiaHint")),
-										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null
+										state.elysia && state.elysia.name ? h("p", { className: "lg-group-hint" }, `✓ ${state.elysia.name}`) : null,
+										state.elysia && state.elysia.profile ? h("p", { className: "lg-group-hint" }, `${translate("elysiaProfile")} ${state.elysia.profile}`) : null,
+										state.elysia && state.elysia.installed ? h("p", { className: "lg-group-hint" }, translate("elysiaRestart")) : null,
+										state.elysia && !state.elysia.installed ? h("p", { className: "lg-group-hint" }, translate("elysiaMissing")) : null
 									)
 								)
 							: null,

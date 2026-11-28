@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.194500";
+		const CLIENT_BUILD = "v.26.11.28.200000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -6024,11 +6024,59 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					frame.setAttribute("aria-hidden", "true");
 					document.body.appendChild(frame);
 					// Opaque origin: postMessage is the only channel this page has.
+					// Real system audio: Chromium loopback through getDisplayMedia, with
+					// the host answering the request (otherwise a picker appears). The
+					// shim keeps its synthetic sweep until the first bins arrive, so a
+					// refused capture degrades instead of going flat.
+					let loopback = null;
+					const stopLoopback = () => {
+						if (!loopback) return;
+						clearInterval(loopback.timer);
+						for (const track of loopback.stream.getTracks()) track.stop();
+						if (loopback.ctx) loopback.ctx.close().catch(() => {});
+						loopback = null;
+						webLog("loopback: stopped");
+					};
+					const beginLoopback = async () => {
+						if (loopback) return;
+						try {
+							const armed = await fetch(`${API}/audio/loopback`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+							webLog(`loopback: host ${armed && armed.ok ? (armed.installed ? "armed" : "answered") : "unavailable " + JSON.stringify((armed && armed.error) || "")}`);
+							const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+							const tracks = stream.getAudioTracks();
+							for (const track of stream.getVideoTracks()) { track.stop(); stream.removeTrack(track); }
+							webLog(`loopback: tracks audio=${tracks.length}`);
+							if (!tracks.length) { stream.getTracks().forEach((t) => t.stop()); return; }
+							const AudioCtx = window.AudioContext || window.webkitAudioContext;
+							const ctx = new AudioCtx();
+							if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+							const source = ctx.createMediaStreamSource(new MediaStream(tracks));
+							const analyser = ctx.createAnalyser();
+							analyser.fftSize = 256;
+							analyser.smoothingTimeConstant = 0.72;
+							source.connect(analyser);
+							const bins = new Uint8Array(analyser.frequencyBinCount);
+							const payload = new Array(bins.length);
+							const timer = setInterval(() => {
+								const win = frame.contentWindow;
+								if (!win) return;
+								analyser.getByteFrequencyData(bins);
+								for (let i = 0; i < bins.length; i += 1) payload[i] = bins[i] / 255;
+								win.postMessage({ __lg: "audio", bins: payload }, "*");
+							}, 16);
+							loopback = { stream, ctx, timer };
+							webLog(`loopback: streaming fft=256 bins=${bins.length}`);
+						} catch (error) {
+							webLog(`loopback failed: ${String((error && error.message) || error)}`);
+						}
+					};
+
 					const onFrameMessage = (event) => {
 						if (!frame.contentWindow || event.source !== frame.contentWindow) return;
 						const data = event.data;
 						if (!data || data.__lg !== "frame") return;
 						webLog(`frame ${data.kind}: ${data.text}`);
+						if (data.kind === "audio") beginLoopback();
 					};
 					window.addEventListener("message", onFrameMessage);
 					
@@ -6099,6 +6147,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						document.removeEventListener("visibilitychange", sync);
 						window.removeEventListener("blur", sync);
 						window.removeEventListener("focus", sync);
+						stopLoopback();
 						window.removeEventListener("message", onFrameMessage);
 						frame.remove();
 						root.dataset.lgWeb = "off";

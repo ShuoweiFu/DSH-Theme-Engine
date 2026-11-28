@@ -139,7 +139,11 @@ const SHIM = String.raw`(function () {
   var spectrum = new Array(BINS).fill(0);
   var realAudio = false;
   window.wallpaperRegisterAudioListener = function (callback) {
-    if (typeof callback === "function") audioListeners.push(callback);
+    if (typeof callback !== "function") return;
+    audioListeners.push(callback);
+    // Tell the host a page wants spectrum data, so only those wallpapers
+    // open the loopback capture.
+    try { parent.postMessage({ __lg: "frame", kind: "audio", text: "listener registered" }, "*"); } catch (error) {}
   };
   window.wallpaperRegisterMediaPlaybackListener = function (callback) {
     if (typeof callback === "function") callback({ state: 0 });

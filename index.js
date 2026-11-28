@@ -48,6 +48,7 @@ import {
 import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
 import { elysiaEngineStatus, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
+import { installLoopback, loopbackStatus } from "./host/audio.js";
 import { openWebRoot, serveWebFile, webLogs } from './host/web-frame.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
@@ -620,6 +621,23 @@ export function apply(ctx, config) {
         return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
       }
     },
+  }));
+
+  // System audio for audio-reactive wallpapers. The renderer calls this
+  // before getDisplayMedia, so the request is answered with loopback audio
+  // instead of a picker.
+  disposers.push(ctx.webServer.register({
+    kind: "exact",
+    path: "/liquid-glass/audio/loopback",
+
+    resource: async () => jsonResponse(await installLoopback()),
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: "exact",
+    path: "/liquid-glass/audio",
+
+    resource: async () => jsonResponse(loopbackStatus()),
   }));
 
   // What the sandboxed page reported, newest last. Handy in bug reports.

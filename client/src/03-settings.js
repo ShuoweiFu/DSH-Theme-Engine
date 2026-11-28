@@ -369,6 +369,30 @@
 				out["--dsw-alias-tooltip-bg"] = { light: surfaces.tip, dark: surfaces.tip };
 				out["--dsw-alias-toast-bg"] = { light: surfaces.tip, dark: surfaces.tip };
 				out["--dsw-alias-bg-skeleton"] = { light: surfaces.skeleton, dark: surfaces.skeleton };
+﻿// Every remaining plate that the app paints under label-primary text
+// and that stayed white while the ink went light: buttons, tags,
+// placeholders, document previews, platform modules. One rule, two
+// variants, so a new component cannot arrive with a white plate and
+// light text on it again.
+const flat = ink === "dark"
+? { module: "rgba(245,246,247,0.62)", multi: "rgba(245,246,247,0.62)", placeholder: "rgba(12,14,20,0.05)", hoverSolid: "rgba(12,14,20,0.06)", floatHover: "rgba(12,14,20,0.06)", tag: "rgba(12,14,20,0.06)", illus: "rgba(237,240,244,0.7)", preview: "rgba(235,238,242,0.7)", ghost: "rgba(12,14,20,0.08)", dimmed: "rgba(77,107,254,0.35)", elevated: "rgba(255,255,255,0.66)", contrast: "rgba(255,255,255,0.92)", settings: "rgba(255,255,255,0.62)" }
+: { module: "rgba(53,54,56,0.62)", multi: "rgba(60,61,63,0.5)", placeholder: "rgba(255,255,255,0.07)", hoverSolid: "rgba(255,255,255,0.10)", floatHover: "rgba(255,255,255,0.10)", tag: "rgba(255,255,255,0.08)", illus: "rgba(46,47,50,0.6)", preview: "rgba(40,41,44,0.7)", ghost: "rgba(255,255,255,0.12)", dimmed: "rgba(77,107,254,0.35)", elevated: "rgba(255,255,255,0.10)", contrast: "rgba(12,14,20,0.7)", settings: "rgba(255,255,255,0.05)" };
+const flatList = [
+["--dsw-alias-bg-module-platform", flat.module],
+["--dsw-alias-bg-multi-select", flat.multi],
+["--dsw-alias-markdown-placeholder", flat.placeholder],
+["--dsw-alias-interactive-bg-hover-solid", flat.hoverSolid],
+["--dsw-alias-button-floating-hover", flat.floatHover],
+["--dsw-alias-markdown-tag", flat.tag],
+["--dsw-alias-illustration-surface", flat.illus],
+["--dsw-alias-bg-document-preview", flat.preview],
+["--dsw-alias-button-ghost-active-fill", flat.ghost],
+["--dsw-alias-button-primary-dimmed", flat.dimmed],
+["--dsw-alias-button-elevated-fill", flat.elevated],
+["--dsw-alias-button-contrast-fill", flat.contrast],
+["--dsw-alias-settings-card-fill", flat.settings]
+];
+for (const [name, value] of flatList) out[name] = { light: value, dark: value };
 			}
 			return out;
 		}

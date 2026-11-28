@@ -41,7 +41,10 @@ function cleanPath(value) {
 }
 
 function normKey(value) {
-  return cleanPath(value).replace(/\//g, '\\').toLowerCase();
+  // Trailing separators must not create a second identity for one folder:
+  // `D:\Steam` and `D:\Steam\` are the same library, and without this the
+  // scan treats them as two roots and lists every wallpaper twice.
+  return cleanPath(value).replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
 }
 
 async function exists(file) {
@@ -253,13 +256,26 @@ export async function elysiaEngineStatus() {
 export async function scanLibrary(roots) {
   /** @type {any[]} */
   const items = [];
+  // One workshop id can exist in more than one Steam library (a moved or
+  // re-downloaded install leaves the old copy behind), and two spellings of
+  // one library path are the same library. Both used to produce a second
+  // card for the same wallpaper, so seen ids and seen roots are skipped here
+  // rather than deduplicated later in the client.
+  const seen = new Set();
+  const seenRoots = new Set();
   for (const root of roots) {
+    const rootKey = normKey(root);
+    if (!rootKey || seenRoots.has(rootKey)) continue;
+    seenRoots.add(rootKey);
     const base = join(root, WORKSHOP_DIR);
     const ids = await readdir(base).catch(() => []);
     for (const id of ids) {
       if (!/^\d+$/.test(id)) continue;
+      if (seen.has(id)) continue;
       const item = await readProject(join(base, id));
-      if (item) items.push(item);
+      if (!item || seen.has(item.id)) continue;
+      seen.add(item.id);
+      items.push(item);
     }
   }
   items.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'));

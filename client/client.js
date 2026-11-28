@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.183000";
+		const CLIENT_BUILD = "v.26.11.28.190000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1027,6 +1027,22 @@
 				out["--dsw-alias-menu-group-header-fill"] = { light: plates.menu, dark: plates.menu };
 				out["--dsw-alias-scrollbar-bg-l1"] = { light: plates.bar1, dark: plates.bar1 };
 				out["--dsw-alias-scrollbar-bg-l2"] = { light: plates.bar2, dark: plates.bar2 };
+				// Menus, the user message bubble and the composer plate are painted
+				// from --dsw-specific-* which the app re-declares on body, so they
+				// ignored the frost and stayed light while the glass went dark. Same
+				// rule as above: the plate follows the ink, not the app theme.
+				const surfaces = ink === "dark"
+					? { menu: "rgba(252,253,254,0.70)", bubble: "rgba(237,243,254,0.78)", input: "rgba(255,255,255,0.66)", platform: "rgba(245,246,247,0.62)", hover: "rgba(38,49,72,0.06)", tip: "rgba(44,44,46,0.94)", skeleton: "rgba(0,0,0,0.04)" }
+					: { menu: "rgba(48,49,54,0.64)", bubble: "rgba(44,44,46,0.74)", input: "rgba(44,44,46,0.66)", platform: "rgba(53,54,56,0.62)", hover: "rgba(255,255,255,0.08)", tip: "rgba(67,69,74,0.94)", skeleton: "rgba(255,255,255,0.08)" };
+				out["--dsw-menu-surface-fill"] = { light: surfaces.menu, dark: surfaces.menu };
+				out["--dsw-specific-menu"] = { light: surfaces.menu, dark: surfaces.menu };
+				out["--dsw-specific-bubble"] = { light: surfaces.bubble, dark: surfaces.bubble };
+				out["--dsw-specific-input-major"] = { light: surfaces.input, dark: surfaces.input };
+				out["--dsw-alias-bg-module-platform"] = { light: surfaces.platform, dark: surfaces.platform };
+				out["--dsw-alias-interactive-bg-hover"] = { light: surfaces.hover, dark: surfaces.hover };
+				out["--dsw-alias-tooltip-bg"] = { light: surfaces.tip, dark: surfaces.tip };
+				out["--dsw-alias-toast-bg"] = { light: surfaces.tip, dark: surfaces.tip };
+				out["--dsw-alias-bg-skeleton"] = { light: surfaces.skeleton, dark: surfaces.skeleton };
 			}
 			return out;
 		}

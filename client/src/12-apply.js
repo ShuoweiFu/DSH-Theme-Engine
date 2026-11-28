@@ -640,16 +640,14 @@
 						// wallpaper is the user's call, not ours. Only "auto" derives an
 						// ink from the sample.
 						let ink = value.ink;
-						let veil = display.veil;
+						const veil = display.veil;
 						if (ink !== "dark" && ink !== "light") {
-							if (forcedMode) {
-								// A forced light glass always needs dark ink and vice versa.
-								ink = forcedMode === "light" ? "dark" : "light";
-							} else if (inkInfo) {
-								const decided = decideInk(inkInfo.content ?? inkInfo.lum, display.tint, display.veil, currentMode() === "dark");
-								ink = decided.ink;
-								veil = decided.veil;
-							}
+							// The text sits on the glass, not on the wallpaper behind it. A forced
+							// scheme flips the palette; without one the app theme paints the glass,
+							// so the ink has to follow that theme. Pairing the ink to the wallpaper
+							// sample instead was the white-on-white bug: a dark wallpaper derived
+							// light ink while the app kept painting its light glass.
+							ink = appliedMode === "dark" ? "light" : "dark";
 						}
 						// The composer is its own surface: the frosted card reads the overlay
 						// token, which glassTokens() already tints toward the ink in use.
@@ -670,7 +668,7 @@
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor]);
+				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor, appliedMode]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper || value.source === "web") {

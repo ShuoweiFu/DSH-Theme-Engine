@@ -48,7 +48,7 @@ import {
 import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
 import { elysiaEngineStatus, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
-import { installLoopback, loopbackStatus } from "./host/audio.js";
+import { hostFacts, installLoopback, loopbackStatus, spectrumStatus, startSpectrum, stopSpectrum } from "./host/audio.js";
 import { openWebRoot, serveWebFile, webLogs } from './host/web-frame.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
@@ -637,7 +637,24 @@ export function apply(ctx, config) {
     kind: "exact",
     path: "/liquid-glass/audio",
 
-    resource: async () => jsonResponse(loopbackStatus()),
+    resource: async () => jsonResponse({ ...loopbackStatus(), host: hostFacts() }),
+  },
+  {
+    kind: "exact",
+    // 128 band levels of the Windows loopback device, produced by bin/lg-audio.exe.
+    // Polled by the page while an audio-reactive wallpaper is on screen.
+    methods: ["GET"],
+    path: "/liquid-glass/audio/spectrum",
+    resource: async () => {
+      const started = startSpectrum();
+      return jsonResponse({ ...started, ...spectrumStatus() });
+    }
+  },
+  {
+    kind: "exact",
+    methods: ["GET"],
+    path: "/liquid-glass/audio/stop",
+    resource: async () => jsonResponse(stopSpectrum())
   }));
 
   // What the sandboxed page reported, newest last. Handy in bug reports.

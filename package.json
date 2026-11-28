@@ -1,59 +1,59 @@
 {
-	"name": "dsh-theme-engine",
-	"version": "26.11.28-231500",
-	"description": "Live wallpaper + liquid-glass background for DeepSeek Harness: native desktop capture, 0.8-grade water shader, contrast-driven adaptive ink, frost-density and tint controls, hardware-adaptive profiles, occluded-window compositing, WebGL/WebGPU backends, five-layer performance guard.",
-	"license": "Apache-2.0",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/ShuoweiFu/DSH-Theme-Engine.git"
-	},
-	"homepage": "https://github.com/ShuoweiFu/DSH-Theme-Engine#readme",
-	"bugs": {
-		"url": "https://github.com/ShuoweiFu/DSH-Theme-Engine/issues"
-	},
-	"type": "module",
-	"main": "index.js",
-	"exports": {
-		".": "./index.js",
-		"./client": "./client/client.js",
-		"./cordis.patch.yml": "./cordis.patch.yml",
-		"./package.json": "./package.json",
-		"./locale/*.json": "./locale/*.json",
-		"./icon": "./icon.svg"
-	},
-	"scripts": {
-		"build": "node scripts/build-client.mjs",
-		"build:client": "node scripts/build-client.mjs",
-		"build:capture": "node scripts/build-capture.mjs"
-	},
-	"files": [
-		"README.md",
-		"README.en.md",
-		"LICENSE",
-		"NOTICE",
-		"index.js",
-		"client",
-		"locale",
-		"docs",
-		"bin",
-		"cordis.patch.yml",
-		"icon.svg",
-		"host",
-		"tools",
-		"scripts"
-	],
-	"dsh": {
-		"bundle": {
-			"patch": "./cordis.patch.yml"
-		},
-		"client": {
-			"platform": "web",
-			"immediately": true,
-			"inject": [
-				"@deepseek-ai/dsh-client-ui-theme",
-				"@deepseek-ai/dsh-client-ui-settings",
-				"@deepseek-ai/dsh-client-locale"
-			]
-		}
-	}
+  "name": "dsh-theme-engine",
+  "version": "26.11.28-233000",
+  "description": "Live wallpaper + liquid-glass background for DeepSeek Harness: native desktop capture, 0.8-grade water shader, contrast-driven adaptive ink, frost-density and tint controls, hardware-adaptive profiles, occluded-window compositing, WebGL/WebGPU backends, five-layer performance guard.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShuoweiFu/DSH-Theme-Engine.git"
+  },
+  "homepage": "https://github.com/ShuoweiFu/DSH-Theme-Engine#readme",
+  "bugs": {
+    "url": "https://github.com/ShuoweiFu/DSH-Theme-Engine/issues"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "build:capture": "node scripts/build-capture.mjs"
+  },
+  "files": [
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "NOTICE",
+    "index.js",
+    "client",
+    "locale",
+    "docs",
+    "bin",
+    "cordis.patch.yml",
+    "icon.svg",
+    "host",
+    "tools",
+    "scripts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
 }

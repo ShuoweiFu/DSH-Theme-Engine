@@ -887,26 +887,57 @@
 					frame.setAttribute("aria-hidden", "true");
 					document.body.appendChild(frame);
 					// Opaque origin: postMessage is the only channel this page has.
-					// Real system audio: Chromium loopback through getDisplayMedia, with
-					// the host answering the request (otherwise a picker appears). The
-					// shim keeps its synthetic sweep until the first bins arrive, so a
-					// refused capture degrades instead of going flat.
+					// Real system audio comes from bin/lg-audio.exe: the host runs as an
+					// Electron utility process, so the electron module is absent and
+					// getDisplayMedia() here is refused. The helper owns WASAPI, does the FFT
+					// and prints 128 band levels; this loop forwards them to the frame. The
+					// shim keeps its synthetic sweep until the first bins arrive, so a helper
+					// that cannot start degrades instead of going flat.
 					let loopback = null;
 					const stopLoopback = () => {
 						if (!loopback) return;
 						clearInterval(loopback.timer);
-						for (const track of loopback.stream.getTracks()) track.stop();
+						if (loopback.stopHost) fetch(`${API}/audio/stop`, { cache: "no-store" }).catch(() => {});
+						if (loopback.stream) for (const track of loopback.stream.getTracks()) track.stop();
 						if (loopback.ctx) loopback.ctx.close().catch(() => {});
 						loopback = null;
 						setAudio({ state: "idle", detail: "" });
 						webLog("loopback: stopped");
 					};
+					const pushBins = (payload) => {
+						const win = frame.contentWindow;
+						if (!win || !payload) return;
+						win.postMessage({ __lg: "audio", bins: payload }, "*");
+					};
 					const beginLoopback = async () => {
 						if (loopback) return;
 						setAudio({ state: "requesting", detail: "" });
 						try {
-							const armed = await fetch(`${API}/audio/loopback`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
-							webLog(`loopback: host ${armed && armed.ok ? (armed.installed ? "armed" : "answered") : "unavailable " + JSON.stringify((armed && armed.error) || "")}`);
+							const probe = await fetch(`${API}/audio/spectrum`, { cache: "no-store" }).then((r) => r.json());
+							webLog(`loopback: spectrum ${probe.ok ? "live" : probe.running ? "warming" : "down"} ${probe.error || ""}`.trim());
+							if (probe.ok || probe.running) {
+								let misses = 0;
+								const timer = setInterval(async () => {
+									if (!frame.isConnected) return;
+									try {
+										const beat = await fetch(`${API}/audio/spectrum`, { cache: "no-store" }).then((r) => r.json());
+										if (beat.ok && beat.bins) {
+											misses = 0;
+											pushBins(beat.bins);
+										} else if (++misses > 6) {
+											webLog(`loopback: spectrum idle (${beat.error || "no data"})`);
+											stopLoopback();
+										}
+									} catch (error) {
+										if (++misses > 6) stopLoopback();
+									}
+								}, 45);
+								loopback = { timer, stopHost: true };
+								setAudio({ state: "live", detail: "system loopback" });
+								webLog("loopback: streaming from lg-audio.exe bins=128");
+								return;
+							}
+							// No helper on disk: fall back to Chromium's own loopback.
 							const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
 							const tracks = stream.getAudioTracks();
 							for (const track of stream.getVideoTracks()) { track.stop(); stream.removeTrack(track); }
@@ -923,11 +954,9 @@
 							const bins = new Uint8Array(analyser.frequencyBinCount);
 							const payload = new Array(bins.length);
 							const timer = setInterval(() => {
-								const win = frame.contentWindow;
-								if (!win) return;
 								analyser.getByteFrequencyData(bins);
 								for (let i = 0; i < bins.length; i += 1) payload[i] = bins[i] / 255;
-								win.postMessage({ __lg: "audio", bins: payload }, "*");
+								pushBins(payload);
 							}, 16);
 							loopback = { stream, ctx, timer };
 							setAudio({ state: "live", detail: `${bins.length} bins` });
@@ -937,7 +966,6 @@
 							setAudio({ state: "denied", detail: String((error && error.message) || error) });
 						}
 					};
-
 					audioControl.start = beginLoopback;
 					audioControl.stop = stopLoopback;
 

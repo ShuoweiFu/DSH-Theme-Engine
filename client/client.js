@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.210000";
+		const CLIENT_BUILD = "v.26.11.28.183000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -389,7 +389,7 @@
 			modeHint_intelligent: "从当前壁纸主色生成玻璃底色。",
 			modeCustomColor: "玻璃主色",
 			modeAutoInvert: "按壁纸自动深浅",
-			modeAutoInvertHint: "壁纸偏暗时自动切深色玻璃、偏亮时切浅色玻璃。",
+			modeAutoInvertHint: "跟随壁纸亮度整界面切换：偏暗转深色（深玻璃 + 浅字 + 深卡片），偏亮转浅色。中间亮度带保持当前模式，不会来回跳。",
 			browserRoots: "磁盘",
 			browserUp: "上一级",
 			browserEmpty: "这里没有可用的媒体文件。",
@@ -638,7 +638,7 @@
 			modeHint_intelligent: "Buid the glass palette from the current wallpaper's dominant colour.",
 			modeCustomColor: "Glass colour",
 			modeAutoInvert: "Auto light / dark",
-			modeAutoInvertHint: "Switch to dark glass on dark wallpapers and light glass on bright ones.",
+			modeAutoInvertHint: "Follows the wallpaper: dark wallpapers switch the whole UI to dark (dark glass, light text, dark cards), bright ones switch to light. A dead band around the middle keeps it from flickering.",
 			browserRoots: "Drives",
 			browserUp: "Up",
 			browserEmpty: "No usable media file here.",
@@ -1012,6 +1012,21 @@
 				out["--dsw-alias-markdown-code-block"] = { light: codePlate, dark: codePlate };
 				out["--dsw-alias-markdown-code-block-banner"] = { light: codeBanner, dark: codeBanner };
 				out["--dsw-alias-markdown-inline-code"] = { light: inlinePlate, dark: inlinePlate };
+				// Cards, popovers and menus carry their own plate; they are not part
+				// of the frost. Pair the plate with the ink so a light plate never
+				// wears white text, whichever scheme the app itself is in. Without
+				// this, forcing dark glass over a light app left white text on the
+				// app's own light cards (user message bubbles, menus, tool cards).
+				const plates = ink === "dark"
+					? { layer3: "rgba(255,255,255,0.72)", card: "rgba(255,255,255,0.62)", hover: "rgba(255,255,255,0.74)", tile: "rgba(255,255,255,0.5)", menu: "rgba(248,249,250,0.94)", bar1: "rgba(229,229,229,0.9)", bar2: "rgb(229,229,229)" }
+					: { layer3: "rgba(53,54,56,0.72)", card: "rgba(33,33,35,0.62)", hover: "rgba(41,41,41,0.74)", tile: "rgba(255,255,255,0.05)", menu: "rgba(48,49,54,0.94)", bar1: "rgba(60,60,61,0.9)", bar2: "rgb(84,85,87)" };
+				out["--dsw-alias-bg-layer-3"] = { light: plates.layer3, dark: plates.layer3 };
+				out["--dsw-alias-card-fill"] = { light: plates.card, dark: plates.card };
+				out["--dsw-alias-card-fill-hover"] = { light: plates.hover, dark: plates.hover };
+				out["--dsw-alias-card-tile-fill"] = { light: plates.tile, dark: plates.tile };
+				out["--dsw-alias-menu-group-header-fill"] = { light: plates.menu, dark: plates.menu };
+				out["--dsw-alias-scrollbar-bg-l1"] = { light: plates.bar1, dark: plates.bar1 };
+				out["--dsw-alias-scrollbar-bg-l2"] = { light: plates.bar2, dark: plates.bar2 };
 			}
 			return out;
 		}
@@ -5422,6 +5437,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// Colour modes (tasks 12-15): force light / dark, colour the glass from a
 				// custom hex, or follow the wallpaper's own dominant colour. "auto" is the
 				// system theme plus the optional auto-invert rule.
+				const schemeRef = useRef("");
 				const colorMode = value.colorMode || "auto";
 				const autoInvert = value.autoInvert !== false;
 				const glassBase = colorMode === "custom" ? value.customColor : colorMode === "intelligent" ? intelColor : "";
@@ -5430,7 +5446,17 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					let lum = null;
 					if (colorMode === "intelligent" && intelColor) lum = hexLuminance(intelColor);
 					else if (colorMode === "auto" && inkInfo) lum = inkInfo.content ?? inkInfo.lum;
-					if (lum != null) forcedMode = lum > 0.62 ? "light" : lum < 0.34 ? "dark" : "";
+					if (lum != null) {
+						// Bright wallpaper -> light glass, dark wallpaper -> dark glass.
+						// 0.46 / 0.54 is hysteresis, not a dead band: a wallpaper hovering
+						// around the middle keeps the scheme it already had instead of
+						// flickering the whole UI each time a frame comes back brighter.
+						const previous = schemeRef.current || (mode === "dark" ? "dark" : "light");
+						if (lum >= 0.54) schemeRef.current = "light";
+						else if (lum <= 0.46) schemeRef.current = "dark";
+						else schemeRef.current = previous;
+						forcedMode = schemeRef.current;
+					}
 				}
 				const appliedMode = forcedMode || mode;
 
@@ -5500,6 +5526,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = appliedMode;
+					root.dataset.lgScheme = appliedMode;
 					root.style.setProperty("--lg-dim", String(display.dim));
 					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
@@ -5810,6 +5837,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
 						appliedRef.current = { signature, dispose: api.overrideTokens(SOURCE, next) };
+						const readToken = (name) => { try { return getComputedStyle(document.body).getPropertyValue(name).trim(); } catch { return "?"; } };
+						webLog(`palette ink=${ink} scheme=${appliedMode} card=${readToken("--dsw-alias-card-fill")} layer2=${readToken("--dsw-alias-bg-layer-2")} overlay=${readToken("--dsw-alias-bg-overlay")}`);
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}

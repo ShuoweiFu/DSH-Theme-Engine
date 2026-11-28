@@ -262,6 +262,7 @@
 				// Colour modes (tasks 12-15): force light / dark, colour the glass from a
 				// custom hex, or follow the wallpaper's own dominant colour. "auto" is the
 				// system theme plus the optional auto-invert rule.
+				const schemeRef = useRef("");
 				const colorMode = value.colorMode || "auto";
 				const autoInvert = value.autoInvert !== false;
 				const glassBase = colorMode === "custom" ? value.customColor : colorMode === "intelligent" ? intelColor : "";
@@ -270,7 +271,17 @@
 					let lum = null;
 					if (colorMode === "intelligent" && intelColor) lum = hexLuminance(intelColor);
 					else if (colorMode === "auto" && inkInfo) lum = inkInfo.content ?? inkInfo.lum;
-					if (lum != null) forcedMode = lum > 0.62 ? "light" : lum < 0.34 ? "dark" : "";
+					if (lum != null) {
+						// Bright wallpaper -> light glass, dark wallpaper -> dark glass.
+						// 0.46 / 0.54 is hysteresis, not a dead band: a wallpaper hovering
+						// around the middle keeps the scheme it already had instead of
+						// flickering the whole UI each time a frame comes back brighter.
+						const previous = schemeRef.current || (mode === "dark" ? "dark" : "light");
+						if (lum >= 0.54) schemeRef.current = "light";
+						else if (lum <= 0.46) schemeRef.current = "dark";
+						else schemeRef.current = previous;
+						forcedMode = schemeRef.current;
+					}
 				}
 				const appliedMode = forcedMode || mode;
 
@@ -340,6 +351,7 @@
 					const root = document.documentElement;
 					root.dataset.lgEnabled = value.enabled ? "on" : "off";
 					root.dataset.lgMode = appliedMode;
+					root.dataset.lgScheme = appliedMode;
 					root.style.setProperty("--lg-dim", String(display.dim));
 					root.style.setProperty("--lg-fallback", appliedMode === "dark" ? "#0b0e14" : "#eef1f6");
 					root.dataset.lgBehind = appsBehind ? "on" : "off";
@@ -650,6 +662,8 @@
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
 						appliedRef.current = { signature, dispose: api.overrideTokens(SOURCE, next) };
+						const readToken = (name) => { try { return getComputedStyle(document.body).getPropertyValue(name).trim(); } catch { return "?"; } };
+						webLog(`palette ink=${ink} scheme=${appliedMode} card=${readToken("--dsw-alias-card-fill")} layer2=${readToken("--dsw-alias-bg-layer-2")} overlay=${readToken("--dsw-alias-bg-overlay")}`);
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}

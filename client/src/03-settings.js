@@ -338,6 +338,21 @@
 				out["--dsw-alias-markdown-code-block"] = { light: codePlate, dark: codePlate };
 				out["--dsw-alias-markdown-code-block-banner"] = { light: codeBanner, dark: codeBanner };
 				out["--dsw-alias-markdown-inline-code"] = { light: inlinePlate, dark: inlinePlate };
+				// Cards, popovers and menus carry their own plate; they are not part
+				// of the frost. Pair the plate with the ink so a light plate never
+				// wears white text, whichever scheme the app itself is in. Without
+				// this, forcing dark glass over a light app left white text on the
+				// app's own light cards (user message bubbles, menus, tool cards).
+				const plates = ink === "dark"
+					? { layer3: "rgba(255,255,255,0.72)", card: "rgba(255,255,255,0.62)", hover: "rgba(255,255,255,0.74)", tile: "rgba(255,255,255,0.5)", menu: "rgba(248,249,250,0.94)", bar1: "rgba(229,229,229,0.9)", bar2: "rgb(229,229,229)" }
+					: { layer3: "rgba(53,54,56,0.72)", card: "rgba(33,33,35,0.62)", hover: "rgba(41,41,41,0.74)", tile: "rgba(255,255,255,0.05)", menu: "rgba(48,49,54,0.94)", bar1: "rgba(60,60,61,0.9)", bar2: "rgb(84,85,87)" };
+				out["--dsw-alias-bg-layer-3"] = { light: plates.layer3, dark: plates.layer3 };
+				out["--dsw-alias-card-fill"] = { light: plates.card, dark: plates.card };
+				out["--dsw-alias-card-fill-hover"] = { light: plates.hover, dark: plates.hover };
+				out["--dsw-alias-card-tile-fill"] = { light: plates.tile, dark: plates.tile };
+				out["--dsw-alias-menu-group-header-fill"] = { light: plates.menu, dark: plates.menu };
+				out["--dsw-alias-scrollbar-bg-l1"] = { light: plates.bar1, dark: plates.bar1 };
+				out["--dsw-alias-scrollbar-bg-l2"] = { light: plates.bar2, dark: plates.bar2 };
 			}
 			return out;
 		}

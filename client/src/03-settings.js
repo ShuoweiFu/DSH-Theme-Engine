@@ -329,6 +329,15 @@
 				const secondary = ink === "dark" ? "rgba(12,14,20,0.68)" : "rgba(246,248,252,0.72)";
 				out["--dsw-alias-label-primary"] = { light: primary, dark: primary };
 				out["--dsw-alias-label-secondary"] = { light: secondary, dark: secondary };
+				// Code blocks and inline code carry their own opaque surface, so they
+				// cannot ride the glass: with light ink they need a dark plate. The text
+				// on that plate is a fixed grey in 07-styles.js, not label-primary.
+				const codePlate = ink === "dark" ? "rgba(12,14,20,0.055)" : "rgba(12,14,20,0.78)";
+				const codeBanner = ink === "dark" ? "rgba(12,14,20,0.09)" : "rgba(12,14,20,0.88)";
+				const inlinePlate = ink === "dark" ? "rgba(12,14,20,0.07)" : "rgba(12,14,20,0.7)";
+				out["--dsw-alias-markdown-code-block"] = { light: codePlate, dark: codePlate };
+				out["--dsw-alias-markdown-code-block-banner"] = { light: codeBanner, dark: codeBanner };
+				out["--dsw-alias-markdown-inline-code"] = { light: inlinePlate, dark: inlinePlate };
 			}
 			return out;
 		}

@@ -22,6 +22,29 @@ html[data-lg-ink="light"] {
 	--lg-caret: #0c0e14;
 }
 
+/*
+ * Code text does NOT follow the ink. The ink describes what the glass sits
+ * on; a code block is painted with its own opaque markdown token (see the
+ * codePlate values in 03-settings.js), so the text on it needs its own grey
+ * that flips with the ink instead of with the theme. Without this, light ink
+ * on a light code plate is white on white.
+ */
+:root {
+	--lg-code-fg: #4a5261;
+}
+
+html[data-lg-ink="light"] {
+	--lg-code-fg: #d8dfe8;
+}
+
+pre,
+pre code,
+code,
+kbd,
+samp {
+	color: var(--lg-code-fg) !important;
+}
+
 html[data-lg-enabled="on"],
 html[data-lg-enabled="on"] body {
 	background: transparent !important;

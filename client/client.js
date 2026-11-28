@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.204500";
+		const CLIENT_BUILD = "v.26.11.21.210000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1003,6 +1003,15 @@
 				const secondary = ink === "dark" ? "rgba(12,14,20,0.68)" : "rgba(246,248,252,0.72)";
 				out["--dsw-alias-label-primary"] = { light: primary, dark: primary };
 				out["--dsw-alias-label-secondary"] = { light: secondary, dark: secondary };
+				// Code blocks and inline code carry their own opaque surface, so they
+				// cannot ride the glass: with light ink they need a dark plate. The text
+				// on that plate is a fixed grey in 07-styles.js, not label-primary.
+				const codePlate = ink === "dark" ? "rgba(12,14,20,0.055)" : "rgba(12,14,20,0.78)";
+				const codeBanner = ink === "dark" ? "rgba(12,14,20,0.09)" : "rgba(12,14,20,0.88)";
+				const inlinePlate = ink === "dark" ? "rgba(12,14,20,0.07)" : "rgba(12,14,20,0.7)";
+				out["--dsw-alias-markdown-code-block"] = { light: codePlate, dark: codePlate };
+				out["--dsw-alias-markdown-code-block-banner"] = { light: codeBanner, dark: codeBanner };
+				out["--dsw-alias-markdown-inline-code"] = { light: inlinePlate, dark: inlinePlate };
 			}
 			return out;
 		}
@@ -1585,6 +1594,29 @@ html[data-lg-ink="dark"] {
 
 html[data-lg-ink="light"] {
 	--lg-caret: #0c0e14;
+}
+
+/*
+ * Code text does NOT follow the ink. The ink describes what the glass sits
+ * on; a code block is painted with its own opaque markdown token (see the
+ * codePlate values in 03-settings.js), so the text on it needs its own grey
+ * that flips with the ink instead of with the theme. Without this, light ink
+ * on a light code plate is white on white.
+ */
+:root {
+	--lg-code-fg: #4a5261;
+}
+
+html[data-lg-ink="light"] {
+	--lg-code-fg: #d8dfe8;
+}
+
+pre,
+pre code,
+code,
+kbd,
+samp {
+	color: var(--lg-code-fg) !important;
 }
 
 html[data-lg-enabled="on"],

@@ -913,7 +913,16 @@
 						if (loopback) return;
 						setAudio({ state: "requesting", detail: "" });
 						try {
-							const probe = await fetch(`${API}/audio/spectrum`, { cache: "no-store" }).then((r) => r.json());
+							// A host that predates these routes answers 404 with an empty body, which
+							// used to surface as "denied" and read like a permissions problem.
+							// Tell the two apart instead of guessing.
+							const probeResponse = await fetch(`${API}/audio/spectrum`, { cache: "no-store" });
+							if (!probeResponse.ok) {
+								webLog(`loopback: host route missing (${probeResponse.status}) - restart DSH to load it`);
+								setAudio({ state: "stale", detail: String(probeResponse.status) });
+								return;
+							}
+							const probe = await probeResponse.json();
 							webLog(`loopback: spectrum ${probe.ok ? "live" : probe.running ? "warming" : "down"} ${probe.error || ""}`.trim());
 							if (probe.ok || probe.running) {
 								let misses = 0;

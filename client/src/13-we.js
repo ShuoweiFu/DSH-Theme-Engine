@@ -339,7 +339,7 @@
 						h(
 							"span",
 							{ className: "lg-status-pill", "data-on": audio.state === "live" ? "on" : undefined },
-							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : t("weAudioIdle")
+							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : audio.state === "stale" ? t("weAudioStale") : t("weAudioIdle")
 						),
 						audio.state === "live"
 							? h("button", { type: "button", className: "lg-button", onClick: () => stopAudio() }, t("weAudioStop"))

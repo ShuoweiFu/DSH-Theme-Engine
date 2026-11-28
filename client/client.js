@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.233000";
+		const CLIENT_BUILD = "v.26.11.28.235500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -338,6 +338,7 @@
 			weAudioDenied: "被拒绝",
 			weAudioAsking: "请求中",
 			weAudioIdle: "未启用",
+			weAudioStale: "需重启 DSH",
 			wePropReset: "恢复默认属性",
 			wePresetName: "预设名称",
 			wePresetDelete: "删除",
@@ -595,6 +596,7 @@
 			weAudioDenied: "Refused",
 			weAudioAsking: "Asking",
 			weAudioIdle: "Off",
+			weAudioStale: "Restart DSH",
 			wePropReset: "Reset properties",
 			wePresetName: "Preset name",
 			wePresetDelete: "Delete",
@@ -6147,7 +6149,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						if (loopback) return;
 						setAudio({ state: "requesting", detail: "" });
 						try {
-							const probe = await fetch(`${API}/audio/spectrum`, { cache: "no-store" }).then((r) => r.json());
+							// A host that predates these routes answers 404 with an empty body, which
+							// used to surface as "denied" and read like a permissions problem.
+							// Tell the two apart instead of guessing.
+							const probeResponse = await fetch(`${API}/audio/spectrum`, { cache: "no-store" });
+							if (!probeResponse.ok) {
+								webLog(`loopback: host route missing (${probeResponse.status}) - restart DSH to load it`);
+								setAudio({ state: "stale", detail: String(probeResponse.status) });
+								return;
+							}
+							const probe = await probeResponse.json();
 							webLog(`loopback: spectrum ${probe.ok ? "live" : probe.running ? "warming" : "down"} ${probe.error || ""}`.trim());
 							if (probe.ok || probe.running) {
 								let misses = 0;
@@ -7410,7 +7421,7 @@ h(
 						h(
 							"span",
 							{ className: "lg-status-pill", "data-on": audio.state === "live" ? "on" : undefined },
-							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : t("weAudioIdle")
+							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : audio.state === "stale" ? t("weAudioStale") : t("weAudioIdle")
 						),
 						audio.state === "live"
 							? h("button", { type: "button", className: "lg-button", onClick: () => stopAudio() }, t("weAudioStop"))

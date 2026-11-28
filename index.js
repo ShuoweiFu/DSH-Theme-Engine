@@ -48,6 +48,7 @@ import {
 import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
 import { elysiaEngineStatus, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
+import { openWebRoot, serveWebFile } from './host/web-frame.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
 import { CACHE_DIR, GATE_SCRIPT_PATH } from './host/paths.js';
@@ -598,6 +599,40 @@ export function apply(ctx, config) {
         return serveMedia(media, request);
       } catch (error) {
         return new Response(`media failed: ${String(error instanceof Error ? error.message : error)}`, {
+          status: 500,
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+        });
+      }
+    },
+  }));
+  // Web wallpapers: one workshop folder is mirrored at a time. The client opens
+  // a folder with /web/open and then points a sandboxed iframe at /web/index.html;
+  // relative asset URLs in that page resolve back into this same prefix route.
+  disposers.push(ctx.webServer.register({
+    kind: 'exact',
+    path: '/liquid-glass/web/open',
+
+    resource: async (request) => {
+      try {
+        const dir = new URL(request.url, 'http://127.0.0.1').searchParams.get('dir') ?? '';
+        return jsonResponse(await openWebRoot(dir));
+      } catch (error) {
+        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
+      }
+    },
+  }));
+
+  disposers.push(ctx.webServer.register({
+    kind: 'prefix',
+    path: '/liquid-glass/web',
+
+    resource: async (request) => {
+      try {
+        const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+        const relative = pathname.slice('/liquid-glass/web'.length).replace(/^\/+/, '');
+        return await serveWebFile(relative);
+      } catch (error) {
+        return new Response(`web wallpaper failed: ${String(error instanceof Error ? error.message : error)}`, {
           status: 500,
           headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
         });

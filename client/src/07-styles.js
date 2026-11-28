@@ -83,6 +83,37 @@ html[data-lg-suppressed="on"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
+
+/* Web wallpaper mode. The frame is an opaque-origin iframe, so no shader can
+   sample it: here the frame *is* the backdrop and the compositor has to do the
+   glass. This is the only mode where #root carries a backdrop-filter. */
+html[data-lg-web="on"] .lg-web-frame {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: -3;
+	border: 0;
+	background: transparent;
+	pointer-events: none;
+}
+
+/* The scrim would paint straight over the frame (it sits at z-index -2 and is
+   almost opaque). The sheen stays: it is what keeps the pane looking like
+   glass rather than a screenshot. */
+html[data-lg-web="on"] body::before {
+	display: none !important;
+}
+
+html[data-lg-web="on"] canvas[data-liquid-glass] {
+	opacity: 0 !important;
+	pointer-events: none !important;
+}
+
+html[data-lg-web="on"][data-lg-enabled="on"] #root {
+	-webkit-backdrop-filter: blur(18px) saturate(1.2);
+	backdrop-filter: blur(18px) saturate(1.2);
+}
 }
 
 /* The glass pane. Every GPU backend blurs the wallpaper in its own shader
@@ -1005,6 +1036,34 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	font-size: 11px;
 	line-height: 16px;
 	color: var(--dsw-alias-label-secondary);
+}
+
+/* A scene is a compiled package we cannot decode, so the card says so instead
+   of offering a click that quietly does nothing. */
+.lg-we-flag {
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: color-mix(in srgb, #d4a017 22%, transparent);
+	color: #a9770a;
+	font-size: 10px;
+	line-height: 18px;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+html[data-lg-mode="dark"] .lg-we-flag {
+	background: color-mix(in srgb, #f0c04a 26%, transparent);
+	color: #f3cf7c;
+}
+
+.lg-we-card[data-blocked="on"] {
+	cursor: default;
+}
+
+.lg-we-card[data-blocked="on"] .lg-we-thumb img {
+	filter: grayscale(0.7);
+	opacity: 0.6;
 }
 
 .lg-we-type {

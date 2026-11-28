@@ -656,7 +656,7 @@
 				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor]);
 
 				useEffect(() => {
-					if (!value.enabled || !value.wallpaper) {
+					if (!value.enabled || !value.wallpaper || value.source === "web") {
 						setWallpaper({
 							status: value.enabled ? "missing" : "off",
 							url: "",
@@ -747,6 +747,100 @@
 					window.removeEventListener("focus", onFocus);
 				};
 			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
+
+				// --- Web wallpapers ---------------------------------------------------
+				// A web wallpaper is HTML, so the only way to show it is to let the browser
+				// render it. The frame is created with exactly "allow-scripts
+				// allow-pointer-lock" and no allow-same-origin: that combination gives the
+				// document an *opaque origin* — it cannot touch this window's DOM, cookies or
+				// storage, cannot read the disk, cannot navigate us, and cannot even learn
+				// which folder it came from. All it can do is paint, script itself and ask for
+				// pointer lock, and everything it loads comes from the host's read-only mirror
+				// of one workshop folder.
+				const webActive = Boolean(value.enabled && value.wallpaper && value.source === "web" && value.webPath);
+				useEffect(() => {
+					document.documentElement.dataset.lgSource = value.source;
+				}, [value.source]);
+
+				useEffect(() => {
+					if (!webActive) return;
+					const root = document.documentElement;
+					root.dataset.lgWeb = "on";
+					// The shader canvas is opaque and sits above the frame; here the frame *is*
+					// the wallpaper, so the renderer steps aside and the glass comes from the CSS
+					// backdrop-filter on the panels instead of from the shader.
+					liquidRef.current?.setPaused("web", true);
+					const frame = document.createElement("iframe");
+					frame.className = "lg-web-frame";
+					frame.dataset.lgWeb = "frame";
+					// The whole security boundary is this one attribute.
+					frame.setAttribute("sandbox", "allow-scripts allow-pointer-lock");
+					frame.setAttribute("referrerpolicy", "no-referrer");
+					frame.setAttribute("tabindex", "-1");
+					frame.setAttribute("aria-hidden", "true");
+					document.body.appendChild(frame);
+					
+					const source = `${API}/web/index.html`;
+					let disposed = false;
+					let loaded = false;
+					let paused = false;
+					let watchdog = 0;
+					const fail = (reason) => {
+						if (disposed) return;
+						const preview = value.webPreview;
+						setSettings(preview ? { source: "file", filePath: preview, wallpaper: true } : { source: "desktop" });
+						setNotice(translate("weWebFailed"));
+						if (reason) reportClientError(`web wallpaper: ${reason}`);
+					};
+					watchdog = setTimeout(() => { if (!loaded) fail("no load event in 5 s"); }, 5000);
+					frame.addEventListener("load", () => {
+						if (disposed) return;
+						if (frame.getAttribute("src") === "about:blank") return;
+						loaded = true;
+						clearTimeout(watchdog);
+					});
+					fetch(`${API}/web/open?dir=${encodeURIComponent(value.webPath)}`, { cache: "no-store" })
+						.then((response) => response.json())
+						.then((data) => {
+							if (disposed) return;
+							if (!data || data.ok !== true) {
+								fail(String((data && data.error) || "open failed"));
+								return;
+							}
+							frame.src = source;
+						})
+						.catch((error) => fail(String((error && error.message) || error)));
+					
+					// Same rule as the shader: a hidden or unfocused window must not leave an
+					// animation running off-screen. Tearing the document down is cheaper than
+					// pausing it, and it also stops any audio the page started on its own.
+					const sync = () => {
+						const hidden = document.visibilityState === "hidden" || !document.hasFocus();
+						if (hidden === paused) return;
+						paused = hidden;
+						if (hidden) {
+							frame.src = "about:blank";
+						} else if (loaded) {
+							frame.src = source;
+						}
+					};
+					document.addEventListener("visibilitychange", sync);
+					window.addEventListener("blur", sync);
+					window.addEventListener("focus", sync);
+					const timer = setInterval(sync, 900);
+					sync();
+					return () => {
+						disposed = true;
+						clearTimeout(watchdog);
+						clearInterval(timer);
+						document.removeEventListener("visibilitychange", sync);
+						window.removeEventListener("blur", sync);
+						window.removeEventListener("focus", sync);
+						frame.remove();
+						root.dataset.lgWeb = "off";
+						liquidRef.current?.setPaused("web", false);
+					};
+				}, [webActive, value.webPath, value.webPreview]);
 
 				// The playlist lives in settings; the audio bus owns the <audio> element
 				// so it keeps playing while the settings page is closed.

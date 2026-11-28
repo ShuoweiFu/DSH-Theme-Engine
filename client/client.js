@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.191500";
+		const CLIENT_BUILD = "v.26.11.21.200000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -45,6 +45,11 @@
 			wePath: "",
 			weId: "",
 			filePath: "",
+			// Web wallpapers: the host mirrors one workshop folder at a time, so the
+			// folder is the thing we store; the URL is rebuilt every session.
+			webPath: "",
+			webTitle: "",
+			webPreview: "",
 			colorMode: "auto",
 			customColor: "#8ab4ff",
 			autoInvert: true,
@@ -356,6 +361,11 @@
 			weApplied: "已应用为该玻璃背景。",
 			wePreviewOnly: "场景/网页壁纸没有可读的画面，这里显示它的预览图；不会改动你桌面上的壁纸。",
 			wePreviewNone: "这一项没有预览图，也没有可直接读取的视频文件。",
+			weSceneUnsupported: "场景壁纸无法直接读取，暂不支持。",
+			weSceneFlag: "不支持",
+			weWebOpening: "正在准备网页壁纸沙箱…",
+			weWebApplied: "网页壁纸已在沙箱里渲染，玻璃效果覆盖在它上面。",
+			weWebFailed: "网页壁纸打不开：这一项没有可用的 index.html，已回退。",
 			modesGroup: "外观模式（四象）",
 			modesIndependentHint: "每个模式各自保存参数：切到浅色调的数值不会影响深色。",
 			modeResetColor: "恢复默认色",
@@ -595,6 +605,11 @@
 			weApplied: "Applied as the glass background.",
 			wePreviewOnly: "Scenes and web wallpapers have no frame we can read, so this shows their preview still — nothing on your desktop is touched.",
 			wePreviewNone: "This item ships no preview image and no video file we can stream.",
+			weSceneUnsupported: "Scene wallpapers cannot be read directly — not supported yet.",
+			weSceneFlag: "NOT SUPPORTED",
+			weWebOpening: "Preparing the web wallpaper sandbox…",
+			weWebApplied: "The web wallpaper runs in a sandbox; the glass renders above it.",
+			weWebFailed: "This web wallpaper could not be opened: no usable index.html. Reverted.",
 			modesGroup: "Appearance modes",
 			modesIndependentHint: "Each mode keeps its own values — tweaking Light never changes Dark.",
 			modeResetColor: "Reset colour",
@@ -756,10 +771,13 @@
 				flow: activeModule.flow,
 				fps: Math.round(num(source.fps, DEFAULT_SETTINGS.fps, 0, 240)),
 				autoScale: source.autoScale !== false,
-				source: ["wallpaper", "we", "file", "desktop"].includes(source.source) ? source.source : "desktop",
+				source: ["wallpaper", "we", "file", "web", "desktop"].includes(source.source) ? source.source : "desktop",
 				wePath: typeof source.wePath === "string" ? source.wePath : "",
 				weId: typeof source.weId === "string" ? source.weId : "",
 				filePath: typeof source.filePath === "string" ? source.filePath : "",
+				webPath: typeof source.webPath === "string" ? source.webPath.slice(0, 512) : "",
+				webTitle: typeof source.webTitle === "string" ? source.webTitle.slice(0, 120) : "",
+				webPreview: typeof source.webPreview === "string" ? source.webPreview.slice(0, 512) : "",
 				colorMode: activeModule.colorMode,
 				customColor: activeMode.customColor,
 				autoInvert: activeMode.autoInvert,
@@ -1610,6 +1628,37 @@ html[data-lg-suppressed="on"] #root {
 	background: transparent !important;
 	-webkit-backdrop-filter: none !important;
 	backdrop-filter: none !important;
+
+/* Web wallpaper mode. The frame is an opaque-origin iframe, so no shader can
+   sample it: here the frame *is* the backdrop and the compositor has to do the
+   glass. This is the only mode where #root carries a backdrop-filter. */
+html[data-lg-web="on"] .lg-web-frame {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: -3;
+	border: 0;
+	background: transparent;
+	pointer-events: none;
+}
+
+/* The scrim would paint straight over the frame (it sits at z-index -2 and is
+   almost opaque). The sheen stays: it is what keeps the pane looking like
+   glass rather than a screenshot. */
+html[data-lg-web="on"] body::before {
+	display: none !important;
+}
+
+html[data-lg-web="on"] canvas[data-liquid-glass] {
+	opacity: 0 !important;
+	pointer-events: none !important;
+}
+
+html[data-lg-web="on"][data-lg-enabled="on"] #root {
+	-webkit-backdrop-filter: blur(18px) saturate(1.2);
+	backdrop-filter: blur(18px) saturate(1.2);
+}
 }
 
 /* The glass pane. Every GPU backend blurs the wallpaper in its own shader
@@ -2532,6 +2581,34 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	font-size: 11px;
 	line-height: 16px;
 	color: var(--dsw-alias-label-secondary);
+}
+
+/* A scene is a compiled package we cannot decode, so the card says so instead
+   of offering a click that quietly does nothing. */
+.lg-we-flag {
+	height: 18px;
+	padding: 0 6px;
+	border-radius: 6px;
+	background: color-mix(in srgb, #d4a017 22%, transparent);
+	color: #a9770a;
+	font-size: 10px;
+	line-height: 18px;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+html[data-lg-mode="dark"] .lg-we-flag {
+	background: color-mix(in srgb, #f0c04a 26%, transparent);
+	color: #f3cf7c;
+}
+
+.lg-we-card[data-blocked="on"] {
+	cursor: default;
+}
+
+.lg-we-card[data-blocked="on"] .lg-we-thumb img {
+	filter: grayscale(0.7);
+	opacity: 0.6;
 }
 
 .lg-we-type {
@@ -5635,7 +5712,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor]);
 
 				useEffect(() => {
-					if (!value.enabled || !value.wallpaper) {
+					if (!value.enabled || !value.wallpaper || value.source === "web") {
 						setWallpaper({
 							status: value.enabled ? "missing" : "off",
 							url: "",
@@ -5726,6 +5803,100 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					window.removeEventListener("focus", onFocus);
 				};
 			}, [value.enabled, value.wallpaper, value.source, value.behind, value.wePath, value.filePath]);
+
+				// --- Web wallpapers ---------------------------------------------------
+				// A web wallpaper is HTML, so the only way to show it is to let the browser
+				// render it. The frame is created with exactly "allow-scripts
+				// allow-pointer-lock" and no allow-same-origin: that combination gives the
+				// document an *opaque origin* — it cannot touch this window's DOM, cookies or
+				// storage, cannot read the disk, cannot navigate us, and cannot even learn
+				// which folder it came from. All it can do is paint, script itself and ask for
+				// pointer lock, and everything it loads comes from the host's read-only mirror
+				// of one workshop folder.
+				const webActive = Boolean(value.enabled && value.wallpaper && value.source === "web" && value.webPath);
+				useEffect(() => {
+					document.documentElement.dataset.lgSource = value.source;
+				}, [value.source]);
+
+				useEffect(() => {
+					if (!webActive) return;
+					const root = document.documentElement;
+					root.dataset.lgWeb = "on";
+					// The shader canvas is opaque and sits above the frame; here the frame *is*
+					// the wallpaper, so the renderer steps aside and the glass comes from the CSS
+					// backdrop-filter on the panels instead of from the shader.
+					liquidRef.current?.setPaused("web", true);
+					const frame = document.createElement("iframe");
+					frame.className = "lg-web-frame";
+					frame.dataset.lgWeb = "frame";
+					// The whole security boundary is this one attribute.
+					frame.setAttribute("sandbox", "allow-scripts allow-pointer-lock");
+					frame.setAttribute("referrerpolicy", "no-referrer");
+					frame.setAttribute("tabindex", "-1");
+					frame.setAttribute("aria-hidden", "true");
+					document.body.appendChild(frame);
+					
+					const source = `${API}/web/index.html`;
+					let disposed = false;
+					let loaded = false;
+					let paused = false;
+					let watchdog = 0;
+					const fail = (reason) => {
+						if (disposed) return;
+						const preview = value.webPreview;
+						setSettings(preview ? { source: "file", filePath: preview, wallpaper: true } : { source: "desktop" });
+						setNotice(translate("weWebFailed"));
+						if (reason) reportClientError(`web wallpaper: ${reason}`);
+					};
+					watchdog = setTimeout(() => { if (!loaded) fail("no load event in 5 s"); }, 5000);
+					frame.addEventListener("load", () => {
+						if (disposed) return;
+						if (frame.getAttribute("src") === "about:blank") return;
+						loaded = true;
+						clearTimeout(watchdog);
+					});
+					fetch(`${API}/web/open?dir=${encodeURIComponent(value.webPath)}`, { cache: "no-store" })
+						.then((response) => response.json())
+						.then((data) => {
+							if (disposed) return;
+							if (!data || data.ok !== true) {
+								fail(String((data && data.error) || "open failed"));
+								return;
+							}
+							frame.src = source;
+						})
+						.catch((error) => fail(String((error && error.message) || error)));
+					
+					// Same rule as the shader: a hidden or unfocused window must not leave an
+					// animation running off-screen. Tearing the document down is cheaper than
+					// pausing it, and it also stops any audio the page started on its own.
+					const sync = () => {
+						const hidden = document.visibilityState === "hidden" || !document.hasFocus();
+						if (hidden === paused) return;
+						paused = hidden;
+						if (hidden) {
+							frame.src = "about:blank";
+						} else if (loaded) {
+							frame.src = source;
+						}
+					};
+					document.addEventListener("visibilitychange", sync);
+					window.addEventListener("blur", sync);
+					window.addEventListener("focus", sync);
+					const timer = setInterval(sync, 900);
+					sync();
+					return () => {
+						disposed = true;
+						clearTimeout(watchdog);
+						clearInterval(timer);
+						document.removeEventListener("visibilitychange", sync);
+						window.removeEventListener("blur", sync);
+						window.removeEventListener("focus", sync);
+						frame.remove();
+						root.dataset.lgWeb = "off";
+						liquidRef.current?.setPaused("web", false);
+					};
+				}, [webActive, value.webPath, value.webPreview]);
 
 				// The playlist lives in settings; the audio bus owns the <audio> element
 				// so it keeps playing while the settings page is closed.
@@ -6620,16 +6791,51 @@ h(
 			const patchWp = (patchValue) => setSettings({ wp: { ...wp, ...patchValue } });
 
 			/*
-			 * Applying a library entry. Only files we can read off disk become a texture:
-			 * a video is streamed as-is, a scene or web wallpaper brings just its preview
-			 * still. We never ask Wallpaper Engine to switch — what runs on the user's
-			 * desktop is not ours to change.
+			 * Applying a library entry. Three shapes, and we only take what we can really
+			 * render:
+			 *   video — streamed off disk as a texture (the wallpaper itself);
+			 *   web   — a folder with index.html, mirrored by the host and rendered in a
+			 *           sandboxed iframe, because HTML is not something a shader samples;
+			 *   scene — packed into scene.pkg: no frame and no HTML we can read, so it is
+			 *           refused out loud instead of pinning a still that pretends to be
+			 *           the wallpaper.
+			 * We never ask Wallpaper Engine to switch — what runs on the user's desktop is
+			 * not ours to change.
 			 */
 			const applyItem = (item) => {
 				if (!item) return;
 				if (item.type === "video") {
 					setSettings({ module: "wallpaper", source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
 					setNotice(t("weApplied"));
+					return;
+				}
+				if (item.type === "scene") {
+					// Deliberately no preview still: a picture of the wallpaper is not the
+					// wallpaper, and silently pinning one is what made this look broken.
+					setNotice(t("weSceneUnsupported"));
+					return;
+				}
+				if (item.type === "web" && item.dir) {
+					setNotice(t("weWebOpening"));
+					fetch(`${API}/web/open?dir=${encodeURIComponent(item.dir)}`, { cache: "no-store" })
+						.then((response) => response.json())
+						.then((data) => {
+							if (!data || data.ok !== true) {
+								setNotice(t("weWebFailed"));
+								return;
+							}
+							setSettings({
+								module: "wallpaper",
+								source: "web",
+								webPath: item.dir,
+								webTitle: item.title || "",
+								webPreview: item.preview || "",
+								weId: item.id,
+								wallpaper: true
+							});
+							setNotice(t("weWebApplied"));
+						})
+						.catch(() => setNotice(t("weWebFailed")));
 					return;
 				}
 				if (item.preview) {
@@ -6867,8 +7073,9 @@ h(
 										key: item.id,
 										type: "button",
 										className: "lg-we-card",
-										title: item.title,
+										title: item.type === "scene" ? `${item.title} · ${t("weSceneUnsupported")}` : item.title,
 										"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
+										"data-blocked": item.type === "scene" ? "on" : undefined,
 										onClick: () => applyItem(item)
 									},
 									h(
@@ -6879,7 +7086,13 @@ h(
 											: h("span", { className: "lg-we-fallback" }, String(item.type || "").toUpperCase())
 									),
 									h("span", { className: "lg-we-name" }, item.title),
-									h("span", { className: "lg-we-meta" }, h("span", { className: "lg-we-gold", title: t("weGold") }, "WE"), h(WeTypeLabel, { t, type: item.type }))
+									h(
+										"span",
+										{ className: "lg-we-meta" },
+										h("span", { className: "lg-we-gold", title: t("weGold") }, "WE"),
+										h(WeTypeLabel, { t, type: item.type }),
+										item.type === "scene" ? h("span", { className: "lg-we-flag" }, t("weSceneFlag")) : null
+									)
 								)
 							)
 						)

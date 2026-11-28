@@ -157,16 +157,51 @@
 			const patchWp = (patchValue) => setSettings({ wp: { ...wp, ...patchValue } });
 
 			/*
-			 * Applying a library entry. Only files we can read off disk become a texture:
-			 * a video is streamed as-is, a scene or web wallpaper brings just its preview
-			 * still. We never ask Wallpaper Engine to switch — what runs on the user's
-			 * desktop is not ours to change.
+			 * Applying a library entry. Three shapes, and we only take what we can really
+			 * render:
+			 *   video — streamed off disk as a texture (the wallpaper itself);
+			 *   web   — a folder with index.html, mirrored by the host and rendered in a
+			 *           sandboxed iframe, because HTML is not something a shader samples;
+			 *   scene — packed into scene.pkg: no frame and no HTML we can read, so it is
+			 *           refused out loud instead of pinning a still that pretends to be
+			 *           the wallpaper.
+			 * We never ask Wallpaper Engine to switch — what runs on the user's desktop is
+			 * not ours to change.
 			 */
 			const applyItem = (item) => {
 				if (!item) return;
 				if (item.type === "video") {
 					setSettings({ module: "wallpaper", source: "we", wePath: item.filePath, weId: item.id, wallpaper: true });
 					setNotice(t("weApplied"));
+					return;
+				}
+				if (item.type === "scene") {
+					// Deliberately no preview still: a picture of the wallpaper is not the
+					// wallpaper, and silently pinning one is what made this look broken.
+					setNotice(t("weSceneUnsupported"));
+					return;
+				}
+				if (item.type === "web" && item.dir) {
+					setNotice(t("weWebOpening"));
+					fetch(`${API}/web/open?dir=${encodeURIComponent(item.dir)}`, { cache: "no-store" })
+						.then((response) => response.json())
+						.then((data) => {
+							if (!data || data.ok !== true) {
+								setNotice(t("weWebFailed"));
+								return;
+							}
+							setSettings({
+								module: "wallpaper",
+								source: "web",
+								webPath: item.dir,
+								webTitle: item.title || "",
+								webPreview: item.preview || "",
+								weId: item.id,
+								wallpaper: true
+							});
+							setNotice(t("weWebApplied"));
+						})
+						.catch(() => setNotice(t("weWebFailed")));
 					return;
 				}
 				if (item.preview) {
@@ -404,8 +439,9 @@
 										key: item.id,
 										type: "button",
 										className: "lg-we-card",
-										title: item.title,
+										title: item.type === "scene" ? `${item.title} · ${t("weSceneUnsupported")}` : item.title,
 										"data-applied": value.source === "we" && value.weId === item.id ? "on" : undefined,
+										"data-blocked": item.type === "scene" ? "on" : undefined,
 										onClick: () => applyItem(item)
 									},
 									h(
@@ -416,7 +452,13 @@
 											: h("span", { className: "lg-we-fallback" }, String(item.type || "").toUpperCase())
 									),
 									h("span", { className: "lg-we-name" }, item.title),
-									h("span", { className: "lg-we-meta" }, h("span", { className: "lg-we-gold", title: t("weGold") }, "WE"), h(WeTypeLabel, { t, type: item.type }))
+									h(
+										"span",
+										{ className: "lg-we-meta" },
+										h("span", { className: "lg-we-gold", title: t("weGold") }, "WE"),
+										h(WeTypeLabel, { t, type: item.type }),
+										item.type === "scene" ? h("span", { className: "lg-we-flag" }, t("weSceneFlag")) : null
+									)
 								)
 							)
 						)

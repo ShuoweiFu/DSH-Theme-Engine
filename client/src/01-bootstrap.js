@@ -6,7 +6,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.191500";
+		const CLIENT_BUILD = "v.26.11.21.200000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -42,6 +42,11 @@
 			wePath: "",
 			weId: "",
 			filePath: "",
+			// Web wallpapers: the host mirrors one workshop folder at a time, so the
+			// folder is the thing we store; the URL is rebuilt every session.
+			webPath: "",
+			webTitle: "",
+			webPreview: "",
 			colorMode: "auto",
 			customColor: "#8ab4ff",
 			autoInvert: true,

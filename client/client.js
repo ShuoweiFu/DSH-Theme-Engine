@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.220000";
+		const CLIENT_BUILD = "v.26.11.28.223000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -5834,6 +5834,21 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 				// sample was exactly what repainted the whole transcript every poll;
 				// with the guard a moving wallpaper can at most swap one palette.
 				const appliedRef = useRef(null);
+				// A window in front of ours means the frost is sitting over *that* window, not
+				// over the wallpaper, so the desktop sample is simply the wrong pixel. Track
+				// focus and treat a covered window as a light app surface instead.
+				const [focusTick, setFocusTick] = useState(0);
+				useEffect(() => {
+					const bump = () => setFocusTick((n) => n + 1);
+					window.addEventListener("focus", bump);
+					window.addEventListener("blur", bump);
+					document.addEventListener("visibilitychange", bump);
+					return () => {
+						window.removeEventListener("focus", bump);
+						window.removeEventListener("blur", bump);
+						document.removeEventListener("visibilitychange", bump);
+					};
+				}, []);
 				useEffect(
 					() => () => {
 						appliedRef.current?.dispose?.();
@@ -5856,14 +5871,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// ink from the sample.
 						let ink = value.ink;
 						let veil = display.veil;
+						const covered = !document.hasFocus();
+						const backdrop = covered ? 0.82 : inkInfo ? (inkInfo.content ?? inkInfo.lum) : null;
 						if (ink !== "dark" && ink !== "light") {
-							if (inkInfo) {
+							if (backdrop !== null) {
 								// What the text really sits on is the frost *over* the wallpaper, so the
 								// decision has to see both: the sampled brightness and the glass colour
 								// that is actually painted (appliedMode). Feeding it the wallpaper alone
 								// put white text on white glass; feeding it the scheme alone puts dark
 								// text on a dark wallpaper at veil 0.
-								const decided = decideInk(inkInfo.content ?? inkInfo.lum, display.tint, display.veil, appliedMode === "dark");
+								const decided = decideInk(backdrop, display.tint, display.veil, appliedMode === "dark");
 								ink = decided.ink;
 								veil = decided.veil;
 							} else {
@@ -5884,7 +5901,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// the pair clears WCAG AA. A bad sample can then only make the glass
 						// thicker, never make the text disappear.
 						const glassLum = appliedMode === "dark" ? relativeLum(9, 11, 16) : relativeLum(255, 255, 255);
-						const sampleLum = inkInfo ? (inkInfo.content ?? inkInfo.lum) : glassLum;
+						const sampleLum = backdrop === null ? glassLum : backdrop;
 						const alphaAt = (v) => Math.min(1, (0.02 + 0.45 * v) * (0.9 + 0.2 * display.tint));
 						const ratioAt = (v, name) => {
 							const a = alphaAt(v);
@@ -5922,7 +5939,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
 					}
-				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor, appliedMode]);
+				}, [value.enabled, display.tint, display.veil, display.base, display.force, value.ink, inkInfo, colorMode, value.customColor, appliedMode, focusTick]);
 
 				useEffect(() => {
 					if (!value.enabled || !value.wallpaper || value.source === "web") {

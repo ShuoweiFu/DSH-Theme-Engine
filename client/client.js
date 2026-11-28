@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.210000";
+		const CLIENT_BUILD = "v.26.11.28.220000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -5877,8 +5877,38 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// The caret must land on the far side of the ink, and the ink is a
 						// token itself, so stamp the decision on <html> and let 07-styles.js
 						// map it: dark ink -> light caret, light ink -> dark caret.
+						// One decision, two outputs. The palette is forced to the scheme we
+						// reasoned about, then the pair is *verified* against the composite that
+						// will actually be painted: the frost over the sample. The veil is the one
+						// knob that works whatever sits behind the window, so it is raised until
+						// the pair clears WCAG AA. A bad sample can then only make the glass
+						// thicker, never make the text disappear.
+						const glassLum = appliedMode === "dark" ? relativeLum(9, 11, 16) : relativeLum(255, 255, 255);
+						const sampleLum = inkInfo ? (inkInfo.content ?? inkInfo.lum) : glassLum;
+						const alphaAt = (v) => Math.min(1, (0.02 + 0.45 * v) * (0.9 + 0.2 * display.tint));
+						const ratioAt = (v, name) => {
+							const a = alphaAt(v);
+							const under = a * glassLum + (1 - a) * sampleLum;
+							const lit = name === "dark" ? relativeLum(12, 14, 20) : relativeLum(246, 248, 252);
+							const hi = Math.max(under, lit);
+							const lo = Math.min(under, lit);
+							return (hi + 0.05) / (lo + 0.05);
+						};
+						let bestRatio = -1;
+						for (const name of [ink, ink === "dark" ? "light" : "dark"]) {
+							let probe = veil;
+							for (let step = 0; step <= 20; step += 1) {
+								const ratio = ratioAt(probe, name);
+								if (ratio >= 4.5 || step === 20) {
+									if (ratio > bestRatio) { bestRatio = ratio; ink = name; veil = probe; }
+									if (ratio >= 4.5) break;
+								}
+								probe = Math.min(1, probe + 0.05);
+							}
+							if (bestRatio >= 4.5) break;
+						}
 						if (ink === "dark" || ink === "light") document.documentElement.dataset.lgInk = ink;
-						const next = glassTokens(display.tint, veil, ink, { force: display.force, base: display.base });
+						const next = glassTokens(display.tint, veil, ink, { force: appliedMode, base: display.base });
 						const signature = JSON.stringify(next);
 						if (appliedRef.current && appliedRef.current.signature === signature) return;
 						appliedRef.current?.dispose?.();
@@ -5887,6 +5917,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						// What the bubble element actually paints, not just the token:
 						// a stale token is invisible while a hard-coded plate is not.
 						const bubbleCss = () => { try { const node = document.querySelector(".bubble, [class*=\"bubble\"]"); if (!node) return "none"; const s = getComputedStyle(node); return String(node.className).slice(0, 40) + " " + s.backgroundColor + "/" + s.color; } catch (error) { return "err"; } };
+						webLog(`contrast ink=${ink} veil=${veil.toFixed(2)} ratio=${bestRatio.toFixed(2)} lum=${sampleLum.toFixed(3)} glass=${appliedMode}`);
 						webLog(`palette ink=${ink} scheme=${appliedMode} card=${readToken("--dsw-alias-card-fill")} layer2=${readToken("--dsw-alias-bg-layer-2")} overlay=${readToken("--dsw-alias-bg-overlay")} bubble=${readToken("--dsw-specific-bubble")} menu=${readToken("--dsw-menu-surface-fill")} bubbleCss=${bubbleCss()}`);
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);

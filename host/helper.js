@@ -52,6 +52,7 @@ let captureHelperPromise = null;
  * @type {import('node:child_process').ChildProcess | null}
  */
 let helperProcess = null;
+let helperStderr = '';
 let helperBuffer = '';
 /** @type {{ resolve: (value: string|null) => void, timer: NodeJS.Timeout } | null} */
 let helperPending = null;
@@ -147,7 +148,12 @@ export async function startHelper() {
     };
     let child;
     try {
-      child = spawn(runPath, ['--serve'], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      child = spawn(runPath, ['--serve'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => {
+      	const text = String(chunk).trim();
+      	if (text) helperStderr = text.slice(-400);
+      });
     } catch {
       finish(false);
       return;
@@ -181,6 +187,12 @@ export async function startHelper() {
       if (helperProcess === child) resetHelper('spawn error');
       finish(false);
     });
+    // A dead child turns the next write into an EPIPE 'error' event on stdin.
+    // Unhandled, that event is an uncaught exception and takes the whole host
+    // down with it, which is exactly what the crash logs showed.
+    child.stdin.on('error', () => {
+    	if (helperProcess === child) resetHelper(helperStderr ? 'stdin closed: ' + helperStderr : 'stdin closed');
+    });
     // Resolve as soon as the process exists: the first command blocks on .NET
     // start-up inside the exe, which the per-command timeout covers.
     setTimeout(() => finish(true), 50);
@@ -208,8 +220,15 @@ export function helperCommand(payload, timeoutMs = 6000) {
         resolve(null);
       }, timeoutMs);
       helperPending = { resolve, timer };
+        const stdin = helperProcess && helperProcess.stdin;
+        if (!stdin || stdin.destroyed || !stdin.writable) {
+        	resetHelper('stdin closed');
+        	clearTimeout(timer);
+        	resolve(null);
+        	return;
+        }
       try {
-        helperProcess.stdin.write(payload);
+        stdin.write(payload);
       } catch {
         resetHelper('write failed');
         resolve(null);

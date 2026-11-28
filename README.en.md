@@ -1,21 +1,22 @@
 <div align="center">
 
-[中文](README.md) · **[English](README.en.md)**
+[中文](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.md) · **[English](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.en.md)**
 
 # DSH Theme Engine
 
 **Your desktop sits behind glass. Your wallpapers obey you.**
 
 [![version](https://img.shields.io/github/v/tag/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=version&color=8fd6a0)](https://github.com/ShuoweiFu/DSH-Theme-Engine/tags)
-[![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](#known-edges)
+[![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-theme-engine?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-theme-engine)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.md#known-edges)
 [![stars](https://img.shields.io/github/stars/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=stars&color=ffd84a)](https://github.com/ShuoweiFu/DSH-Theme-Engine/stargazers)
 
-Version **v.26.11.21.175000** · Apache-2.0 · DSH Desktop on Windows only
+Version **v.26.11.21.190500** · Apache-2.0 · DSH Desktop on Windows only
 
 </div>
 
-![Interface](docs/screenshot.png)
+![Interface](https://raw.githubusercontent.com/ShuoweiFu/DSH-Theme-Engine/main/docs/screenshot.png)
 
 ---
 
@@ -50,6 +51,10 @@ plugin_manager install_bundle target="<downloaded .tgz>"
 # from source
 git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
 plugin_manager install_bundle target="<absolute path to the clone>"
+
+# or take the identical content from npm and hand it to the same installer
+npm pack dsh-theme-engine
+plugin_manager install_bundle target="<the .tgz npm pack produced>"
 ```
 
 Reload the page: a **Theme Engine** row appears in the sidebar. Click it and the settings page fills the main work area.
@@ -196,6 +201,6 @@ Please include host/plugin versions, OS, GPU, reproduction steps and redacted lo
 
 ## License
 
-[Apache License 2.0](LICENSE) © DSH Theme Engine contributors
+[Apache License 2.0](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE) © DSH Theme Engine contributors
 
-Commercial use, modification and redistribution are allowed with copyright and licence notices retained. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Commercial use, modification and redistribution are allowed with copyright and licence notices retained. See [LICENSE](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE) and [NOTICE](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/NOTICE).

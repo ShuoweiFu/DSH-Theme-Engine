@@ -1,21 +1,22 @@
 <div align="center">
 
-**[中文](README.md)** · [English](README.en.md)
+**[中文](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.md)** · [English](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.en.md)
 
 # DSH Theme Engine
 
 **桌面在玻璃后面，壁纸归你管。**
 
 [![version](https://img.shields.io/github/v/tag/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=version&color=8fd6a0)](https://github.com/ShuoweiFu/DSH-Theme-Engine/tags)
-[![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](LICENSE)
-[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](#已知边界)
+[![license](https://img.shields.io/badge/license-Apache--2.0-8fd6a0?style=flat-square)](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-theme-engine?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-theme-engine)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%2020348%2B%20%7C%2011-5a544a?style=flat-square)](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/README.md#已知边界)
 [![stars](https://img.shields.io/github/stars/ShuoweiFu/DSH-Theme-Engine?style=flat-square&label=stars&color=ffd84a)](https://github.com/ShuoweiFu/DSH-Theme-Engine/stargazers)
 
-当前版本 **v.26.11.21.175000** · Apache-2.0 · 只跑在 Windows 上的 DSH 桌面版
+当前版本 **v.26.11.21.190500** · Apache-2.0 · 只跑在 Windows 上的 DSH 桌面版
 
 </div>
 
-![界面](docs/screenshot.png)
+![界面](https://raw.githubusercontent.com/ShuoweiFu/DSH-Theme-Engine/main/docs/screenshot.png)
 
 ---
 
@@ -50,6 +51,10 @@ plugin_manager install_bundle target="<下载的 .tgz>"
 # 装：源码
 git clone https://github.com/ShuoweiFu/DSH-Theme-Engine.git
 plugin_manager install_bundle target="<clone 出来的绝对路径>"
+
+# 或者从 npm 取同一份内容，再交给同一个安装器
+npm pack dsh-theme-engine
+plugin_manager install_bundle target="<npm pack 生成的 .tgz>"
 ```
 
 刷新页面 → 侧边栏多一行 **主题引擎** → 点开，设置页整页铺在右侧主工作区。
@@ -196,6 +201,6 @@ pnpm build:capture   # tools/capture/lg-capture.cpp → bin/lg-capture.exe（要
 
 ## 许可
 
-[Apache License 2.0](LICENSE) © DSH Theme Engine contributors
+[Apache License 2.0](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE) © DSH Theme Engine contributors
 
-允许商用、修改、再分发，需保留版权与许可声明；详见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+允许商用、修改、再分发，需保留版权与许可声明；详见 [LICENSE](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/LICENSE) 与 [NOTICE](https://github.com/ShuoweiFu/DSH-Theme-Engine/blob/main/NOTICE)。

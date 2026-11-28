@@ -463,7 +463,10 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	padding: 6px 18px;
 	border: 0.5px solid var(--dsw-alias-border-l1);
 	border-radius: 14px;
-	background: var(--dsw-alias-bg-layer-2);
+	/* layer-2 is a near transparent veil by design (it sits on the shader), which
+	   left this card's prose floating on the wallpaper. Overlay carries the ink
+	   plate, so mixing it here gives the group a surface of its own. */
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 86%, transparent);
 	-webkit-backdrop-filter: blur(24px) saturate(1.18);
 	backdrop-filter: blur(24px) saturate(1.18);
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);

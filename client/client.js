@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.195426";
+		const CLIENT_BUILD = "v.26.11.28.200257";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1050,8 +1050,11 @@
 				// ignored the frost and stayed light while the glass went dark. Same
 				// rule as above: the plate follows the ink, not the app theme.
 				const surfaces = ink === "dark"
-					? { menu: "rgba(252,253,254,0.70)", bubble: "rgba(237,243,254,0.78)", input: "rgba(255,255,255,0.66)", platform: "rgba(245,246,247,0.62)", hover: "rgba(38,49,72,0.06)", tip: "rgba(44,44,46,0.94)", skeleton: "rgba(0,0,0,0.04)" }
-					: { menu: "rgba(48,49,54,0.64)", bubble: "rgba(44,44,46,0.74)", input: "rgba(44,44,46,0.66)", platform: "rgba(53,54,56,0.62)", hover: "rgba(255,255,255,0.08)", tip: "rgba(67,69,74,0.94)", skeleton: "rgba(255,255,255,0.08)" };
+					// Dialogs, popovers and menus carry real prose, so their plate is near opaque:
+					// a 0.7 alpha over a busy wallpaper reads as noise whatever the text colour.
+					// The frost still shows through the border, the shadow and the blur behind it.
+					? { menu: "rgba(252,253,254,0.90)", bubble: "rgba(237,243,254,0.90)", input: "rgba(255,255,255,0.86)", platform: "rgba(245,246,247,0.82)", hover: "rgba(38,49,72,0.06)", tip: "rgba(44,44,46,0.96)", skeleton: "rgba(0,0,0,0.04)" }
+					: { menu: "rgba(48,49,54,0.88)", bubble: "rgba(44,44,46,0.88)", input: "rgba(44,44,46,0.86)", platform: "rgba(53,54,56,0.82)", hover: "rgba(255,255,255,0.08)", tip: "rgba(67,69,74,0.96)", skeleton: "rgba(255,255,255,0.08)" };
 				out["--dsw-menu-surface-fill"] = { light: surfaces.menu, dark: surfaces.menu };
 				out["--dsw-specific-menu"] = { light: surfaces.menu, dark: surfaces.menu };
 				out["--dsw-specific-bubble"] = { light: surfaces.bubble, dark: surfaces.bubble };
@@ -1061,6 +1064,12 @@
 				out["--dsw-alias-tooltip-bg"] = { light: surfaces.tip, dark: surfaces.tip };
 				out["--dsw-alias-toast-bg"] = { light: surfaces.tip, dark: surfaces.tip };
 				out["--dsw-alias-bg-skeleton"] = { light: surfaces.skeleton, dark: surfaces.skeleton };
+				// The app only defines this token inside one decorative stylesheet, so elsewhere
+				// `backdrop-filter: var(--dsw-menu-backdrop-filter)` resolved to nothing and the
+				// wallpaper stayed razor sharp behind dialog prose. Declared here, every menu
+				// and modal frosts instead.
+				out["--dsw-menu-backdrop-filter"] = { light: "blur(40px) saturate(1.5)", dark: "blur(40px) saturate(1.5)" };
+				out["--dsw-mask-blur"] = { light: "blur(14px)", dark: "blur(14px)" };
 ﻿// Every remaining plate that the app paints under label-primary text
 // and that stayed white while the ink went light: buttons, tags,
 // placeholders, document previews, platform modules. One rule, two
@@ -2110,7 +2119,10 @@ html[data-lg-mode="dark"] div[data-shortcut-modal="settings"] {
 	padding: 6px 18px;
 	border: 0.5px solid var(--dsw-alias-border-l1);
 	border-radius: 14px;
-	background: var(--dsw-alias-bg-layer-2);
+	/* layer-2 is a near transparent veil by design (it sits on the shader), which
+	   left this card's prose floating on the wallpaper. Overlay carries the ink
+	   plate, so mixing it here gives the group a surface of its own. */
+	background: color-mix(in srgb, var(--dsw-alias-bg-overlay) 86%, transparent);
 	-webkit-backdrop-filter: blur(24px) saturate(1.18);
 	backdrop-filter: blur(24px) saturate(1.18);
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);

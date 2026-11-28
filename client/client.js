@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.200707";
+		const CLIENT_BUILD = "v.26.11.28.201102";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1094,13 +1094,19 @@ const flatList = [
 ["--dsw-alias-settings-card-fill", flat.settings]
 ];
 for (const [name, value] of flatList) out[name] = { light: value, dark: value };
+
+				// The composer's round add button paints button-floating-fill, which the app
+				// resolves to plain white in a light theme; with the ink turned light its glyph
+				// vanished into the circle. Round controls follow the ink like every other plate.
+				out["--dsw-alias-button-floating-fill"] = { light: ink === "dark" ? "rgba(255,255,255,0.80)" : "rgba(44,44,46,0.90)", dark: ink === "dark" ? "rgba(255,255,255,0.80)" : "rgba(44,44,46,0.90)" };
+				out["--dsw-alias-button-tool-bar-fill"] = { light: ink === "dark" ? "rgba(12,14,20,0.10)" : "rgba(255,255,255,0.12)", dark: ink === "dark" ? "rgba(12,14,20,0.10)" : "rgba(255,255,255,0.12)" };
 				// The label ramp is the other half of legibility. The app resolves caption,
 				// tertiary and secondary from its own theme, so a light app theme left dark grey
 				// hints under our dark plates: the add-plugin field read as an empty box. Keying
 				// the whole ramp to the ink fixes every placeholder and dimmed label at once.
 				const ramp = ink === "dark"
-					? { secondary: "rgba(12,14,20,0.72)", tertiary: "rgba(12,14,20,0.62)", caption: "rgba(12,14,20,0.55)", dimmed: "rgba(12,14,20,0.42)" }
-					: { secondary: "rgba(246,248,252,0.74)", tertiary: "rgba(246,248,252,0.62)", caption: "rgba(246,248,252,0.55)", dimmed: "rgba(246,248,252,0.42)" };
+					? { secondary: "rgba(12,14,20,0.74)", tertiary: "rgba(12,14,20,0.68)", caption: "rgba(12,14,20,0.60)", dimmed: "rgba(12,14,20,0.48)" }
+					: { secondary: "rgba(246,248,252,0.76)", tertiary: "rgba(246,248,252,0.68)", caption: "rgba(246,248,252,0.60)", dimmed: "rgba(246,248,252,0.48)" };
 				out["--dsw-alias-label-secondary"] = { light: ramp.secondary, dark: ramp.secondary };
 				out["--dsw-alias-label-tertiary"] = { light: ramp.tertiary, dark: ramp.tertiary };
 				out["--dsw-alias-label-caption"] = { light: ramp.caption, dark: ramp.caption };

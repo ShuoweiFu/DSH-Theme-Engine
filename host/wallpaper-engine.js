@@ -326,34 +326,6 @@ export async function weState(force = false) {
  * Resolve an item's preview image / animation.
  * @param {string} id
  */
-/**
- * Ask the running Wallpaper Engine to switch to one library item. Only used for
- * scenes and web wallpapers: their frames cannot be read off disk, so the glass
- * follows the desktop capture and the item has to be the one WE is playing.
- * @param {string} target item id, project file or folder
- */
-export async function openWallpaper(target) {
-	const wanted = String(target ?? "");
-	if (!wanted) return { ok: false, error: "empty" };
-	const before = await weState();
-	if (!before.installed) return { ok: false, error: "not-installed" };
-	const key = normKey(wanted);
-	const item =
-		before.items.find((entry) => entry.id === wanted) ??
-		before.items.find((entry) => normKey(entry.filePath) === key) ??
-		before.items.find((entry) => normKey(entry.dir) === key);
-	if (!item) return { ok: false, error: "not-found" };
-	const exe = join(before.installRoot, "wallpaper64.exe");
-	const output = await run(exe, ["-control", "openWallpaper", "-file", item.filePath], 15_000);
-	invalidate();
-	// WE writes its config a moment after the command returns; re-read once so the
-	// reply tells the user whether the switch actually landed.
-	await new Promise((resolve) => setTimeout(resolve, 1200));
-	const after = await weState(true);
-	const switched = Boolean(after.current && after.current.id === item.id);
-	return { ok: true, switched, id: item.id, title: item.title, type: item.type, output: output.slice(0, 400) };
-}
-
 export async function previewFor(id) {
 
   const state = await weState();
@@ -419,21 +391,6 @@ export async function listDirectory(target) {
   dirs.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
   files.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
   return { ok: true, path: dir, parent: join(dir, '..'), roots: [], dirs, files };
-}
-
-/**
- * Launch a Steam URI (`steam://rungameid/431960` opens Wallpaper Engine,
- * `steam://open/main` opens the Steam client). Fire and forget: Windows does
- * not expose a reliable exit code for the shell hand-off.
- * @param {string} uri
- */
-export async function launchUri(uri) {
-  const target = String(uri ?? '');
-  if (!/^steam:\/\/[a-z0-9/_-]+$/i.test(target)) return false;
-  await run('cmd.exe', ['/c', `start "" "${target}"`], 6000);
-  // A stale snapshot would keep reporting "not running" for the whole page.
-  cache = null;
-  return true;
 }
 
 /** Force the next `weState()` to rescan the libraries. */

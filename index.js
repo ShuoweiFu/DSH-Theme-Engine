@@ -47,7 +47,7 @@ import {
 } from './host/helper.js';
 import { detectWallpaper, jsonResponse, kindOf, mimeOf, readWallpaperEngine, streamFile } from './host/wallpaper.js';
 import { checkForUpdates } from './host/update-check.js';
-import { elysiaEngineStatus, launchUri, listDirectory, mediaFile, openWallpaper, previewFor, weState } from './host/wallpaper-engine.js';
+import { elysiaEngineStatus, listDirectory, mediaFile, previewFor, weState } from './host/wallpaper-engine.js';
 import { runPowerShellFile } from './host/run.js';
 import { GATE_SCRIPT } from './host/scripts.js';
 import { CACHE_DIR, GATE_SCRIPT_PATH } from './host/paths.js';
@@ -546,22 +546,6 @@ export function apply(ctx, config) {
       }
     },
   }));
-
-  // Scenes and web wallpapers cannot be read as a file, so the panel asks WE to
-  // play the chosen item and keeps following it through the desktop capture.
-  disposers.push(ctx.webServer.register({
-    kind: 'exact',
-    path: '/liquid-glass/we/open',
-    resource: async (request) => {
-      try {
-        const id = new URL(request.url, 'http://127.0.0.1').searchParams.get('id') ?? '';
-        return jsonResponse(await openWallpaper(id));
-      } catch (error) {
-        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
-      }
-    },
-  }));
-
   disposers.push(ctx.webServer.register({
     kind: 'exact',
     path: '/liquid-glass/we/preview',
@@ -620,21 +604,6 @@ export function apply(ctx, config) {
       }
     },
   }));
-
-  disposers.push(ctx.webServer.register({
-    kind: 'exact',
-    path: '/liquid-glass/launch',
-    resource: async (request) => {
-      try {
-        const target = new URL(request.url, 'http://127.0.0.1').searchParams.get('target') ?? '';
-        const uri = target === 'steam' ? 'steam://open/main' : 'steam://rungameid/431960';
-        return jsonResponse({ ok: await launchUri(uri) });
-      } catch (error) {
-        return jsonResponse({ ok: false, error: String(error instanceof Error ? error.message : error) }, 500);
-      }
-    },
-  }));
-
   // Event-driven capture: the watcher only asks for a new frame when the
   // window geometry changed, so an idle desktop is never re-captured.
   startDesktopWatch();

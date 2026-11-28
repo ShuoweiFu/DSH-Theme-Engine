@@ -144,9 +144,6 @@
 			useEffect(() => {
 				load(false);
 			}, [load]);
-			const launch = (target) => {
-				fetch(`${API}/launch?target=${target}`).catch(() => {});
-			};
 			const installed = Boolean(library && library.installed);
 			const current = library && library.current;
 			const items = (library && library.items) || [];
@@ -160,10 +157,10 @@
 			const patchWp = (patchValue) => setSettings({ wp: { ...wp, ...patchValue } });
 
 			/*
-			 * Applying a library entry. A video is readable on disk, so it becomes the
-			 * texture directly. Scenes and web wallpapers have no frame we can sample, so
-			 * WE is asked to play the item and the glass falls back to the live desktop
-			 * capture underneath it; the panel says so instead of silently doing nothing.
+			 * Applying a library entry. Only files we can read off disk become a texture:
+			 * a video is streamed as-is, a scene or web wallpaper brings just its preview
+			 * still. We never ask Wallpaper Engine to switch — what runs on the user's
+			 * desktop is not ours to change.
 			 */
 			const applyItem = (item) => {
 				if (!item) return;
@@ -172,9 +169,12 @@
 					setNotice(t("weApplied"));
 					return;
 				}
-				setSettings({ module: "wallpaper", source: "desktop", weId: item.id, wallpaper: true });
-				fetch(`${API}/we/open?id=${encodeURIComponent(item.id)}`).catch(() => {});
-				setNotice(t("weLiveHint"));
+				if (item.preview) {
+					setSettings({ module: "wallpaper", source: "file", filePath: item.preview, weId: item.id, wallpaper: true });
+					setNotice(t("wePreviewOnly"));
+					return;
+				}
+				setNotice(t("wePreviewNone"));
 			};
 			const pickFile = (file) => {
 				if (!file || !file.path) return;
@@ -378,13 +378,10 @@
 								)
 							),
 							h("button", { type: "button", className: "lg-button", disabled: loading, onClick: () => load(true) }, loading ? t("weLoading") : t("weRefresh")),
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam"))
 						)
 					: h(
 							"div",
 							{ className: "lg-we-tools" },
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
 							h(
 								"a",
 								{

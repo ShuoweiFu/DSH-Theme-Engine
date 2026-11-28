@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.21.181500";
+		const CLIENT_BUILD = "v.26.11.21.184500";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -200,7 +200,6 @@
 			weConfigHint: "更多配置请打开 Wallpaper Engine。",
 			weAdd: "添加壁纸",
 			weEditor: "打开壁纸编辑器",
-			weOpenWallpaper: "打开壁纸",
 			weConfirm: "确认",
 			weCancel: "取消",
 			weAlignCover: "覆盖",
@@ -337,8 +336,6 @@
 			weCurrent: "当前：",
 			weRefresh: "刷新壁纸库",
 			weLoading: "读取中…",
-			weOpen: "打开 Wallpaper Engine",
-			weSteam: "打开 Steam",
 			weStore: "瓦特加速器（微软商店）",
 			weSearch: "搜索壁纸…",
 			weFilter_all: "全部",
@@ -357,7 +354,8 @@
 			weBrowse: "浏览文件",
 			weClear: "清除",
 			weApplied: "已应用为该玻璃背景。",
-			weLiveHint: "场景/网页壁纸无法直接读取，已切换到实时桌面捕获；请先在 Wallpaper Engine 中播放它。",
+			wePreviewOnly: "场景/网页壁纸没有可读的画面，这里显示它的预览图；不会改动你桌面上的壁纸。",
+			wePreviewNone: "这一项没有预览图，也没有可直接读取的视频文件。",
 			modesGroup: "外观模式（四象）",
 			modesIndependentHint: "每个模式各自保存参数：切到浅色调的数值不会影响深色。",
 			modeResetColor: "恢复默认色",
@@ -441,7 +439,6 @@
 			weConfigHint: "Open Wallpaper Engine for the full configuration.",
 			weAdd: "Add wallpaper",
 			weEditor: "Open wallpaper editor",
-			weOpenWallpaper: "Open wallpaper",
 			weConfirm: "Confirm",
 			weCancel: "Cancel",
 			weAlignCover: "Cover",
@@ -578,8 +575,6 @@
 			weCurrent: "Current:",
 			weRefresh: "Refresh library",
 			weLoading: "Reading…",
-			weOpen: "Open Wallpaper Engine",
-			weSteam: "Open Steam",
 			weStore: "Watt accelerator (Microsoft Store)",
 			weSearch: "Search wallpapers…",
 			weFilter_all: "All",
@@ -598,7 +593,8 @@
 			weBrowse: "Browse files",
 			weClear: "Clear",
 			weApplied: "Applied as the glass background.",
-			weLiveHint: "Scenes and web wallpapers cannot be read directly, so the live desktop capture was selected — play it in Wallpaper Engine first.",
+			wePreviewOnly: "Scenes and web wallpapers have no frame we can read, so this shows their preview still — nothing on your desktop is touched.",
+			wePreviewNone: "This item ships no preview image and no video file we can stream.",
 			modesGroup: "Appearance modes",
 			modesIndependentHint: "Each mode keeps its own values — tweaking Light never changes Dark.",
 			modeResetColor: "Reset colour",
@@ -6611,9 +6607,6 @@ h(
 			useEffect(() => {
 				load(false);
 			}, [load]);
-			const launch = (target) => {
-				fetch(`${API}/launch?target=${target}`).catch(() => {});
-			};
 			const installed = Boolean(library && library.installed);
 			const current = library && library.current;
 			const items = (library && library.items) || [];
@@ -6627,10 +6620,10 @@ h(
 			const patchWp = (patchValue) => setSettings({ wp: { ...wp, ...patchValue } });
 
 			/*
-			 * Applying a library entry. A video is readable on disk, so it becomes the
-			 * texture directly. Scenes and web wallpapers have no frame we can sample, so
-			 * WE is asked to play the item and the glass falls back to the live desktop
-			 * capture underneath it; the panel says so instead of silently doing nothing.
+			 * Applying a library entry. Only files we can read off disk become a texture:
+			 * a video is streamed as-is, a scene or web wallpaper brings just its preview
+			 * still. We never ask Wallpaper Engine to switch — what runs on the user's
+			 * desktop is not ours to change.
 			 */
 			const applyItem = (item) => {
 				if (!item) return;
@@ -6639,9 +6632,12 @@ h(
 					setNotice(t("weApplied"));
 					return;
 				}
-				setSettings({ module: "wallpaper", source: "desktop", weId: item.id, wallpaper: true });
-				fetch(`${API}/we/open?id=${encodeURIComponent(item.id)}`).catch(() => {});
-				setNotice(t("weLiveHint"));
+				if (item.preview) {
+					setSettings({ module: "wallpaper", source: "file", filePath: item.preview, weId: item.id, wallpaper: true });
+					setNotice(t("wePreviewOnly"));
+					return;
+				}
+				setNotice(t("wePreviewNone"));
 			};
 			const pickFile = (file) => {
 				if (!file || !file.path) return;
@@ -6845,13 +6841,10 @@ h(
 								)
 							),
 							h("button", { type: "button", className: "lg-button", disabled: loading, onClick: () => load(true) }, loading ? t("weLoading") : t("weRefresh")),
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("we") }, t("weOpen")),
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam"))
 						)
 					: h(
 							"div",
 							{ className: "lg-we-tools" },
-							h("button", { type: "button", className: "lg-button", onClick: () => launch("steam") }, t("weSteam")),
 							h(
 								"a",
 								{

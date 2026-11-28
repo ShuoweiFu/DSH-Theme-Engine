@@ -174,6 +174,27 @@
 			};
 			const useWallpaper = () => useSyncExternalStore(subscribeWallpaper, getWallpaper, getWallpaper);
 
+			// Audio-reactive wallpapers read the system mix through the shim callback.
+			// The state lives here so the property sheet can say whether the capture
+			// actually started, instead of a silent no-op.
+			let audio = { state: "idle", detail: "" };
+			const audioListeners = new Set();
+			const getAudio = () => audio;
+			const setAudio = (patch) => {
+				audio = { ...audio, ...patch };
+				for (const listener of audioListeners) listener();
+			};
+			const useAudio = () =>
+				useSyncExternalStore(
+					(listener) => {
+						audioListeners.add(listener);
+						return () => audioListeners.delete(listener);
+					},
+					getAudio,
+					getAudio
+				);
+			const audioControl = { start: null, stop: null };
+
 			// The panel components (13-we.js) live outside this closure; hand them the
 			// live store hooks so every surface reads the same settings object.
 			panelHooks.useSettings = useSettings;
@@ -182,6 +203,9 @@
 			panelHooks.useWallpaper = useWallpaper;
 			panelHooks.useIntelColor = useIntelColor;
 			panelHooks.resampleIntel = intelResample;
+			panelHooks.useAudio = useAudio;
+			panelHooks.startAudio = () => audioControl.start?.();
+			panelHooks.stopAudio = () => audioControl.stop?.();
 
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
@@ -874,10 +898,12 @@
 						for (const track of loopback.stream.getTracks()) track.stop();
 						if (loopback.ctx) loopback.ctx.close().catch(() => {});
 						loopback = null;
+						setAudio({ state: "idle", detail: "" });
 						webLog("loopback: stopped");
 					};
 					const beginLoopback = async () => {
 						if (loopback) return;
+						setAudio({ state: "requesting", detail: "" });
 						try {
 							const armed = await fetch(`${API}/audio/loopback`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
 							webLog(`loopback: host ${armed && armed.ok ? (armed.installed ? "armed" : "answered") : "unavailable " + JSON.stringify((armed && armed.error) || "")}`);
@@ -904,11 +930,16 @@
 								win.postMessage({ __lg: "audio", bins: payload }, "*");
 							}, 16);
 							loopback = { stream, ctx, timer };
+							setAudio({ state: "live", detail: `${bins.length} bins` });
 							webLog(`loopback: streaming fft=256 bins=${bins.length}`);
 						} catch (error) {
 							webLog(`loopback failed: ${String((error && error.message) || error)}`);
+							setAudio({ state: "denied", detail: String((error && error.message) || error) });
 						}
 					};
+
+					audioControl.start = beginLoopback;
+					audioControl.stop = stopLoopback;
 
 					// The page reports its own backdrop colour; that beats guessing from
 					// the desktop capture, which for a web wallpaper is somebody else.

@@ -12,7 +12,10 @@
 			useLang: null,
 			useWallpaper: null,
 			useIntelColor: null,
-			resampleIntel: null
+			resampleIntel: null,
+			useAudio: null,
+			startAudio: null,
+			stopAudio: null
 		};
 
 		function useSettings() {
@@ -37,6 +40,18 @@
 
 		function resampleIntel() {
 			return panelHooks.resampleIntel();
+		}
+
+		function useAudio() {
+			return panelHooks.useAudio();
+		}
+
+		function startAudio() {
+			return panelHooks.startAudio();
+		}
+
+		function stopAudio() {
+			return panelHooks.stopAudio();
 		}
 
 		/*
@@ -130,6 +145,7 @@
 			const [presetName, setPresetName] = useState("");
 			const [share, setShare] = useState("");
 			const [glassOpen, setGlassOpen] = useState(false);
+			const audio = useAudio();
 			const load = useCallback((force) => {
 				setLoading(true);
 				setError("");
@@ -313,6 +329,22 @@
 					Row,
 					{ label: t("wePropMute"), hint: t("wePropMuteHint") },
 					h(Switch, { on: wp.muted, onChange: (next) => patchWp({ muted: next }), label: t("wePropMute") })
+				),
+				h(
+					Row,
+					{ label: t("wePropAudio"), hint: t("wePropAudioHint") },
+					h(
+						"div",
+						{ className: "lg-wp-audio" },
+						h(
+							"span",
+							{ className: "lg-status-pill", "data-on": audio.state === "live" ? "on" : undefined },
+							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : t("weAudioIdle")
+						),
+						audio.state === "live"
+							? h("button", { type: "button", className: "lg-button", onClick: () => stopAudio() }, t("weAudioStop"))
+							: h("button", { type: "button", className: "lg-button", onClick: () => startAudio() }, t("weAudioStart"))
+					)
 				),
 				h(
 					"div",

@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.223000";
+		const CLIENT_BUILD = "v.26.11.28.230000";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -330,6 +330,14 @@
 			weAlignPixel: "像素（1:1）",
 			wePropMute: "静音",
 			wePropMuteHint: "壁纸默认静音；打开音量后需要手动关闭静音才会出声。",
+			wePropAudio: "系统音频",
+			wePropAudioHint: "音域回响这类壁纸要读系统声音才会动。启用后按 128 段频谱送进页面；被拒绝时页面自动回落到内置合成谱。",
+			weAudioStart: "启用",
+			weAudioStop: "停止",
+			weAudioLive: "已连接",
+			weAudioDenied: "被拒绝",
+			weAudioAsking: "请求中",
+			weAudioIdle: "未启用",
 			wePropReset: "恢复默认属性",
 			wePresetName: "预设名称",
 			wePresetDelete: "删除",
@@ -579,6 +587,14 @@
 			weAlignPixel: "Pixel (1:1)",
 			wePropMute: "Mute",
 			wePropMuteHint: "Wallpapers start muted; raise the volume and turn mute off to hear them.",
+			wePropAudio: "System audio",
+			wePropAudioHint: "Audio-reactive wallpapers need the system mix to move. Enabling sends 128 spectrum bins into the page; if the capture is refused the page falls back to its built-in sweep.",
+			weAudioStart: "Enable",
+			weAudioStop: "Stop",
+			weAudioLive: "Live",
+			weAudioDenied: "Refused",
+			weAudioAsking: "Asking",
+			weAudioIdle: "Off",
 			wePropReset: "Reset properties",
 			wePresetName: "Preset name",
 			wePresetDelete: "Delete",
@@ -2789,6 +2805,9 @@ html[data-lg-mode="dark"] .lg-we-flag {
 	background: var(--lg-surface, rgba(255, 255, 255, 0.05));
 	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
 }
+
+.lg-wp-audio { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lg-wp-audio .lg-status-pill { min-width: 56px; text-align: center; }
 
 .lg-wp-saverow {
 	display: flex;
@@ -5389,6 +5408,27 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			};
 			const useWallpaper = () => useSyncExternalStore(subscribeWallpaper, getWallpaper, getWallpaper);
 
+			// Audio-reactive wallpapers read the system mix through the shim callback.
+			// The state lives here so the property sheet can say whether the capture
+			// actually started, instead of a silent no-op.
+			let audio = { state: "idle", detail: "" };
+			const audioListeners = new Set();
+			const getAudio = () => audio;
+			const setAudio = (patch) => {
+				audio = { ...audio, ...patch };
+				for (const listener of audioListeners) listener();
+			};
+			const useAudio = () =>
+				useSyncExternalStore(
+					(listener) => {
+						audioListeners.add(listener);
+						return () => audioListeners.delete(listener);
+					},
+					getAudio,
+					getAudio
+				);
+			const audioControl = { start: null, stop: null };
+
 			// The panel components (13-we.js) live outside this closure; hand them the
 			// live store hooks so every surface reads the same settings object.
 			panelHooks.useSettings = useSettings;
@@ -5397,6 +5437,9 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 			panelHooks.useWallpaper = useWallpaper;
 			panelHooks.useIntelColor = useIntelColor;
 			panelHooks.resampleIntel = intelResample;
+			panelHooks.useAudio = useAudio;
+			panelHooks.startAudio = () => audioControl.start?.();
+			panelHooks.stopAudio = () => audioControl.stop?.();
 
 			// What sits behind the window is now part of the wallpaper picture:
 			// the host composites the occluded app windows into the same capture, so
@@ -6089,10 +6132,12 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						for (const track of loopback.stream.getTracks()) track.stop();
 						if (loopback.ctx) loopback.ctx.close().catch(() => {});
 						loopback = null;
+						setAudio({ state: "idle", detail: "" });
 						webLog("loopback: stopped");
 					};
 					const beginLoopback = async () => {
 						if (loopback) return;
+						setAudio({ state: "requesting", detail: "" });
 						try {
 							const armed = await fetch(`${API}/audio/loopback`, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
 							webLog(`loopback: host ${armed && armed.ok ? (armed.installed ? "armed" : "answered") : "unavailable " + JSON.stringify((armed && armed.error) || "")}`);
@@ -6119,11 +6164,16 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 								win.postMessage({ __lg: "audio", bins: payload }, "*");
 							}, 16);
 							loopback = { stream, ctx, timer };
+							setAudio({ state: "live", detail: `${bins.length} bins` });
 							webLog(`loopback: streaming fft=256 bins=${bins.length}`);
 						} catch (error) {
 							webLog(`loopback failed: ${String((error && error.message) || error)}`);
+							setAudio({ state: "denied", detail: String((error && error.message) || error) });
 						}
 					};
+
+					audioControl.start = beginLoopback;
+					audioControl.stop = stopLoopback;
 
 					// The page reports its own backdrop colour; that beats guessing from
 					// the desktop capture, which for a web wallpaper is somebody else.
@@ -7005,7 +7055,10 @@ h(
 			useLang: null,
 			useWallpaper: null,
 			useIntelColor: null,
-			resampleIntel: null
+			resampleIntel: null,
+			useAudio: null,
+			startAudio: null,
+			stopAudio: null
 		};
 
 		function useSettings() {
@@ -7030,6 +7083,18 @@ h(
 
 		function resampleIntel() {
 			return panelHooks.resampleIntel();
+		}
+
+		function useAudio() {
+			return panelHooks.useAudio();
+		}
+
+		function startAudio() {
+			return panelHooks.startAudio();
+		}
+
+		function stopAudio() {
+			return panelHooks.stopAudio();
 		}
 
 		/*
@@ -7123,6 +7188,7 @@ h(
 			const [presetName, setPresetName] = useState("");
 			const [share, setShare] = useState("");
 			const [glassOpen, setGlassOpen] = useState(false);
+			const audio = useAudio();
 			const load = useCallback((force) => {
 				setLoading(true);
 				setError("");
@@ -7306,6 +7372,22 @@ h(
 					Row,
 					{ label: t("wePropMute"), hint: t("wePropMuteHint") },
 					h(Switch, { on: wp.muted, onChange: (next) => patchWp({ muted: next }), label: t("wePropMute") })
+				),
+				h(
+					Row,
+					{ label: t("wePropAudio"), hint: t("wePropAudioHint") },
+					h(
+						"div",
+						{ className: "lg-wp-audio" },
+						h(
+							"span",
+							{ className: "lg-status-pill", "data-on": audio.state === "live" ? "on" : undefined },
+							audio.state === "live" ? t("weAudioLive") : audio.state === "denied" ? t("weAudioDenied") : audio.state === "requesting" ? t("weAudioAsking") : t("weAudioIdle")
+						),
+						audio.state === "live"
+							? h("button", { type: "button", className: "lg-button", onClick: () => stopAudio() }, t("weAudioStop"))
+							: h("button", { type: "button", className: "lg-button", onClick: () => startAudio() }, t("weAudioStart"))
+					)
 				),
 				h(
 					"div",

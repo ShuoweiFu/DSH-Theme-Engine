@@ -1161,6 +1161,9 @@ html[data-lg-mode="dark"] .lg-we-flag {
 	border: 1px solid var(--lg-border, var(--dsw-alias-border-l2));
 }
 
+.lg-wp-audio { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lg-wp-audio .lg-status-pill { min-width: 56px; text-align: center; }
+
 .lg-wp-saverow {
 	display: flex;
 	flex-wrap: wrap;

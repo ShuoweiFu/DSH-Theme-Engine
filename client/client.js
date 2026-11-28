@@ -9,7 +9,7 @@
 		const LEGACY_STORAGE_KEYS = ["dsh-liquid-glass.settings.v2"];
 		const API = "/liquid-glass";
 		/** Bumped whenever the mapping or the settings contract changes; visible via /liquid-glass/state. */
-		const CLIENT_BUILD = "v.26.11.28.200257";
+		const CLIENT_BUILD = "v.26.11.28.200707";
 		const LOAD_TAG = String((globalThis.__lgLoadCount = (globalThis.__lgLoadCount || 0) + 1));
 		/**
 		 * Appearance values are archived per colour mode. These ids and keys are
@@ -1094,6 +1094,27 @@ const flatList = [
 ["--dsw-alias-settings-card-fill", flat.settings]
 ];
 for (const [name, value] of flatList) out[name] = { light: value, dark: value };
+				// The label ramp is the other half of legibility. The app resolves caption,
+				// tertiary and secondary from its own theme, so a light app theme left dark grey
+				// hints under our dark plates: the add-plugin field read as an empty box. Keying
+				// the whole ramp to the ink fixes every placeholder and dimmed label at once.
+				const ramp = ink === "dark"
+					? { secondary: "rgba(12,14,20,0.72)", tertiary: "rgba(12,14,20,0.62)", caption: "rgba(12,14,20,0.55)", dimmed: "rgba(12,14,20,0.42)" }
+					: { secondary: "rgba(246,248,252,0.74)", tertiary: "rgba(246,248,252,0.62)", caption: "rgba(246,248,252,0.55)", dimmed: "rgba(246,248,252,0.42)" };
+				out["--dsw-alias-label-secondary"] = { light: ramp.secondary, dark: ramp.secondary };
+				out["--dsw-alias-label-tertiary"] = { light: ramp.tertiary, dark: ramp.tertiary };
+				out["--dsw-alias-label-caption"] = { light: ramp.caption, dark: ramp.caption };
+				out["--dsw-alias-label-dimmed"] = { light: ramp.dimmed, dark: ramp.dimmed };
+
+				// Result banners paint their text with label-primary on the state tertiary plate,
+				// and the app's own pair only agrees while the app theme matches the ink. That is
+				// why the install notice went cream with white prose over it.
+				const states = ink === "dark"
+					? { warn: "rgb(254,245,231)", success: "rgb(230,250,237)", business: "rgb(228,237,253)" }
+					: { warn: "rgb(39,36,31)", success: "rgb(35,60,44)", business: "rgb(52,65,91)" };
+				out["--dsw-alias-state-warn-tertiary"] = { light: states.warn, dark: states.warn };
+				out["--dsw-alias-state-success-tertiary"] = { light: states.success, dark: states.success };
+				out["--dsw-alias-state-business-tertiary"] = { light: states.business, dark: states.business };
 			}
 			return out;
 		}

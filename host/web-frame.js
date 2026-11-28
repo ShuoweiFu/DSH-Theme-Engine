@@ -129,6 +129,75 @@ const SHIM = String.raw`(function () {
     send('console', Array.prototype.map.call(arguments, function (v) { try { return typeof v === 'string' ? v : JSON.stringify(v); } catch (e) { return String(v); } }).join(' '));
     return original.apply(console, arguments);
   };
+﻿  // ---- Wallpaper Engine runtime API -------------------------------------
+  // Audio-reactive wallpapers expect the engine to drive them: they call
+  // wallpaperRegisterAudioListener with a callback and the engine feeds it
+  // 128 spectrum values about 16 ms apart. In a bare iframe nothing calls it,
+  // so their analyser never fires and the scene sits on one flat frame.
+  var audioListeners = [];
+  var BINS = 128;
+  var spectrum = new Array(BINS).fill(0);
+  var realAudio = false;
+  window.wallpaperRegisterAudioListener = function (callback) {
+    if (typeof callback === "function") audioListeners.push(callback);
+  };
+  window.wallpaperRegisterMediaPlaybackListener = function (callback) {
+    if (typeof callback === "function") callback({ state: 0 });
+  };
+  window.wallpaperRegisterMediaThumbnailListener = function () {};
+  window.wallpaperRegisterMediaStatusListener = function () {};
+  window.wallpaperRegisterMediaPropertiesListener = function () {};
+  window.wallpaperRequestRandomFileForProperty = function () { return null; };
+  window.wallpaperPropertyListener = window.wallpaperPropertyListener || {
+    applyUserProperties: function () {},
+    applyGeneralProperties: function () {},
+    setPaused: function () {}
+  };
+  window.addEventListener("message", function (event) {
+    var data = event && event.data;
+    if (!data || data.__lg !== "audio") return;
+    if (!Array.isArray(data.bins) || !data.bins.length) return;
+    spectrum = data.bins.slice(0, BINS).map(function (v) { return Math.max(0, Math.min(1, Number(v) || 0)); });
+    while (spectrum.length < BINS) spectrum.push(0);
+    realAudio = true;
+  });
+  var startedAt = (window.performance && performance.now()) || 0;
+  function synth() {
+    var t = (((window.performance && performance.now()) || 0) - startedAt) / 1000;
+    for (var i = 0; i < BINS; i += 1) {
+      var band = i / BINS;
+      var decay = Math.pow(1 - band, 1.4);
+      var wave = 0.5 + 0.5 * Math.sin(t * 1.9 - i * 0.19);
+      var breathe = 0.6 + 0.4 * Math.sin(t * 0.7);
+      spectrum[i] = Math.max(0, Math.min(1, decay * wave * breathe));
+    }
+  }
+  setInterval(function () {
+    if (!audioListeners.length) return;
+    if (!realAudio) synth();
+    for (var i = 0; i < audioListeners.length; i += 1) {
+      try { audioListeners[i](spectrum); } catch (e) { send("error", "audio listener: " + (e && e.message)); }
+    }
+  }, 16);
+  function probeContexts() {
+    var out = { webgl2: false, webgl: false, error: null };
+    try {
+      var c2 = document.createElement("canvas");
+      var gl2 = c2.getContext("webgl2");
+      out.webgl2 = Boolean(gl2);
+      if (gl2) { var lose = gl2.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); }
+      else out.webgl = Boolean(document.createElement("canvas").getContext("webgl"));
+    } catch (e) { out.error = e && e.message; }
+    return out;
+  }
+  function reportProbe() {
+    var r = probeContexts();
+    var text = "webgl2=" + (r.webgl2 ? "ok" : "null") + " webgl1=" + (r.webgl ? "ok" : "no") + (r.error ? " err=" + r.error : "");
+    send("probe", text);
+    try { parent.postMessage({ __lg: "frame", kind: "probe", text: text }, "*"); } catch (e) {}
+  }
+  setTimeout(reportProbe, 600);
+  setTimeout(function () { if (!audioListeners.length) send("probe", "no audio listener registered after 3 s"); }, 3000);
   window.__lgSandbox = { storage: 'memory', origin: location.origin };
   send('boot', 'shim ready, origin=' + location.origin);
 })();`;

@@ -5999,6 +5999,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 					frame.setAttribute("tabindex", "-1");
 					frame.setAttribute("aria-hidden", "true");
 					document.body.appendChild(frame);
+					// Opaque origin: postMessage is the only channel this page has.
+					const onFrameMessage = (event) => {
+						if (!frame.contentWindow || event.source !== frame.contentWindow) return;
+						const data = event.data;
+						if (!data || data.__lg !== "frame") return;
+						webLog(`frame ${data.kind}: ${data.text}`);
+					};
+					window.addEventListener("message", onFrameMessage);
 					
 					const source = `${API}/web/index.html`;
 					let disposed = false;
@@ -6067,6 +6075,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						document.removeEventListener("visibilitychange", sync);
 						window.removeEventListener("blur", sync);
 						window.removeEventListener("focus", sync);
+						window.removeEventListener("message", onFrameMessage);
 						frame.remove();
 						root.dataset.lgWeb = "off";
 						liquidRef.current?.setPaused("web", false);

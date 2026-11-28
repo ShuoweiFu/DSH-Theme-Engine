@@ -5856,7 +5856,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 						const readToken = (name) => { try { return getComputedStyle(document.body).getPropertyValue(name).trim(); } catch { return "?"; } };
 						// What the bubble element actually paints, not just the token:
 						// a stale token is invisible while a hard-coded plate is not.
-						const bubbleCss = () => { try { const node = document.querySelector(".bubble, [class*=\"_bubble_\"]"); if (!node) return "none"; const s = getComputedStyle(node); return s.backgroundColor + "/" + s.color; } catch (error) { return "err"; } };
+						const bubbleCss = () => { try { const node = document.querySelector(".bubble, [class*=\"bubble\"]"); if (!node) return "none"; const s = getComputedStyle(node); return String(node.className).slice(0, 40) + " " + s.backgroundColor + "/" + s.color; } catch (error) { return "err"; } };
 						webLog(`palette ink=${ink} scheme=${appliedMode} card=${readToken("--dsw-alias-card-fill")} layer2=${readToken("--dsw-alias-bg-layer-2")} overlay=${readToken("--dsw-alias-bg-overlay")} bubble=${readToken("--dsw-specific-bubble")} menu=${readToken("--dsw-menu-surface-fill")} bubbleCss=${bubbleCss()}`);
 					} catch (error) {
 						reportClientError(`overrideTokens: ${String(error?.stack ?? error)}`);
